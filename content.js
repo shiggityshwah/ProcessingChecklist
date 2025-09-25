@@ -58,9 +58,16 @@
 
         function init() {
             console.log(LOG_PREFIX, "Content script initialized.");
+            // Ensure DOM is ready before querying or injecting DOM elements.
             injectConfirmationCheckboxes();
             contentPort = browser.runtime.connect({ name: "content-script-port" });
             contentPort.onMessage.addListener(handleMessage);
+            // Render the first unchecked field immediately so the on-page UI appears
+            try {
+                updateNextFieldDisplay();
+            } catch (e) {
+                console.error(LOG_PREFIX, "Failed to render initial checklist UI:", e);
+            }
         }
 
         function getFieldData(index) {
@@ -257,7 +264,11 @@
             }
         }
 
-        init();
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
 
     } catch (e) {
         console.error(LOG_PREFIX, "A fatal error occurred:", e);
