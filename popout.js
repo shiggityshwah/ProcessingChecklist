@@ -6,13 +6,14 @@
 
 (function() {
     "use strict";
+    const ext = (typeof browser !== 'undefined') ? browser : chrome;
 
     let port = null;
     let currentIndex = -1;
 
     function init() {
         try {
-            port = browser.runtime.connect({ name: "popout-port" });
+            port = ext.runtime.connect({ name: "popout-port" });
             port.onMessage.addListener(handleMessage);
             port.onDisconnect.addListener(() => {
                 displayError("Connection to the page was lost. Please refresh the page and try again.");

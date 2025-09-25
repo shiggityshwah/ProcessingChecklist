@@ -5,6 +5,7 @@
  */
 
 const DEBUG = false;
+const ext = (typeof browser !== 'undefined') ? browser : chrome;
 
 let contentPort = null;
 let popoutPort = null;
@@ -17,7 +18,7 @@ function dbg(...args) {
     if (DEBUG && console && console.debug) console.debug("[ProcessingChecklist-bg]", ...args);
 }
 
-browser.runtime.onConnect.addListener((port) => {
+ext.runtime.onConnect.addListener((port) => {
     dbg("Connection received from:", port.name);
 
     if (port.name === "content-script-port") {

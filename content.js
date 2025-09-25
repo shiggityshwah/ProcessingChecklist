@@ -6,6 +6,7 @@
 (function() {
     "use strict";
     const LOG_PREFIX = "[ProcessingChecklist]";
+    const ext = (typeof browser !== 'undefined') ? browser : chrome;
     try {
         let contentPort = null;
         let currentIndex = 0;
@@ -60,7 +61,7 @@
             console.log(LOG_PREFIX, "Content script initialized.");
             // Ensure DOM is ready before querying or injecting DOM elements.
             injectConfirmationCheckboxes();
-            contentPort = browser.runtime.connect({ name: "content-script-port" });
+            contentPort = ext.runtime.connect({ name: "content-script-port" });
             contentPort.onMessage.addListener(handleMessage);
             // Render the first unchecked field immediately so the on-page UI appears
             try {
