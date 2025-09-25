@@ -1,1 +1,17 @@
+# Local helper files
 .aider*
+
+# Node dependencies and build artifacts
+node_modules/
+dist/
+build/
+
+# Editor directories and system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Environment and logs
+.env
+*.log

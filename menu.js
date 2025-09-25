@@ -1,24 +1,30 @@
-
 (function() {
     "use strict";
 
+    const DEBUG = false;
+    function dbg(...args) { if (DEBUG && console && console.debug) console.debug("[ProcessingChecklist-Menu]", ...args); }
     const LOG_PREFIX = "[ProcessingChecklist-Menu]";
     let port = null;
 
     function init() {
-        console.log(LOG_PREFIX, "Menu script loaded.");
+        console.info(LOG_PREFIX, "Menu script loaded.");
         try {
             port = browser.runtime.connect({ name: "menu-port" });
-            console.log(LOG_PREFIX, "Successfully connected to background script.");
+            console.info(LOG_PREFIX, "Successfully connected to background script.");
+
+            port.onDisconnect.addListener(() => {
+                console.warn(LOG_PREFIX, "Disconnected from background");
+                port = null;
+            });
 
             document.getElementById('toggle-ui-button').addEventListener('click', () => {
-                console.log(LOG_PREFIX, "Toggle UI button clicked.");
-                port.postMessage({ action: 'toggleUI' });
+                dbg("Toggle UI button clicked.");
+                if (port) port.postMessage({ action: 'toggleUI' });
             });
 
             document.getElementById('popout-button').addEventListener('click', () => {
-                console.log(LOG_PREFIX, "Open Checklist button clicked.");
-                port.postMessage({ action: 'openPopout' });
+                dbg("Open Checklist button clicked.");
+                if (port) port.postMessage({ action: 'openPopout' });
             });
 
         } catch (error) {

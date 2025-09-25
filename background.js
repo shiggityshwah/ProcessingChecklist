@@ -1,43 +1,93 @@
+/**
+ * background.js
+ * Add small message-queueing and debug support so popout/content connection race
+ * doesn't cause the popout to appear stuck on "Loading..."
+ */
+
+const DEBUG = false;
+
 let contentPort = null;
 let popoutPort = null;
 
+// Queues used when one side is not yet connected
+const queueToPopout = [];
+const queueToContent = [];
+
+function dbg(...args) {
+    if (DEBUG && console && console.debug) console.debug("[ProcessingChecklist-bg]", ...args);
+}
+
 browser.runtime.onConnect.addListener((port) => {
-    console.log("Connection received from:", port.name);
+    dbg("Connection received from:", port.name);
 
     if (port.name === "content-script-port") {
         contentPort = port;
-        console.log("Content script connected");
+        dbg("Content script connected");
+
+        // Flush any queued messages waiting for content
+        while (queueToContent.length > 0 && contentPort) {
+            const queued = queueToContent.shift();
+            dbg("Delivering queued message to content:", queued);
+            try { contentPort.postMessage(queued); } catch (e) { dbg("Error posting queued to content:", e); }
+        }
+
         port.onMessage.addListener((message) => {
-            console.log("Message from content script:", message);
+            dbg("Message from content script:", message);
             if (popoutPort) {
-                console.log("Forwarding message to popout");
-                popoutPort.postMessage(message);
+                try {
+                    dbg("Forwarding message to popout");
+                    popoutPort.postMessage(message);
+                } catch (e) {
+                    dbg("Error forwarding to popout, queueing:", e);
+                    queueToPopout.push(message);
+                }
             } else {
-                console.log("No popout connected to forward message to");
+                dbg("No popout connected, queueing message for popout");
+                queueToPopout.push(message);
             }
         });
+
         port.onDisconnect.addListener(() => {
             contentPort = null;
-            console.log("Content script disconnected.");
+            dbg("Content script disconnected.");
         });
+
     } else if (port.name === "popout-port") {
         popoutPort = port;
-        console.log("Popout connected");
+        dbg("Popout connected");
+
+        // Deliver any queued messages waiting for the popout
+        while (queueToPopout.length > 0 && popoutPort) {
+            const queued = queueToPopout.shift();
+            dbg("Delivering queued message to popout:", queued);
+            try { popoutPort.postMessage(queued); } catch (e) { dbg("Error posting queued to popout:", e); }
+        }
+
         port.onMessage.addListener((message) => {
-            console.log("Message from popout:", message);
+            dbg("Message from popout:", message);
             if (contentPort) {
-                console.log("Forwarding message to content script");
-                contentPort.postMessage(message);
+                try {
+                    dbg("Forwarding message to content script");
+                    contentPort.postMessage(message);
+                } catch (e) {
+                    dbg("Error forwarding to content, queueing:", e);
+                    queueToContent.push(message);
+                }
             } else {
-                console.log("No content script connected to forward message to");
+                dbg("No content script connected, queueing message for content");
+                queueToContent.push(message);
             }
         });
+
         port.onDisconnect.addListener(() => {
             popoutPort = null;
-            console.log("Popout script disconnected.");
+            dbg("Popout script disconnected.");
         });
+
     } else if (port.name === "menu-port") {
+        dbg("Menu connected");
         port.onMessage.addListener((message) => {
+            dbg("Message from menu:", message);
             if (message.action === 'toggleUI') {
                 if (contentPort) {
                     contentPort.postMessage({ action: 'toggleUI' });
@@ -53,5 +103,11 @@ browser.runtime.onConnect.addListener((port) => {
                 });
             }
         });
+
+        port.onDisconnect.addListener(() => {
+            dbg("Menu disconnected");
+        });
+    } else {
+        dbg("Unknown port connected:", port.name);
     }
 });
