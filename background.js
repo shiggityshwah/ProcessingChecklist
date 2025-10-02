@@ -1,114 +1,142 @@
 /**
  * background.js
- * Add small message-queueing and debug support so popout/content connection race
- * doesn't cause the popout to appear stuck on "Loading..."
+ * Handles message passing between the content script and the popout window.
+ * Manages tab-specific connections and popout lifecycle.
  */
 
-const DEBUG = false;
 const ext = (typeof browser !== 'undefined') ? browser : chrome;
 
-let contentPort = null;
-let popoutPort = null;
+// Map of tab IDs to their content script ports
+const contentPorts = new Map(); // tabId -> port
 
-// Queues used when one side is not yet connected
-const queueToPopout = [];
-const queueToContent = [];
+// Map of popout ports to their metadata
+const popoutPorts = new Map(); // portId -> {tabId, windowId, port}
 
-function dbg(...args) {
-    if (DEBUG && console && console.debug) console.debug("[ProcessingChecklist-bg]", ...args);
-}
+let portIdCounter = 0;
+
+// Keep-alive mechanism to prevent background script termination
+const PING_INTERVAL = 25000; // 25 seconds
+const pingTimers = new Map(); // portId -> intervalId
 
 ext.runtime.onConnect.addListener((port) => {
-    dbg("Connection received from:", port.name);
+    if (port.name === "content-script") {
+        const tabId = port.sender.tab.id;
+        contentPorts.set(tabId, port);
 
-    if (port.name === "content-script-port") {
-        contentPort = port;
-        dbg("Content script connected");
-
-        // Flush any queued messages waiting for content
-        while (queueToContent.length > 0 && contentPort) {
-            const queued = queueToContent.shift();
-            dbg("Delivering queued message to content:", queued);
-            try { contentPort.postMessage(queued); } catch (e) { dbg("Error posting queued to content:", e); }
-        }
+        // Send tab ID to content script
+        port.postMessage({ action: 'init', tabId: tabId });
 
         port.onMessage.addListener((message) => {
-            dbg("Message from content script:", message);
-            if (popoutPort) {
-                try {
-                    dbg("Forwarding message to popout");
-                    popoutPort.postMessage(message);
-                } catch (e) {
-                    dbg("Error forwarding to popout, queueing:", e);
-                    queueToPopout.push(message);
+            // Forward message to all popouts bound to this tab
+            popoutPorts.forEach((popoutInfo) => {
+                if (popoutInfo.tabId === tabId) {
+                    popoutInfo.port.postMessage(message);
                 }
-            } else {
-                dbg("No popout connected, queueing message for popout");
-                queueToPopout.push(message);
-            }
+            });
         });
 
         port.onDisconnect.addListener(() => {
-            contentPort = null;
-            dbg("Content script disconnected.");
+            contentPorts.delete(tabId);
         });
+    } else if (port.name === "popout") {
+        const portId = `popout-${portIdCounter++}`;
 
-    } else if (port.name === "popout-port") {
-        popoutPort = port;
-        dbg("Popout connected");
-
-        // Deliver any queued messages waiting for the popout
-        while (queueToPopout.length > 0 && popoutPort) {
-            const queued = queueToPopout.shift();
-            dbg("Delivering queued message to popout:", queued);
-            try { popoutPort.postMessage(queued); } catch (e) { dbg("Error posting queued to popout:", e); }
-        }
-
-        port.onMessage.addListener((message) => {
-            dbg("Message from popout:", message);
-            if (contentPort) {
-                try {
-                    dbg("Forwarding message to content script");
-                    contentPort.postMessage(message);
-                } catch (e) {
-                    dbg("Error forwarding to content, queueing:", e);
-                    queueToContent.push(message);
-                }
-            } else {
-                dbg("No content script connected, queueing message for content");
-                queueToContent.push(message);
+        // Set up keep-alive ping for this popout
+        const pingInterval = setInterval(() => {
+            try {
+                port.postMessage({ action: 'ping' });
+            } catch (e) {
+                clearInterval(pingInterval);
+                pingTimers.delete(portId);
             }
-        });
+        }, PING_INTERVAL);
+        pingTimers.set(portId, pingInterval);
 
-        port.onDisconnect.addListener(() => {
-            popoutPort = null;
-            dbg("Popout script disconnected.");
-        });
-
-    } else if (port.name === "menu-port") {
-        dbg("Menu connected");
         port.onMessage.addListener((message) => {
-            dbg("Message from menu:", message);
-            if (message.action === 'toggleUI') {
+            // Respond to pong messages (keep-alive)
+            if (message.action === 'pong') {
+                return;
+            }
+
+            if (message.action === 'popout-init') {
+                // Store popout metadata
+                const tabId = message.tabId;
+                const windowId = message.windowId;
+                popoutPorts.set(portId, { tabId, windowId, port });
+
+                // Forward initialization to content script
+                const contentPort = contentPorts.get(tabId);
                 if (contentPort) {
-                    contentPort.postMessage({ action: 'toggleUI' });
-                } else {
-                    console.warn("Cannot toggle UI, content script not connected.");
+                    contentPort.postMessage({ action: 'popout-ready' });
                 }
-            } else if (message.action === 'openPopout') {
-                browser.windows.create({
-                    url: browser.runtime.getURL('popout.html'),
-                    type: 'popup',
-                    width: 350,
-                    height: 250,
-                });
+            } else {
+                // Forward message to content script
+                const popoutInfo = popoutPorts.get(portId);
+                if (popoutInfo) {
+                    const contentPort = contentPorts.get(popoutInfo.tabId);
+                    if (contentPort) {
+                        contentPort.postMessage(message);
+                    }
+                }
             }
         });
 
         port.onDisconnect.addListener(() => {
-            dbg("Menu disconnected");
+            // Clean up keep-alive timer
+            const pingInterval = pingTimers.get(portId);
+            if (pingInterval) {
+                clearInterval(pingInterval);
+                pingTimers.delete(portId);
+            }
+            popoutPorts.delete(portId);
         });
-    } else {
-        dbg("Unknown port connected:", port.name);
+    } else if (port.name === "menu-port") {
+        port.onMessage.addListener((message) => {
+            if (message.action === 'openPopout') {
+                const tabId = message.tabId;
+                ext.windows.create({
+                    url: ext.runtime.getURL(`popout.html?tabId=${tabId}`),
+                    type: 'popup',
+                    width: 400,
+                    height: 300,
+                });
+            } else if (message.action === 'toggleUI') {
+                const tabId = message.tabId;
+                const contentPort = contentPorts.get(tabId);
+                if (contentPort) {
+                    contentPort.postMessage(message);
+                }
+            } else if (message.tabId) {
+                const contentPort = contentPorts.get(message.tabId);
+                if (contentPort) {
+                    contentPort.postMessage(message);
+                }
+            }
+        });
     }
+});
+
+// Clean up popouts when their bound tab is closed
+ext.tabs.onRemoved.addListener((tabId) => {
+    // Close all popout windows bound to this tab
+    popoutPorts.forEach((popoutInfo, portId) => {
+        if (popoutInfo.tabId === tabId) {
+            ext.windows.remove(popoutInfo.windowId).catch(() => {
+                // Window might already be closed
+            });
+            popoutPorts.delete(portId);
+        }
+    });
+
+    // Clean up storage for this tab
+    ext.storage.local.remove([`checklistState_${tabId}`, `uiState_${tabId}`]);
+});
+
+// Clean up tracking when popout window is closed by user
+ext.windows.onRemoved.addListener((windowId) => {
+    popoutPorts.forEach((popoutInfo, portId) => {
+        if (popoutInfo.windowId === windowId) {
+            popoutPorts.delete(portId);
+        }
+    });
 });

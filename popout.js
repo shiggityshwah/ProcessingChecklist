@@ -1,155 +1,412 @@
 /*************************************************************************************************
  *  popout.js - The script for the popout window.
- *  This script is responsible for rendering the UI for the current checklist step and
- *  sending user actions (confirm, skip, update value) to the content script.
 /*************************************************************************************************/
-
 (function() {
     "use strict";
     const ext = (typeof browser !== 'undefined') ? browser : chrome;
-
     let port = null;
     let currentIndex = -1;
+    let boundTabId = null;
+    let currentWindowId = null;
+    let reconnectAttempts = 0;
+    let reconnectTimer = null;
+    let storagePollingTimer = null;
+    let lastKnownState = null;
+    let isConnected = false;
 
-    function init() {
+    const MAX_RECONNECT_ATTEMPTS = 10;
+    const BASE_RECONNECT_DELAY = 1000; // 1 second
+    const MAX_RECONNECT_DELAY = 30000; // 30 seconds
+    const STORAGE_POLL_INTERVAL = 2000; // 2 seconds
+
+    function connect() {
         try {
-            port = ext.runtime.connect({ name: "popout-port" });
+            port = ext.runtime.connect({ name: "popout" });
             port.onMessage.addListener(handleMessage);
-            port.onDisconnect.addListener(() => {
-                displayError("Connection to the page was lost. Please refresh the page and try again.");
-                port = null;
+            port.onDisconnect.addListener(handleDisconnect);
+
+            // Get current window ID
+            ext.windows.getCurrent().then((window) => {
+                currentWindowId = window.id;
+                // Send initialization with tab ID and window ID
+                port.postMessage({
+                    action: "popout-init",
+                    tabId: boundTabId,
+                    windowId: currentWindowId
+                });
+
+                // Connection successful
+                isConnected = true;
+                reconnectAttempts = 0;
+                stopStoragePolling();
+                clearReconnectTimer();
             });
-
-            port.postMessage({ action: "popout-ready-ping" });
-
         } catch (error) {
-            displayError("An unexpected error occurred while connecting.");
+            handleDisconnect();
         }
     }
 
-    function renderField(fieldData) {
-        const display = document.getElementById('next-field-display');
-        if (!display) return;
+    function handleDisconnect() {
+        isConnected = false;
+        port = null;
 
-        if (!fieldData) {
-            display.innerHTML = '<div class="completion-message">All fields checked!</div>';
+        // Check if tab still exists before attempting reconnection
+        ext.tabs.get(boundTabId).then(() => {
+            // Tab exists, attempt reconnection
+            attemptReconnect();
+        }).catch(() => {
+            // Tab closed
+            displayError("Connection lost. Tab has been closed.");
+            stopStoragePolling();
+        });
+    }
+
+    function attemptReconnect() {
+        if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+            displayError("Connection lost. Falling back to storage sync.");
+            startStoragePolling();
             return;
         }
 
-        let fieldsHtml = '';
-        if (fieldData.type === 'group') {
-            fieldsHtml = fieldData.fields.map((field, index) => {
-                let inputHtml = '';
-                switch (field.type) {
-                    case 'select':
-                        const options = field.options.map(opt => 
-                            `<option value="${opt.value}" ${field.value === opt.value ? 'selected' : ''}>${opt.text}</option>`
-                        ).join('');
-                        inputHtml = `<select class="display-input" data-field-index="${index}">${options}</select>`;
-                        break;
-                    case 'checkbox':
-                        inputHtml = `<input type="checkbox" class="display-input" data-field-index="${index}" ${field.value ? 'checked' : ''}>`;
-                        break;
-                    default:
-                        inputHtml = `<input type="text" class="display-input" data-field-index="${index}" value="${field.value || ''}">`;
-                        break;
+        const delay = Math.min(
+            BASE_RECONNECT_DELAY * Math.pow(2, reconnectAttempts),
+            MAX_RECONNECT_DELAY
+        );
+
+        reconnectAttempts++;
+
+        clearReconnectTimer();
+        reconnectTimer = setTimeout(() => {
+            connect();
+        }, delay);
+
+        // Start storage polling as fallback while reconnecting
+        if (!storagePollingTimer) {
+            startStoragePolling();
+        }
+    }
+
+    function clearReconnectTimer() {
+        if (reconnectTimer) {
+            clearTimeout(reconnectTimer);
+            reconnectTimer = null;
+        }
+    }
+
+    function startStoragePolling() {
+        if (storagePollingTimer) return;
+
+        storagePollingTimer = setInterval(() => {
+            const storageKey = `checklistState_${boundTabId}`;
+            ext.storage.local.get(storageKey, (result) => {
+                if (result[storageKey]) {
+                    const newState = result[storageKey];
+                    // Check if state has changed
+                    if (JSON.stringify(newState) !== JSON.stringify(lastKnownState)) {
+                        lastKnownState = newState;
+                        handleStateChange(newState);
+                    }
                 }
-                return `<div class="field-group"><b>${field.name}</b>${inputHtml}</div>`;
-            }).join('');
-        } else if (fieldData.type === 'virtual') {
-            fieldsHtml = `<p class="virtual-step">Please perform this action on the page.</p>`;
+            });
+        }, STORAGE_POLL_INTERVAL);
+    }
+
+    function stopStoragePolling() {
+        if (storagePollingTimer) {
+            clearInterval(storagePollingTimer);
+            storagePollingTimer = null;
+        }
+    }
+
+    function init() {
+        // Parse tab ID from URL
+        const urlParams = new URLSearchParams(window.location.search);
+        boundTabId = parseInt(urlParams.get('tabId'), 10);
+
+        if (!boundTabId) {
+            displayError("No tab ID specified. Please open from the menu.");
+            return;
         }
 
+        connect();
+
+        const storageKey = `checklistState_${boundTabId}`;
+        ext.storage.local.get(storageKey, (result) => {
+            if (result[storageKey]) {
+                handleStateChange(result[storageKey]);
+            }
+        });
+
+        ext.storage.onChanged.addListener((changes, namespace) => {
+            if (namespace === 'local' && changes[storageKey]) {
+                const newValue = changes[storageKey].newValue;
+                if (newValue) {
+                    handleStateChange(newValue);
+                }
+                // If newValue is undefined, storage was cleared (reset)
+                // The content script will recreate it and trigger another change
+            }
+        });
+        renderField(null); // Initial loading state
+    }
+
+    function handleStateChange(state) {
+        const nextIndex = findNextStep(state);
+
+        // Always update lastKnownState
+        lastKnownState = state;
+
+        if (port && isConnected) {
+            port.postMessage({ action: 'getUpdatedFieldData', index: nextIndex });
+        } else {
+            // Fallback: When disconnected, show a simplified view
+            // The popout will show basic info until reconnection
+            if (nextIndex === -1) {
+                renderField(null, null);
+            } else {
+                // Show placeholder until we can get real data
+                const placeholderData = {
+                    name: `Step ${nextIndex + 1} (Reconnecting...)`,
+                    fields: []
+                };
+                if (nextIndex !== currentIndex) {
+                    currentIndex = nextIndex;
+                    renderField(placeholderData, null);
+                }
+            }
+        }
+    }
+
+    function getFieldDataFromState(state, index) {
+        // This is a simplified fallback that shows basic state info
+        // when the port is disconnected
+        if (index === -1) return null;
+
+        // Read the stored field data if available
+        ext.storage.local.get(`fieldData_${boundTabId}_${index}`, (result) => {
+            const key = `fieldData_${boundTabId}_${index}`;
+            if (result[key]) {
+                return result[key];
+            }
+        });
+
+        // Return basic structure if no cached data
+        return {
+            name: `Step ${index + 1}`,
+            fields: []
+        };
+    }
+
+    function handleMessage(message) {
+        // Respond to ping with pong (keep-alive)
+        if (message.action === 'ping') {
+            if (port && isConnected) {
+                port.postMessage({ action: 'pong' });
+            }
+            return;
+        }
+
+        // Handle reset complete message
+        if (message.action === 'resetComplete') {
+            const display = document.getElementById('next-field-display');
+            if (display) {
+                display.innerHTML = '<div style="text-align: center; padding: 20px;"><div style="color: #007cba; font-weight: bold; margin-bottom: 10px;">Checklist Reset</div><div style="margin-bottom: 10px;">Please refresh the page to continue</div><button id="refresh-popout-button" style="background-color: #007cba; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer;">Refresh Page</button></div>';
+
+                const refreshBtn = document.getElementById('refresh-popout-button');
+                if (refreshBtn) {
+                    refreshBtn.addEventListener('click', () => {
+                        // Get the bound tab and reload it
+                        ext.tabs.reload(boundTabId);
+                    });
+                }
+            }
+            return;
+        }
+
+        if (message.action === 'updateDisplay') {
+            if (message.index !== currentIndex) {
+                currentIndex = message.index;
+                renderField(message.fieldData, message.policyNumber);
+            } else {
+                updateFieldValues(message.fieldData);
+            }
+            // Update policy number if provided
+            if (message.policyNumber !== undefined) {
+                updatePolicyNumber(message.policyNumber);
+            }
+        }
+    }
+
+    function updatePolicyNumber(policyNumber) {
+        const policyNumberDisplay = document.getElementById('policy-number-display');
+        if (policyNumberDisplay) {
+            policyNumberDisplay.textContent = policyNumber || 'No Policy #';
+        }
+    }
+
+    function findNextStep(state) {
+        if (!state || !Array.isArray(state)) return -1;
+        for (let i = 0; i < state.length; i++) {
+            if (!state[i].processed && !state[i].skipped) {
+                return i;
+            }
+        }
+        for (let i = 0; i < state.length; i++) {
+            if (state[i].skipped) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    function updateFieldValues(fieldData) {
+        if (!fieldData || !fieldData.fields) return;
+        fieldData.fields.forEach((field, index) => {
+            const inputElement = document.querySelector(`.display-input[data-field-index="${index}"]`);
+            if (inputElement) {
+                if (inputElement.type === 'checkbox') {
+                    if (inputElement.checked !== field.value) inputElement.checked = field.value;
+                } else {
+                    if (inputElement.value !== field.value) inputElement.value = field.value;
+                }
+            }
+        });
+    }
+
+    function renderField(fieldData, policyNumber) {
+        const display = document.getElementById('next-field-display');
+        if (!display) return;
+
+        // Update policy number display
+        updatePolicyNumber(policyNumber);
+
+        if (!fieldData) {
+            display.innerHTML = '<div class="completion-message">All fields checked!</div>';
+            resizeWindow();
+            return;
+        }
+
+        let fieldsHtml = fieldData.fields.map((field, index) => {
+            let inputHtml;
+            if (field.type === 'select') {
+                const options = field.options.map(opt => `<option value="${opt.value}" ${field.value === opt.value ? 'selected' : ''}>${opt.text}</option>`).join('');
+                inputHtml = `<select class="display-input" data-field-index="${index}">${options}</select>`;
+                return `<div class="field-group"><b>${field.name}</b>${inputHtml}</div>`;
+            } else if (field.type === 'checkbox') {
+                return `<label class="field-group checkbox-label"><input type="checkbox" class="display-input" data-field-index="${index}" ${field.value ? 'checked' : ''}> <span>${field.name}</span></label>`;
+            } else if (field.type === 'radio') {
+                return `<label class="field-group radio-label"><input type="radio" class="display-input" name="${fieldData.name}" data-field-index="${index}" ${field.value ? 'checked' : ''}> <span>${field.name}</span></label>`;
+            } else if (field.type === 'virtual') {
+                return `<div class="field-group"><b>${field.name}:</b> <span>${field.value}</span></div>`;
+            } else if (field.type === 'labelWithDivText') {
+                return `<div class="field-group label-with-text"><b>${field.labelText}</b><span>${field.divText}</span></div>`;
+            } else {
+                inputHtml = `<input type="text" class="display-input" data-field-index="${index}" value="${field.value || ''}">`;
+                return `<div class="field-group"><b>${field.name}</b>${inputHtml}</div>`;
+            }
+        }).join('');
+
         display.innerHTML = `
-            <div id="display-content-wrapper">
-              <div id="step-name">${fieldData.name}</div>
-              <div id="display-content">
-                ${fieldsHtml}
-              </div>
-              <div id="button-container">
+            <div id="step-name">${fieldData.name}</div>
+            <div id="display-content">${fieldsHtml}</div>
+            <div id="button-container">
                 <button id="confirm-button">✓</button>
                 <button id="skip-button">Skip</button>
-              </div>
             </div>
         `;
-
         setupEventListeners(fieldData);
+        resizeWindow();
+    }
+
+    function resizeWindow() {
+        // Wait for DOM to render and styles to apply
+        setTimeout(() => {
+            // Force layout recalculation
+            document.body.style.overflow = 'hidden';
+
+            // Get the next-field-display element which contains our content
+            const displayElement = document.getElementById('next-field-display');
+            if (!displayElement) return;
+
+            // Get the bounding rect which gives us the actual rendered size
+            const contentRect = displayElement.getBoundingClientRect();
+
+            // Calculate needed dimensions including body padding
+            const bodyStyles = window.getComputedStyle(document.body);
+            const paddingTop = parseInt(bodyStyles.paddingTop) || 0;
+            const paddingBottom = parseInt(bodyStyles.paddingBottom) || 0;
+            const paddingLeft = parseInt(bodyStyles.paddingLeft) || 0;
+            const paddingRight = parseInt(bodyStyles.paddingRight) || 0;
+
+            // Calculate total needed size
+            const neededWidth = Math.ceil(contentRect.width + paddingLeft + paddingRight);
+            const neededHeight = Math.ceil(contentRect.height + paddingTop + paddingBottom);
+
+            // Update window size - keep consistent width, adjust height
+            ext.windows.getCurrent().then((window) => {
+                ext.windows.update(window.id, {
+                    width: 300, // Fixed consistent width
+                    height: Math.min(Math.max(neededHeight + 50, 180), 700) // Extra buffer for buttons
+                });
+            });
+        }, 100);
     }
 
     function displayError(message) {
         const display = document.getElementById('next-field-display');
         if (display) {
             display.innerHTML = `<div class="error-message">${message}</div>`;
+            resizeWindow();
         }
     }
 
     function setupEventListeners(fieldData) {
         document.getElementById('confirm-button').addEventListener('click', () => {
-            if (port) port.postMessage({ action: 'confirmField', index: currentIndex });
+            if (port && isConnected) {
+                port.postMessage({ action: 'confirmField', index: currentIndex });
+            } else {
+                // Fallback: update storage directly
+                const storageKey = `checklistState_${boundTabId}`;
+                ext.storage.local.get(storageKey, (result) => {
+                    if (result[storageKey]) {
+                        const newState = [...result[storageKey]];
+                        newState[currentIndex] = { processed: true, skipped: false };
+                        ext.storage.local.set({ [storageKey]: newState });
+                    }
+                });
+            }
         });
 
         document.getElementById('skip-button').addEventListener('click', () => {
-            if (port) port.postMessage({ action: 'skipField', index: currentIndex });
-        });
-
-        if (fieldData.type === 'group') {
-            document.querySelectorAll('.display-input').forEach(inputElement => {
-                const fieldIndex = parseInt(inputElement.getAttribute('data-field-index'), 10);
-                const field = fieldData.fields[fieldIndex];
-                const eventType = (field.type === 'checkbox' || field.type === 'select') ? 'change' : 'input';
-
-                inputElement.addEventListener(eventType, () => {
-                    const value = (field.type === 'checkbox') ? inputElement.checked : inputElement.value;
-                    if (port) {
-                        port.postMessage({ 
-                            action: 'updateFieldValue', 
-                            index: currentIndex, 
-                            fieldIndex: fieldIndex,
-                            value: value,
-                            fromPopout: true 
-                        });
+            if (port && isConnected) {
+                port.postMessage({ action: 'skipField', index: currentIndex });
+            } else {
+                // Fallback: update storage directly
+                const storageKey = `checklistState_${boundTabId}`;
+                ext.storage.local.get(storageKey, (result) => {
+                    if (result[storageKey]) {
+                        const newState = [...result[storageKey]];
+                        newState[currentIndex] = { processed: false, skipped: true };
+                        ext.storage.local.set({ [storageKey]: newState });
                     }
                 });
-
-                if (fieldIndex === 0) {
-                    inputElement.focus();
-                    if (field.type === 'text' && inputElement.value) {
-                        inputElement.select();
-                    }
-                }
-            });
-        }
-    }
-
-    function handleMessage(message) {
-        if (message.action === 'content-script-ready') {
-            requestNextField();
-            return;
-        }
-
-        try {
-            if (message.action === 'updateDisplay') {
-                currentIndex = message.index;
-                renderField(message.fieldData);
-            } else {
             }
-        } catch (error) {
-            displayError("An error occurred while rendering the checklist step.");
-        }
+        });
+
+        document.querySelectorAll('.display-input').forEach(input => {
+            const fieldIndex = parseInt(input.getAttribute('data-field-index'), 10);
+            const field = fieldData.fields[fieldIndex];
+            const eventType = (field.type === 'checkbox' || field.type === 'select') ? 'change' : 'input';
+            input.addEventListener(eventType, () => {
+                const value = (field.type === 'checkbox') ? input.checked : input.value;
+                if (port && isConnected) {
+                    port.postMessage({ action: 'updateFieldValue', index: currentIndex, fieldIndex, value });
+                }
+                // Note: field value updates require content script access to DOM
+                // so we can't provide a direct fallback here
+            });
+        });
     }
 
-    function requestNextField() {
-        if (port) {
-            port.postMessage({ action: 'getNextField' });
-        } else {
-            displayError("Cannot request field: connection not established.");
-        }
-    }
-
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
-    } else {
-        init();
-    }
-
+    document.addEventListener('DOMContentLoaded', init);
 })();

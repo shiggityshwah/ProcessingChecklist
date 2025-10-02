@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Processing Checklist</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        html {
+            overflow: hidden;
+        }
+
+        body {
+            margin: 0;
+            padding: 15px;
+            padding-top: 30px;
+            font-family: Arial, sans-serif;
+            background-color: #fff;
+            overflow: hidden;
+            box-sizing: border-box;
+            position: relative;
+            width: fit-content;
+            min-width: 250px;
+        }
+
+        /* Policy Number display in top-right corner */
+        #policy-number-display {
+            position: absolute;
+            top: 5px;
+            right: 10px;
+            font-size: 11px;
+            color: #666;
+            font-weight: normal;
+            z-index: 1000;
+        }
+
+        /* Override the fixed positioning for popout */
+        #next-field-display {
+            position: static;
+            width: auto;
+            min-width: 250px;
+            max-width: 500px;
+        }
+
+        #step-name {
+            font-weight: bold;
+            margin-bottom: 12px;
+            color: #005a9c;
+            font-size: 16px;
+        }
+
+        .field-group {
+            margin-bottom: 10px;
+        }
+
+        .field-group b {
+            display: block;
+            margin-bottom: 4px;
+            font-size: 13px;
+        }
+
+        /* Checkbox and Radio layouts matching on-page UI */
+        .checkbox-label,
+        .radio-label {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .checkbox-label input[type="checkbox"],
+        .radio-label input[type="radio"] {
+            width: fit-content !important;
+            margin: 0;
+            padding: 0;
+        }
+
+        .checkbox-label span,
+        .radio-label span {
+            margin-left: 5px;
+            width: 100%;
+        }
+
+        /* Label with div text layout */
+        .label-with-text {
+            display: flex;
+            align-items: center;
+        }
+
+        .label-with-text b {
+            display: inline;
+            margin: 0;
+        }
+
+        .label-with-text span {
+            margin-left: 8px;
+            color: #333;
+        }
+
+        .display-input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+
+        #button-container {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 15px;
+            gap: 8px;
+        }
+
+        #confirm-button {
+            background-color: #28a745;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 20px;
+            width: 36px;
+            height: 36px;
+            line-height: 36px;
+            text-align: center;
+            transition: background-color 0.2s ease-in-out;
+        }
+
+        #confirm-button:hover {
+            background-color: #218838;
+        }
+
+        #skip-button {
+            background-color: #ffc107;
+            color: #333;
+            padding: 8px 15px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: background-color 0.2s ease-in-out;
+        }
+
+        #skip-button:hover {
+            background-color: #e0a800;
+        }
+
+        .completion-message {
+            text-align: center;
+            color: #28a745;
+            font-weight: bold;
+            padding: 20px 0;
+        }
+
+        .error-message {
+            text-align: center;
+            color: #dc3545;
+            font-weight: bold;
+            padding: 20px 0;
+        }
+
+        .loading-message {
+            text-align: center;
+            color: #666;
+            padding: 20px 0;
+        }
+
+        /* Hide popout button in the popout window */
+        #popout-button {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="policy-number-display">Loading...</div>
+    <div id="next-field-display">
+        <div class="loading-message">Loading...</div>
+    </div>
+    <script src="popout.js"></script>
+</body>
+</html>

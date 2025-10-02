@@ -1,5 +1,6 @@
 # Local helper files
 .aider*
+CLAUDE.md
 
 # Node dependencies and build artifacts
 node_modules/
@@ -15,3 +16,8 @@ Thumbs.db
 # Environment and logs
 .env
 *.log
+
+# development files
+backup/
+index.html
+blue.css

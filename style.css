@@ -1,0 +1,179 @@
+/* General Body Styles */
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+    color: #333;
+}
+
+/* On-Page UI Container */
+#processing-checklist-container {
+    position: fixed !important;
+    top: 20px !important;
+    right: 20px !important;
+    z-index: 10000 !important;
+    background: #ffffff !important;
+    border: 1px solid #e0e0e0 !important;
+    border-radius: 12px !important;
+    padding: 16px !important;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.1) !important;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+    font-size: 14px !important;
+    max-width: 320px !important;
+    min-width: 280px !important;
+}
+
+/* Skipped Item Visual Cue */
+.skipped-item {
+    background-color: #fffbe6 !important; /* A light yellow background */
+    border-left: 4px solid #facc15 !important; /* A more prominent yellow-orange border */
+    padding-left: 30px !important;
+    transition: background-color 0.3s ease;
+}
+
+/* Confirmed Item Visual Cue */
+.confirmed-item {
+    background-color: #f0fff4 !important; /* A light green background */
+    border-left: 4px solid #48bb78 !important; /* A more prominent green border */
+    padding-left: 30px !important;
+    transition: background-color 0.3s ease;
+}
+
+.processing-checklist-checkbox {
+    position: absolute;
+    top: 8px;
+    left: 5px;
+    z-index: 1000;
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+}
+
+/* NAICS Code Specific Styles */
+#PolicyNAICSContainer {
+    position: relative;
+    padding-left: 30px;
+}
+
+
+
+#NaicsCode_input {
+    width: 100% !important;
+}
+
+.form-group, .details-row, .row {
+    position: relative;
+    padding-left: 30px !important;
+}
+
+#IncludesBinder {
+    margin-left: 30px;
+}
+
+.col-md-5 {
+    position: relative;
+    padding-left: 30px !important;
+}
+
+#coveragesTable, #reasonCodeContainer, #feesTable {
+    position: relative;
+    padding-left: 30px !important;
+}
+
+
+/* Popout & On-Page Display Styles */
+#next-field-display {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+}
+
+#display-content-wrapper {
+    background-color: #f7f7f7;
+    padding: 16px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-family: sans-serif;
+    min-width: 250px;
+    max-width: 350px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+}
+
+#step-name {
+    font-weight: bold;
+    margin-bottom: 12px;
+    color: #005a9c;
+    font-size: 16px;
+}
+
+.field-group {
+    margin-bottom: 10px;
+}
+
+.display-input, .on-page-input {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 14px;
+    box-sizing: border-box;
+}
+
+#button-container, #processing-checklist-container div:last-child {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 15px;
+    gap: 8px;
+}
+
+#confirm-button, #confirm-button-page {
+    background-color: #28a745;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 20px;
+    width: 36px;
+    height: 36px;
+    line-height: 36px;
+    text-align: center;
+    transition: background-color 0.2s ease-in-out;
+}
+
+#confirm-button:hover, #confirm-button-page:hover {
+    background-color: #218838;
+}
+
+#skip-button, #skip-button-page {
+    background-color: #ffc107;
+    color: #333;
+    padding: 8px 15px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: background-color 0.2s ease-in-out;
+}
+
+#skip-button:hover, #skip-button-page:hover {
+    background-color: #e0a800;
+}
+
+.completion-message {
+    color: #28a745;
+    font-weight: bold;
+    text-align: center;
+    padding: 20px 0;
+}
+
+.error-message {
+    color: #dc3545;
+    font-weight: bold;
+    text-align: center;
+    padding: 20px 0;
+}
+
+input[type="checkbox"] {
+  margin-right: 8px;
+  transform: scale(1.2);
+}
