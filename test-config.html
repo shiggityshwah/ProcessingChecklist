@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configuration Loader Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 20px;
+        }
+        .section {
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .success {
+            background-color: #d4edda;
+            border-color: #c3e6cb;
+        }
+        .error {
+            background-color: #f8d7da;
+            border-color: #f5c6cb;
+        }
+        pre {
+            background-color: #f5f5f5;
+            padding: 10px;
+            border-radius: 3px;
+            overflow-x: auto;
+        }
+        button {
+            padding: 8px 16px;
+            margin: 5px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <h1>ProcessingChecklist Configuration Loader Test</h1>
+
+    <div class="section">
+        <h2>Test Controls</h2>
+        <button onclick="testLoadConfig()">Load Configuration</button>
+        <button onclick="testValidation()">Test Validation</button>
+        <button onclick="clearResults()">Clear Results</button>
+    </div>
+
+    <div id="results"></div>
+
+    <script src="config-loader-simple.js"></script>
+    <script>
+        const resultsDiv = document.getElementById('results');
+
+        function clearResults() {
+            resultsDiv.innerHTML = '';
+        }
+
+        function addResult(title, content, isError = false) {
+            const section = document.createElement('div');
+            section.className = 'section ' + (isError ? 'error' : 'success');
+            section.innerHTML = `
+                <h3>${title}</h3>
+                <pre>${typeof content === 'object' ? JSON.stringify(content, null, 2) : content}</pre>
+            `;
+            resultsDiv.appendChild(section);
+        }
+
+        async function testLoadConfig() {
+            clearResults();
+            addResult('Test: Loading Configuration', 'Loading checklist-config.json...', false);
+
+            try {
+                const config = await ConfigLoader.load();
+
+                if (config.error) {
+                    const errorMsg = `[${config.error.type}] ${config.error.message}`;
+                    addResult('Configuration Load Failed', errorMsg, true);
+                } else {
+                    addResult('Configuration Loaded Successfully', {
+                        metadata: config.metadata,
+                        policyNumber: config.policyNumber,
+                        checklistItemCount: config.checklist.length,
+                        firstItem: config.checklist[0]
+                    }, false);
+
+                    // Test checklist structure
+                    const checklistInfo = config.checklist.map((item, idx) => ({
+                        index: idx,
+                        name: item.name,
+                        type: item.type,
+                        fieldCount: item.fields ? item.fields.length : 0
+                    }));
+                    addResult('Checklist Items', checklistInfo, false);
+                }
+            } catch (error) {
+                addResult('Unexpected Error', error.message + '\n\n' + error.stack, true);
+            }
+        }
+
+        async function testValidation() {
+            clearResults();
+            addResult('Test: JSON Syntax Validation', 'Testing JSON parsing...', false);
+
+            // Test 1: Valid JSON
+            const validJSON = `{
+                "metadata": {"form_name": "Test"},
+                "policy_number": {"selector": "#test"},
+                "checklist": [{"name": "Test", "type": "group", "fields": []}]
+            }`;
+
+            try {
+                JSON.parse(validJSON);
+                addResult('Test 1: Valid JSON', 'Valid JSON parsed successfully ✓', false);
+            } catch (e) {
+                addResult('Test 1: Valid JSON', 'Failed to parse: ' + e.message, true);
+            }
+
+            // Test 2: Invalid JSON - missing comma
+            const invalidJSON1 = `{
+                "name": "Test"
+                "type": "group"
+            }`;
+
+            try {
+                JSON.parse(invalidJSON1);
+                addResult('Test 2: Missing Comma', 'Should have failed but didn\'t!', true);
+            } catch (e) {
+                addResult('Test 2: Missing Comma', 'Correctly detected error: ' + e.message, false);
+            }
+
+            // Test 3: Invalid JSON - trailing comma
+            const invalidJSON2 = `{
+                "name": "Test",
+                "type": "group",
+            }`;
+
+            try {
+                JSON.parse(invalidJSON2);
+                addResult('Test 3: Trailing Comma', 'Should have failed but didn\'t!', true);
+            } catch (e) {
+                addResult('Test 3: Trailing Comma', 'Correctly detected error: ' + e.message, false);
+            }
+
+            // Test 4: Invalid JSON - single quotes
+            const invalidJSON3 = `{
+                'name': 'Test',
+                'type': 'group'
+            }`;
+
+            try {
+                JSON.parse(invalidJSON3);
+                addResult('Test 4: Single Quotes', 'Should have failed but didn\'t!', true);
+            } catch (e) {
+                addResult('Test 4: Single Quotes', 'Correctly detected error: ' + e.message, false);
+            }
+
+            addResult('Validation Tests Complete', 'JSON syntax validation tests completed. The config loader performs basic validation on structure.', false);
+        }
+
+        // Auto-run tests on load
+        window.addEventListener('DOMContentLoaded', () => {
+            console.log('Test page loaded. Click buttons to run tests.');
+        });
+    </script>
+</body>
+</html>

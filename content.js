@@ -16,28 +16,10 @@
 
     const RECONNECT_DELAY = 2000; // 2 seconds
 
-    const checklist = [{ name: "Link/Check Previous Policy", selector: "#btnCopyOrLinkPolicy", type: "virtual" },
-    { name: "Policy Number", fields: [{ name: "Policy Number", selector: "#PolicyNumber", type: "text" }], type: "group" },
-    { name: "Binder Checkbox", fields: [{ name: "Binder Checkbox", selector: "#IncludesBinder", type: "checkbox" }], type: "group", container_selector: "#IncludesBinder", container_levels_up: 2 },
-    
-    { name: "Named Insured", type: "group", container_selector:"#PrimaryInsuredName", container_levels_up: 3, fields: [{ name: "Primary Insured", selector: "#PrimaryInsuredName", type: "text" }, { name: "Secondary Insured", selector: "#SecondaryInsuredName", type: "text" }, { name: "DBA Name", selector: "#InsuredDbaName", type: "text" }] },
-    { name: "NAICS Code", fields: [{ name: "NAICS Code", selector: "#NaicsCode_input", type: "text" }], type: "group", container_selector: "#policyNAICSContainer", container_levels_up: 2 },
-    { name: "Insured Address", type: "group", container_selector: "#Address1", container_levels_up: 3, fields: [{ name: "Address Line 1", selector: "#Address1", type: "text" }, { name: "Address Line 2", selector: "#Address2", type: "text" }, { name: "City", selector: "#cityInput", type: "text" }, { name: "State", selector: "#State", type: "select" }, { name: "ZIP", selector: "#zipCodeInput", type: "text" }, { name: "Country", selector: "#Country", type: "select" }] },
-    { name: "Location of Risk", type: "group", container_selector: "#SameAddress", container_levels_up: 4, fields: [{ name: "Same as Insured Address", selector: "#SameAddress", type: "checkbox" }, { name: "Various locations", selector: "#VariousLocations", type: "checkbox" }, { name: "Address Line 1", selector: "#RiskAddress1", type: "text" }, { name: "Address Line 2", selector: "#RiskAddress2", type: "text" }, { name: "City", selector: "#RiskCity", type: "text" }, { name: "State", selector: "#RiskState", type: "select" }, { name: "ZIP", selector: "#RiskZip", type: "text" }, { name: "Country", selector: "#RiskCountry", type: "select" }] },
-    { name: "Policy Notes and ECP/CI Checkbox", container_selector: "#NeedsSpecialHandling", container_levels_up: 4, fields: [{ name: "Exempt Commercial Purchaser", selector: "#IsExemptCommercialPurchaser", type: "checkbox" }], type: "group" },
-    { name: "Transaction Type", fields: [{ name: "Transaction Type", selector: "#TransactionTypeId", type: "select" }], type: "group" },
-    { name: "Late Explanation Provided", container_selector: "label[for='IsLate']", container_levels_up: 1, fields: [
-        { name: "Late", selector: "label[for='IsLate']", type: "labelWithDivText", divSelector: "label[for='IsLate']" },
-        { name: "Explanation Provided", selector: "#ExplanationProvided", type: "checkbox" }
-    ], type: "group" },
-    { name: "Checkboxes", fields: [{ name: "SL1 Included", selector: "#SL1Included", type: "checkbox" }, { name: "SL2 Included", selector: "#SL2Included", type: "checkbox" }, { name: "New SL2", selector: "#NewSL2", type: "checkbox" }, { name: "SL2 Addendum", selector: "#SL2Addendum", type: "checkbox" }, { name: "Multi-State", selector: "#IsMultiState", type: "checkbox" }, { name: "WC Policy", selector: "#WCPolicy", type: "checkbox" }], type: "group", container_selector: "#SL1Included", container_levels_up: 4 },
-    { name: "Effective Date", container_selector: "#transactionEffectiveDate", container_levels_up: 4, fields:[{ name: "Effective Date", selector: "#transactionEffectiveDate", type: "text" }, { name: "Expiration Date", selector: "#transactionExpirationDate", type: "text" }, { name: "Open Ended", selector: "#IsOpenEnded", type: "checkbox" }], type: "group" },
-        { name: "Invoice Date", fields: [{ name: "Invoice Date", selector: "#transactionInsurerInvoiceDate", type: "text" }], type: "group" },
-        { name: "Insurer Details", container_selector: "#radSingleInsurer", container_levels_up: 4,fields: [{ name: "Single Insurer", selector: "#radSingleInsurer", type: "radio" }, { name: "Multiple Insurers", selector: "#radMultiInsurers", type: "radio" }, { name: "Include Prior Names", selector: "#IncludePriorNames", type: "checkbox" }, { name: "SLA Number Search", selector: "#SLANumber", type: "text" }, { name: "Insurer Search", selector: "#SingleSelectedInsurerId_input", type: "text" }], type: "group" },
-        { name: "Coverage", fields: [], type: "custom", table_id: "coveragesTable", container_selector: "#coveragesTable" },
-        { name: "Reason Code", fields: [{ name: "Reason Code", selector: "#ReasonCode", type: "select" }], type: "group", container_selector: "#ReasonsJson", container_levels_up:1},
-        { name: "Fees", fields: [], type: "custom", table_id: "feesTable", container_selector: "div.col-md-7:has(> div.k-widget.k-grid)",  }
-    ];
+    // Configuration will be loaded dynamically
+    let checklist = [];
+    let config = null;
+    let configLoaded = false;
 
     function connect() {
         try {
@@ -83,8 +65,70 @@
         };
     }
 
-    function init() {
+    async function loadConfiguration() {
+        try {
+            config = await ConfigLoader.load();
+
+            if (config.error) {
+                ConfigLoader.showErrorNotification(config);
+                showConfigError(config.error);
+                return false;
+            }
+
+            checklist = config.checklist;
+            configLoaded = true;
+            console.log(LOG_PREFIX, "Configuration loaded successfully:", config.metadata);
+            return true;
+        } catch (error) {
+            console.error(LOG_PREFIX, "Failed to load configuration:", error);
+            showConfigError({
+                type: 'LOAD_FAILED',
+                message: 'Failed to load configuration',
+                details: error.message
+            });
+            return false;
+        }
+    }
+
+    function showConfigError(error) {
+        // Create error display on page
+        const errorDiv = document.createElement('div');
+        errorDiv.id = 'processing-checklist-error';
+        errorDiv.style.cssText = `
+            position: fixed !important;
+            top: 20px !important;
+            right: 20px !important;
+            z-index: 10001 !important;
+            background: #dc3545 !important;
+            color: white !important;
+            border: 2px solid #c82333 !important;
+            border-radius: 8px !important;
+            padding: 15px !important;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3) !important;
+            font-family: Arial, sans-serif !important;
+            font-size: 14px !important;
+            max-width: 350px !important;
+        `;
+        errorDiv.innerHTML = `
+            <div style="font-weight: bold; margin-bottom: 8px; font-size: 16px;">⚠ Configuration Error</div>
+            <div style="margin-bottom: 8px;">${error.message || 'Unknown error'}</div>
+            <div style="font-size: 12px; margin-top: 8px; opacity: 0.9;">
+                Check browser console (F12) for details
+            </div>
+        `;
+        document.body.appendChild(errorDiv);
+    }
+
+    async function init() {
         isInitializing = true;
+
+        // Load configuration first
+        const loaded = await loadConfiguration();
+        if (!loaded) {
+            console.error(LOG_PREFIX, "Cannot initialize without valid configuration");
+            return;
+        }
+
         connect();
         // Wait for tab ID from background script before initializing
     }
@@ -204,7 +248,8 @@
     }
 
     function getPolicyNumber() {
-        const policyNumberElement = document.querySelector('#PolicyNumber');
+        const selector = config?.policyNumber?.selector || '#PolicyNumber';
+        const policyNumberElement = document.querySelector(selector);
         return policyNumberElement ? policyNumberElement.value : '';
     }
 
@@ -535,7 +580,12 @@
         }, 0);
     }
 
-    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
-    else init();
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+            init().catch(err => console.error(LOG_PREFIX, "Initialization failed:", err));
+        });
+    } else {
+        init().catch(err => console.error(LOG_PREFIX, "Initialization failed:", err));
+    }
 
 })();

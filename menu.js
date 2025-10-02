@@ -10,10 +10,17 @@
 
     function isFormPage(url) {
         if (!url) return false;
-        // Match local test page (index.html)
-        if (url.includes('index.html')) return true;
-        // Add production URL patterns here as needed
-        // Example: if (url.includes('yourcompany.com/policy')) return true;
+
+        // Default URL patterns - edit here to add more patterns
+        // These should match the patterns in checklist-config.yaml
+        const patterns = ['index.html'];
+
+        for (const p of patterns) {
+            if (url.includes(p)) {
+                return true;
+            }
+        }
+
         return false;
     }
 
