@@ -203,15 +203,4 @@ Each tab maintains isolated state using tab-specific storage keys, preventing in
 2. Verify elements exist when the page loads
 3. For dynamic content, you may need to wait for AJAX to complete
 
-## Development
 
-For detailed development documentation, see **CLAUDE.md** which includes:
-- Complete architecture overview
-- Communication flow details
-- Configuration system design
-- Maintenance and customization guide
-- Common patterns and examples
-
-## License
-
-This extension is provided as-is for internal use.
