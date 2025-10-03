@@ -65,8 +65,8 @@
     {
       "name": "NAICS Code",
       "type": "group",
-      "container_selector": "#policyNAICSContainer",
-      "container_levels_up": 2,
+      "container_selector": "#SicCode",
+      "container_levels_up": 1,
       "fields": [
         {
           "name": "NAICS Code",
