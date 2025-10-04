@@ -13,6 +13,8 @@
     let isConnected = false;
     let isProgrammaticUpdate = false; // Flag to prevent change event loops
     let isResetting = false; // Flag to track reset in progress
+    let highlightZones = new Map(); // Track created zone divs by index
+    let zoneCheckboxes = new Map(); // Track zone checkboxes by index: Map<itemIndex, Array<{checkbox, zoneIndex}>>
 
     const RECONNECT_DELAY = 2000; // 2 seconds
 
@@ -523,6 +525,14 @@
 
     function injectConfirmationCheckboxes(state) {
         checklist.forEach((step, index) => {
+            // Skip traditional checkbox injection if this item uses zone checkboxes
+            if (itemUsesZoneCheckboxes(index)) {
+                console.log(LOG_PREFIX, `Skipping traditional checkbox for item "${step.name}" - using zone checkboxes`);
+                // Inject zone checkboxes instead
+                injectZoneCheckboxes(index, state);
+                return;
+            }
+
             const container = getElementForStep(index);
             if (container && !document.getElementById(`checklist-confirm-cb-${index}`)) {
                 const checkbox = document.createElement('input');
@@ -545,6 +555,55 @@
         });
     }
 
+    /**
+     * Inject zone-based checkboxes for an item
+     * @param {number} index - The checklist item index
+     * @param {Array} state - The checklist state array
+     */
+    function injectZoneCheckboxes(index, state) {
+        const step = checklist[index];
+        if (!step.highlight_zones || step.highlight_zones.length === 0) return;
+
+        // Don't re-inject if already exists
+        if (zoneCheckboxes.has(index)) return;
+
+        const itemState = state && state[index] ? state[index] : { processed: false, skipped: false };
+        const checkboxes = [];
+
+        step.highlight_zones.forEach((zoneConfig, zoneIndex) => {
+            if (zoneConfig.show_checkbox !== true) return;
+
+            try {
+                const rect = calculateZoneRect(zoneConfig, index, zoneIndex);
+
+                if (!rect) {
+                    console.warn(LOG_PREFIX,
+                        `Item "${step.name}" zone ${zoneIndex} has show_checkbox:true but zone rect calculation failed`
+                    );
+                    return;
+                }
+
+                if (rect.width <= 0 || rect.height <= 0) {
+                    console.warn(LOG_PREFIX,
+                        `Item "${step.name}" zone ${zoneIndex} has show_checkbox:true but zone has invalid dimensions`
+                    );
+                    return;
+                }
+
+                const checkbox = createZoneCheckbox(index, zoneIndex, rect, itemState);
+                if (checkbox) {
+                    checkboxes.push({ checkbox, zoneIndex });
+                }
+            } catch (error) {
+                console.error(LOG_PREFIX, `Failed to inject zone checkbox for item ${index}, zone ${zoneIndex}:`, error);
+            }
+        });
+
+        if (checkboxes.length > 0) {
+            zoneCheckboxes.set(index, checkboxes);
+        }
+    }
+
     function updateOnPageCheckbox(index, isChecked) {
         const checkbox = document.getElementById(`checklist-confirm-cb-${index}`);
         if (checkbox && checkbox.checked !== isChecked) {
@@ -560,25 +619,388 @@
     function updateItemVisuals(state) {
         isProgrammaticUpdate = true;
         state.forEach((itemState, index) => {
-            const container = getElementForStep(index);
-            if (container) {
-                container.classList.remove('skipped-item', 'confirmed-item');
-                if (itemState.skipped) {
-                    container.classList.add('skipped-item');
-                } else if (itemState.processed) {
-                    container.classList.add('confirmed-item');
+            const step = checklist[index];
+
+            // Handle highlight zones if defined
+            if (step && step.highlight_zones && step.highlight_zones.length > 0) {
+                updateHighlightZones(index, itemState);
+            } else {
+                // Fallback to container highlighting
+                const container = getElementForStep(index);
+                if (container) {
+                    container.classList.remove('skipped-item', 'confirmed-item');
+                    if (itemState.skipped) {
+                        container.classList.add('skipped-item');
+                    } else if (itemState.processed) {
+                        container.classList.add('confirmed-item');
+                    }
                 }
             }
-            // Also update checkbox to match state
+
+            // Update traditional checkbox to match state (if it exists)
             const checkbox = document.getElementById(`checklist-confirm-cb-${index}`);
             if (checkbox && checkbox.checked !== itemState.processed) {
                 checkbox.checked = itemState.processed;
             }
+
+            // Update zone checkboxes to match state (if they exist)
+            updateZoneCheckboxes(index, itemState.processed);
         });
         setTimeout(() => {
             isProgrammaticUpdate = false;
         }, 0);
     }
+
+    /**
+     * Check if a checklist item uses zone-based checkboxes
+     * @param {number} index - The checklist item index
+     * @returns {boolean} True if any zone has show_checkbox: true
+     */
+    function itemUsesZoneCheckboxes(index) {
+        const step = checklist[index];
+        if (!step || !step.highlight_zones) return false;
+        return step.highlight_zones.some(zone => zone.show_checkbox === true);
+    }
+
+    /**
+     * Calculate checkbox position with overflow handling
+     * @param {Object} zoneRect - Zone rectangle {top, left, width, height}
+     * @param {number} checkboxWidth - Checkbox width in pixels
+     * @param {number} checkboxHeight - Checkbox height in pixels
+     * @returns {Object} Position {top, left}
+     */
+    function calculateCheckboxPosition(zoneRect, checkboxWidth, checkboxHeight) {
+        const padding = 10;
+        let left, top;
+
+        // Horizontal positioning
+        if (checkboxWidth > zoneRect.width - (2 * padding)) {
+            // Center horizontally - checkbox too wide for zone with padding
+            left = zoneRect.left + (zoneRect.width / 2) - (checkboxWidth / 2);
+        } else {
+            // Default: top-left with padding
+            left = zoneRect.left + padding;
+        }
+
+        // Vertical positioning
+        if (checkboxHeight > zoneRect.height - (2 * padding)) {
+            // Center vertically - checkbox too tall for zone with padding
+            top = zoneRect.top + (zoneRect.height / 2) - (checkboxHeight / 2);
+        } else {
+            // Default: top-left with padding
+            top = zoneRect.top + padding;
+        }
+
+        return { top, left };
+    }
+
+    /**
+     * Create a zone-positioned checkbox
+     * @param {number} itemIndex - The checklist item index
+     * @param {number} zoneIndex - The zone index within the item
+     * @param {Object} zoneRect - Zone rectangle {top, left, width, height}
+     * @param {Object} itemState - Item state {processed, skipped}
+     * @returns {HTMLElement|null} The created checkbox element or null
+     */
+    function createZoneCheckbox(itemIndex, zoneIndex, zoneRect, itemState) {
+        try {
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.className = 'zone-checkbox';
+            checkbox.setAttribute('data-zone-checkbox', 'true');
+            checkbox.setAttribute('data-item-index', itemIndex);
+            checkbox.setAttribute('data-zone-index', zoneIndex);
+            checkbox.checked = itemState.processed;
+
+            // Get checkbox dimensions (using known size from CSS)
+            const checkboxWidth = 18 + 4; // 18px + 2px padding on each side
+            const checkboxHeight = 18 + 4;
+
+            // Calculate position with overflow handling
+            const position = calculateCheckboxPosition(zoneRect, checkboxWidth, checkboxHeight);
+
+            // Position relative to document (with scroll offset)
+            checkbox.style.top = `${position.top + window.scrollY}px`;
+            checkbox.style.left = `${position.left + window.scrollX}px`;
+
+            // Add event listener
+            checkbox.addEventListener('change', () => {
+                if (isInitializing || isProgrammaticUpdate) return;
+                if (checkbox.checked) {
+                    handleConfirmField(itemIndex);
+                } else {
+                    unconfirmField(itemIndex);
+                }
+            });
+
+            document.body.appendChild(checkbox);
+            return checkbox;
+        } catch (error) {
+            console.error(LOG_PREFIX, `Failed to create zone checkbox for item ${itemIndex}, zone ${zoneIndex}:`, error);
+            return null;
+        }
+    }
+
+    /**
+     * Remove all zone checkboxes for a specific item index
+     * @param {number} index - The checklist item index
+     */
+    function removeZoneCheckboxes(index) {
+        const checkboxData = zoneCheckboxes.get(index);
+        if (checkboxData) {
+            checkboxData.forEach(({ checkbox }) => {
+                if (checkbox.parentNode) {
+                    checkbox.parentNode.removeChild(checkbox);
+                }
+            });
+            zoneCheckboxes.delete(index);
+        }
+    }
+
+    /**
+     * Update zone checkbox checked state
+     * @param {number} index - The checklist item index
+     * @param {boolean} isChecked - Whether the checkbox should be checked
+     */
+    function updateZoneCheckboxes(index, isChecked) {
+        const checkboxData = zoneCheckboxes.get(index);
+        if (checkboxData) {
+            isProgrammaticUpdate = true;
+            checkboxData.forEach(({ checkbox }) => {
+                if (checkbox.checked !== isChecked) {
+                    checkbox.checked = isChecked;
+                }
+            });
+            setTimeout(() => {
+                isProgrammaticUpdate = false;
+            }, 0);
+        }
+    }
+
+    /**
+     * Create or update highlight zones for a checklist item
+     * @param {number} index - The checklist item index
+     * @param {Object} itemState - The state object {processed, skipped}
+     */
+    function updateHighlightZones(index, itemState) {
+        // Remove existing zones for this index (but NOT checkboxes - they stay visible)
+        removeHighlightZones(index);
+
+        const step = checklist[index];
+        if (!step.highlight_zones || step.highlight_zones.length === 0) return;
+
+        // Determine state class
+        let stateClass = '';
+        if (itemState.processed) {
+            stateClass = 'confirmed-zone';
+        } else if (itemState.skipped) {
+            stateClass = 'skipped-zone';
+        }
+
+        // If no state, don't create zones (but checkboxes remain visible)
+        if (!stateClass) return;
+
+        const zoneDivs = [];
+
+        step.highlight_zones.forEach((zoneConfig, zoneIndex) => {
+            try {
+                const rect = calculateZoneRect(zoneConfig, index, zoneIndex);
+
+                if (!rect) {
+                    // Elements not found or invalid
+                    return;
+                }
+
+                // Skip zones that are fully off-screen
+                if (rect.width <= 0 || rect.height <= 0) {
+                    return;
+                }
+
+                // Create zone div
+                const zoneDiv = document.createElement('div');
+                zoneDiv.className = `highlight-zone-overlay ${stateClass}`;
+                zoneDiv.setAttribute('data-item-index', index);
+                zoneDiv.setAttribute('data-zone-index', zoneIndex);
+                zoneDiv.style.top = `${rect.top + window.scrollY}px`;
+                zoneDiv.style.left = `${rect.left + window.scrollX}px`;
+                zoneDiv.style.width = `${rect.width}px`;
+                zoneDiv.style.height = `${rect.height}px`;
+
+                document.body.appendChild(zoneDiv);
+                zoneDivs.push(zoneDiv);
+            } catch (error) {
+                console.warn(LOG_PREFIX, `Failed to create zone ${zoneIndex} for item "${step.name}":`, error);
+            }
+        });
+
+        if (zoneDivs.length > 0) {
+            highlightZones.set(index, zoneDivs);
+        }
+    }
+
+    /**
+     * Calculate the rectangle for a highlight zone from edge definitions
+     * @param {Object} zoneConfig - Zone configuration with top, bottom, left, right edges
+     * @param {number} itemIndex - The item index (for error logging)
+     * @param {number} zoneIndex - The zone index (for error logging)
+     * @returns {Object|null} Rectangle {top, left, width, height} or null if invalid
+     */
+    function calculateZoneRect(zoneConfig, itemIndex, zoneIndex) {
+        const edges = { top: null, bottom: null, left: null, right: null };
+
+        // Calculate each edge position
+        for (const edgeName of ['top', 'bottom', 'left', 'right']) {
+            const edgeConfig = zoneConfig[edgeName];
+            const element = document.querySelector(edgeConfig.selector);
+
+            if (!element) {
+                console.warn(LOG_PREFIX,
+                    `Item "${checklist[itemIndex].name}" (index ${itemIndex}), zone ${zoneIndex}: ` +
+                    `Element not found for ${edgeName} edge (selector: "${edgeConfig.selector}")`
+                );
+                return null;
+            }
+
+            const rect = element.getBoundingClientRect();
+            let position;
+
+            switch (edgeConfig.edge) {
+                case 'top':
+                    position = rect.top;
+                    break;
+                case 'bottom':
+                    position = rect.bottom;
+                    break;
+                case 'left':
+                    position = rect.left;
+                    break;
+                case 'right':
+                    position = rect.right;
+                    break;
+                default:
+                    console.warn(LOG_PREFIX,
+                        `Invalid edge type "${edgeConfig.edge}" for ${edgeName} in item ${itemIndex}, zone ${zoneIndex}`
+                    );
+                    return null;
+            }
+
+            edges[edgeName] = position + (edgeConfig.offset || 0);
+        }
+
+        // Calculate final rectangle
+        return {
+            top: edges.top,
+            left: edges.left,
+            width: edges.right - edges.left,
+            height: edges.bottom - edges.top
+        };
+    }
+
+    /**
+     * Remove all highlight zone divs for a specific item index
+     * @param {number} index - The checklist item index
+     */
+    function removeHighlightZones(index) {
+        const zoneDivs = highlightZones.get(index);
+        if (zoneDivs) {
+            zoneDivs.forEach(div => {
+                if (div.parentNode) {
+                    div.parentNode.removeChild(div);
+                }
+            });
+            highlightZones.delete(index);
+        }
+    }
+
+    /**
+     * Remove all highlight zones for all items
+     */
+    function removeAllHighlightZones() {
+        highlightZones.forEach((zoneDivs, index) => {
+            zoneDivs.forEach(div => {
+                if (div.parentNode) {
+                    div.parentNode.removeChild(div);
+                }
+            });
+        });
+        highlightZones.clear();
+    }
+
+    /**
+     * Remove all zone checkboxes for all items
+     */
+    function removeAllZoneCheckboxes() {
+        zoneCheckboxes.forEach((checkboxData, index) => {
+            checkboxData.forEach(({ checkbox }) => {
+                if (checkbox.parentNode) {
+                    checkbox.parentNode.removeChild(checkbox);
+                }
+            });
+        });
+        zoneCheckboxes.clear();
+    }
+
+    /**
+     * Recalculate zone checkbox positions
+     */
+    function recalculateZoneCheckboxes() {
+        zoneCheckboxes.forEach((checkboxData, index) => {
+            const step = checklist[index];
+            if (!step || !step.highlight_zones) return;
+
+            checkboxData.forEach(({ checkbox, zoneIndex }) => {
+                try {
+                    const zoneConfig = step.highlight_zones[zoneIndex];
+                    if (!zoneConfig) return;
+
+                    const rect = calculateZoneRect(zoneConfig, index, zoneIndex);
+                    if (!rect || rect.width <= 0 || rect.height <= 0) return;
+
+                    // Get checkbox dimensions
+                    const checkboxWidth = 18 + 4;
+                    const checkboxHeight = 18 + 4;
+
+                    // Calculate new position
+                    const position = calculateCheckboxPosition(rect, checkboxWidth, checkboxHeight);
+
+                    // Update position
+                    checkbox.style.top = `${position.top + window.scrollY}px`;
+                    checkbox.style.left = `${position.left + window.scrollX}px`;
+                } catch (error) {
+                    console.warn(LOG_PREFIX, `Failed to recalculate checkbox position for item ${index}, zone ${zoneIndex}:`, error);
+                }
+            });
+        });
+    }
+
+    /**
+     * Recalculate all visible highlight zones (for window resize)
+     */
+    function recalculateHighlightZones() {
+        const keys = getStorageKeys();
+        ext.storage.local.get(keys.checklistState, (result) => {
+            if (result[keys.checklistState]) {
+                updateItemVisuals(result[keys.checklistState]);
+            }
+        });
+        // Also recalculate zone checkbox positions
+        recalculateZoneCheckboxes();
+    }
+
+    // Add window resize listener for zone recalculation
+    let resizeTimeout;
+    window.addEventListener('resize', () => {
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(() => {
+            recalculateHighlightZones();
+        }, 250); // Debounce resize events
+    });
+
+    // Cleanup on page unload
+    window.addEventListener('beforeunload', () => {
+        removeAllHighlightZones();
+        removeAllZoneCheckboxes();
+    });
 
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', () => {

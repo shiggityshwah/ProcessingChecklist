@@ -177,3 +177,37 @@ input[type="checkbox"] {
   margin-right: 8px;
   transform: scale(1.2);
 }
+
+/* Highlight Zone Overlays */
+.highlight-zone-overlay {
+    position: absolute;
+    pointer-events: none;
+    z-index: 100;
+    transition: background-color 0.3s ease;
+}
+
+.highlight-zone-overlay.confirmed-zone {
+    background-color: rgba(72, 187, 120, 0.15); /* Semi-transparent green */
+    border: 1px solid rgba(72, 187, 120, 0.3);
+}
+
+.highlight-zone-overlay.skipped-zone {
+    background-color: rgba(250, 204, 21, 0.15); /* Semi-transparent yellow */
+    border: 1px solid rgba(250, 204, 21, 0.3);
+}
+
+/* Zone-positioned Checkboxes */
+.zone-checkbox {
+    position: absolute;
+    z-index: 10000; /* Above zones, below popups */
+    pointer-events: auto; /* Must remain clickable */
+    cursor: pointer;
+    width: 18px;
+    height: 18px;
+
+    /* Visual enhancement for visibility on colored zones */
+    background: white;
+    padding: 2px;
+    border-radius: 3px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}

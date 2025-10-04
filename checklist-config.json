@@ -13,25 +13,35 @@
     {
       "name": "Link/Check Previous Policy",
       "type": "virtual",
-      "selector": "#btnCopyOrLinkPolicy"
+      "selector": "#btnCopyOrLinkPolicy",
+      "highlight_zones": [
+        {
+          "top": {"selector": "#previousPolicyNumberContainer", "edge": "top", "offset": -4},
+          "bottom": {"selector": "#PrimaryInsuredName", "edge": "top", "offset": -6},
+          "left": {"selector": "#PolicyDetail", "edge": "left", "offset": 0},
+          "right": {"selector": "#PolicyDetail", "edge": "right", "offset": -2},
+          "show_checkbox": true
+        }
+      ]
     },
     {
       "name": "Policy Number",
       "type": "group",
+      "highlight_zones": [
+        {
+          "top": {"selector": "#PolicyNumber", "edge": "top", "offset": -5},
+          "bottom": {"selector": "#previousPolicyNumberContainer", "edge": "top", "offset": -5},
+          "left": {"selector": "#PolicyDetail", "edge": "left", "offset": 0},
+          "right": {"selector": "#PolicyDetail", "edge": "right", "offset": -2},
+          "show_checkbox": true
+        }
+      ],
       "fields": [
         {
           "name": "Policy Number",
           "selector": "#PolicyNumber",
           "type": "text"
-        }
-      ]
-    },
-    {
-      "name": "Binder Checkbox",
-      "type": "group",
-      "container_selector": "#IncludesBinder",
-      "container_levels_up": 2,
-      "fields": [
+        },
         {
           "name": "Binder Checkbox",
           "selector": "#IncludesBinder",
@@ -42,6 +52,15 @@
     {
       "name": "Named Insured",
       "type": "group",
+      "highlight_zones": [
+        {
+          "top": {"selector": "#PrimaryInsuredName", "edge": "top", "offset": -5},
+          "bottom": {"selector": "#InsuredDbaName", "edge": "bottom", "offset": 5},
+          "left": {"selector": "#PolicyDetail", "edge": "left", "offset": 0},
+          "right": {"selector": "#PrimaryInsuredName", "edge": "right", "offset": 15},
+          "show_checkbox": true
+        }
+      ],
       "container_selector": "#PrimaryInsuredName",
       "container_levels_up": 3,
       "fields": [
@@ -65,6 +84,15 @@
     {
       "name": "NAICS Code",
       "type": "group",
+      "highlight_zones": [
+        {
+          "top": {"selector": ".col-md-6:has(#PolicyNAICSContainer", "edge": "top", "offset": -5},
+          "bottom": {"selector": ".row:has(#Address1)", "edge": "top", "offset": -5},
+          "left": {"selector": ".col-md-6:has(#PolicyNAICSContainer", "edge": "left", "offset": 1},
+          "right": {"selector": "#PolicyDetail", "edge": "right", "offset": -2},
+          "show_checkbox": true
+        }
+      ],
       "container_selector": "#SicCode",
       "container_levels_up": 1,
       "fields": [
@@ -78,6 +106,15 @@
     {
       "name": "Insured Address",
       "type": "group",
+      "highlight_zones": [
+        {
+          "top": {"selector": ".col-md-6:has(#Address1", "edge": "top", "offset": -4},
+          "bottom": {"selector": ".col-md-6:has(#Address1", "edge": "bottom", "offset": 0},
+          "left": {"selector": "#PolicyDetail", "edge": "left", "offset": 0},
+          "right": {"selector": ".col-md-6:has(#Address1", "edge": "right", "offset": 0},
+          "show_checkbox": true
+        }
+      ],
       "container_selector": "#Address1",
       "container_levels_up": 3,
       "fields": [
@@ -116,6 +153,15 @@
     {
       "name": "Location of Risk",
       "type": "group",
+      "highlight_zones": [
+        {
+          "top": {"selector": ".col-md-6:has(#RiskAddress1", "edge": "top", "offset": -4},
+          "bottom": {"selector": ".col-md-6:has(#RiskAddress1", "edge": "bottom", "offset": -4},
+          "left": {"selector": ".col-md-6:has(#RiskAddress1", "edge": "left", "offset": 1},
+          "right": {"selector": "#PolicyDetail", "edge": "right", "offset": -2},
+          "show_checkbox": true
+        }
+      ],
       "container_selector": "#SameAddress",
       "container_levels_up": 4,
       "fields": [
@@ -164,6 +210,15 @@
     {
       "name": "Policy Notes and ECP/CI Checkbox",
       "type": "group",
+      "highlight_zones": [
+        {
+          "top": {"selector": ".row:has(#needsSpecialHandlingWrap", "edge": "top", "offset": -3},
+          "bottom": {"selector": ".row:has(#needsSpecialHandlingWrap", "edge": "bottom", "offset": -4},
+          "left": {"selector": "#PolicyDetail", "edge": "left", "offset": 0},
+          "right": {"selector": "#PolicyDetail", "edge": "right", "offset": -2},
+          "show_checkbox": true
+        }
+      ],
       "container_selector": "#NeedsSpecialHandling",
       "container_levels_up": 4,
       "fields": [
@@ -177,6 +232,15 @@
     {
       "name": "Transaction Type",
       "type": "group",
+      "highlight_zones": [
+        {
+          "top": {"selector": ".col-md-4:has(#TransactionTypeId", "edge": "top", "offset": -9},
+          "bottom": {"selector": ".col-md-4:has(#TransactionTypeId", "edge": "bottom", "offset": -2},
+          "left": {"selector": "#transaction-edit-panel", "edge": "left", "offset": 1},
+          "right": {"selector": "div.form-horizontal:nth-child(4) > div:nth-child(9) > div:nth-child(1)", "edge": "right", "offset": -10},
+          "show_checkbox": true
+        }
+      ],
       "fields": [
         {
           "name": "Transaction Type",
@@ -188,6 +252,15 @@
     {
       "name": "Late Explanation Provided",
       "type": "group",
+      "highlight_zones": [
+        {
+          "top": {"selector": ".col-md-3:has(#ExplanationProvided", "edge": "top", "offset": -1},
+          "bottom": {"selector": ".col-md-3:has(#ExplanationProvided", "edge": "bottom", "offset": 2},
+          "left": {"selector": ".col-md-3:has(#ExplanationProvided", "edge": "left", "offset": -30},
+          "right": {"selector": ".col-md-3:has(#ExplanationProvided", "edge": "right", "offset": -1},
+          "show_checkbox": true
+        }
+      ],
       "container_selector": "label[for='IsLate']",
       "container_levels_up": 1,
       "fields": [
@@ -207,6 +280,15 @@
     {
       "name": "Checkboxes",
       "type": "group",
+      "highlight_zones": [
+        {
+          "top": {"selector": ".col-md-5:has(#SL1Included", "edge": "top", "offset": -1},
+          "bottom": {"selector": ".col-md-5:has(#SL1Included", "edge": "bottom", "offset": 0},
+          "left": {"selector": ".col-md-5:has(#SL1Included", "edge": "left", "offset": 0},
+          "right": {"selector": "#transaction-edit-panel", "edge": "right", "offset": -3},
+          "show_checkbox": true
+        }
+      ],
       "container_selector": "#SL1Included",
       "container_levels_up": 4,
       "fields": [
@@ -243,8 +325,17 @@
       ]
     },
     {
-      "name": "Effective Date",
+      "name": "Effective Dates",
       "type": "group",
+      "highlight_zones": [
+        {
+          "top": {"selector": ".transaction-edit:has(#transactionEffectiveDate", "edge": "top", "offset": 1},
+          "bottom": {"selector": ".col-md-5:has(#transactionExpirationDate", "edge": "bottom", "offset": 0},
+          "left": {"selector": ".transaction-edit:has(#transactionEffectiveDate", "edge": "left", "offset": 1},
+          "right": {"selector": ".col-md-5:has(#transactionExpirationDate", "edge": "right", "offset": -1},
+          "show_checkbox": true
+        }
+      ],
       "container_selector": "#transactionEffectiveDate",
       "container_levels_up": 4,
       "fields": [
@@ -268,6 +359,15 @@
     {
       "name": "Invoice Date",
       "type": "group",
+      "highlight_zones": [
+        {
+          "top": {"selector": ".transaction-edit:has(#transactionEffectiveDate", "edge": "top", "offset": 1},
+          "bottom": {"selector": ".col-md-4:has(#transactionInsurerInvoiceDate", "edge": "bottom", "offset": 12},
+          "left": {"selector": ".col-md-4:has(#transactionInsurerInvoiceDate", "edge": "left", "offset": 0},
+          "right": {"selector": ".transaction-edit:has(#transactionEffectiveDate", "edge": "right", "offset": -3},
+          "show_checkbox": true
+        }
+      ],
       "fields": [
         {
           "name": "Invoice Date",
@@ -279,6 +379,15 @@
     {
       "name": "Insurer Details",
       "type": "group",
+      "highlight_zones": [
+        {
+          "top": {"selector": ".col-md-12:has(#selectedInsurerContainer", "edge": "top", "offset": 0},
+          "bottom": {"selector": "#coveragesTable", "edge": "top", "offset": -12},
+          "left": {"selector": ".transaction-edit:has(#transactionEffectiveDate", "edge": "left", "offset": 1},
+          "right": {"selector": ".transaction-edit:has(#transactionEffectiveDate", "edge": "right", "offset": -3},
+          "show_checkbox": true
+        }
+      ],
       "container_selector": "#radSingleInsurer",
       "container_levels_up": 4,
       "fields": [
@@ -312,6 +421,15 @@
     {
       "name": "Coverage",
       "type": "custom",
+      "highlight_zones": [
+        {
+          "top": {"selector": "#coveragesTable", "edge": "top", "offset": -11},
+          "bottom": {"selector": "#coverages > div:nth-child(2)", "edge": "bottom", "offset": 0},
+          "left": {"selector": ".transaction-edit:has(#transactionEffectiveDate", "edge": "left", "offset": 1},
+          "right": {"selector": ".transaction-edit:has(#transactionEffectiveDate", "edge": "right", "offset": -3},
+          "show_checkbox": true
+        }
+      ],
       "table_id": "coveragesTable",
       "container_selector": "#coveragesTable",
       "fields": []
@@ -319,6 +437,15 @@
     {
       "name": "Reason Code",
       "type": "group",
+      "highlight_zones": [
+        {
+          "top": {"selector": "#reasoncontainer > div:nth-child(1)", "edge": "top", "offset": -9},
+          "bottom": {"selector": "#reasoncontainer > div:nth-child(1) > div:nth-child(1)", "edge": "bottom", "offset": 0},
+          "left": {"selector": ".transaction-edit:has(#transactionEffectiveDate", "edge": "left", "offset": 1},
+          "right": {"selector": "#reasoncontainer > div:nth-child(1) > div:nth-child(1)", "edge": "right", "offset": 0},
+          "show_checkbox": true
+        }
+      ],
       "container_selector": "#ReasonsJson",
       "container_levels_up": 1,
       "fields": [
@@ -332,6 +459,15 @@
     {
       "name": "Fees",
       "type": "custom",
+      "highlight_zones": [
+        {
+          "top": {"selector": "div.col-md-7:nth-child(2)", "edge": "top", "offset": -9},
+          "bottom": {"selector": ".tab-content-row > div:nth-child(1) > div:nth-child(9)", "edge": "bottom", "offset": 0},
+          "left": {"selector": "div.col-md-7:nth-child(2)", "edge": "left", "offset": -14},
+          "right": {"selector": ".transaction-edit:has(#transactionEffectiveDate", "edge": "right", "offset": -3},
+          "show_checkbox": true
+        }
+      ],
       "table_id": "feesTable",
       "container_selector": "div.col-md-7:has(> div.k-widget.k-grid)",
       "fields": []

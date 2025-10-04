@@ -43,9 +43,18 @@
 
     <div class="section">
         <h2>Test Controls</h2>
+        <p><strong>Note:</strong> Due to browser CORS restrictions, you must run this from a local web server, not by opening the file directly.</p>
+        <p>Quick start: <code>python -m http.server 8000</code> or <code>npx http-server</code></p>
         <button onclick="testLoadConfig()">Load Configuration</button>
         <button onclick="testValidation()">Test Validation</button>
+        <button onclick="testWithFileInput()">Test with File Upload</button>
         <button onclick="clearResults()">Clear Results</button>
+    </div>
+
+    <div class="section" style="display: none;" id="fileUploadSection">
+        <h2>Upload Configuration File</h2>
+        <input type="file" id="configFileInput" accept=".json" />
+        <button onclick="loadFromFile()">Load File</button>
     </div>
 
     <div id="results"></div>
@@ -160,9 +169,80 @@
             addResult('Validation Tests Complete', 'JSON syntax validation tests completed. The config loader performs basic validation on structure.', false);
         }
 
+        function testWithFileInput() {
+            const section = document.getElementById('fileUploadSection');
+            section.style.display = section.style.display === 'none' ? 'block' : 'none';
+        }
+
+        async function loadFromFile() {
+            const fileInput = document.getElementById('configFileInput');
+            if (!fileInput.files.length) {
+                addResult('No File Selected', 'Please select a JSON file', true);
+                return;
+            }
+
+            clearResults();
+            const file = fileInput.files[0];
+            addResult('Test: Loading from File', `Loading ${file.name}...`, false);
+
+            try {
+                const text = await file.text();
+                const configData = JSON.parse(text);
+
+                // Manually validate using ConfigLoader's validation
+                if (!configData.checklist || !Array.isArray(configData.checklist)) {
+                    addResult('Validation Failed', 'Invalid configuration: missing checklist array', true);
+                    return;
+                }
+
+                const validationError = ConfigLoader.validateHighlightZones(configData.checklist);
+                if (validationError) {
+                    addResult('Validation Failed', validationError, true);
+                    return;
+                }
+
+                const config = {
+                    metadata: configData.metadata || {},
+                    policyNumber: configData.policy_number || { selector: '#PolicyNumber' },
+                    checklist: configData.checklist,
+                    raw: configData
+                };
+
+                addResult('Configuration Loaded Successfully', {
+                    metadata: config.metadata,
+                    policyNumber: config.policyNumber,
+                    checklistItemCount: config.checklist.length,
+                    firstItem: config.checklist[0]
+                }, false);
+
+                // Show items with highlight_zones
+                const itemsWithZones = config.checklist
+                    .map((item, idx) => ({ index: idx, name: item.name, hasZones: !!item.highlight_zones, zoneCount: item.highlight_zones?.length || 0 }))
+                    .filter(item => item.hasZones);
+
+                if (itemsWithZones.length > 0) {
+                    addResult('Items with Highlight Zones', itemsWithZones, false);
+                }
+
+                // Test checklist structure
+                const checklistInfo = config.checklist.map((item, idx) => ({
+                    index: idx,
+                    name: item.name,
+                    type: item.type,
+                    fieldCount: item.fields ? item.fields.length : 0,
+                    hasHighlightZones: !!item.highlight_zones
+                }));
+                addResult('Checklist Items', checklistInfo, false);
+
+            } catch (error) {
+                addResult('Error Loading File', error.message, true);
+            }
+        }
+
         // Auto-run tests on load
         window.addEventListener('DOMContentLoaded', () => {
             console.log('Test page loaded. Click buttons to run tests.');
+            addResult('Test Page Ready', 'To test the configuration:\n\n1. Start a local web server: python -m http.server 8000\n2. Click "Load Configuration" to test fetch from server\n3. OR click "Test with File Upload" to manually upload checklist-config.json\n\nThe "Test Validation" button tests JSON syntax validation.', false);
         });
     </script>
 </body>
