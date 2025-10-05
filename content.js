@@ -432,7 +432,7 @@
         if (!container) {
             container = document.createElement('div');
             container.id = 'processing-checklist-container';
-            container.style.cssText = `position: fixed !important; top: 20px !important; right: 20px !important; z-index: 10000 !important; background: #fff !important; border: 2px solid #007cba !important; border-radius: 8px !important; padding: 15px !important; box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important; font-family: Arial, sans-serif !important; font-size: 14px !important; max-width: 300px !important; min-width: 250px !important;`;
+            container.style.cssText = `position: fixed !important; top: 20px !important; right: 20px !important; z-index: 10000 !important; background: white !important; border: none !important; border-radius: 16px !important; padding: 20px !important; box-shadow: 0 8px 32px rgba(0,0,0,0.12) !important; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important; font-size: 14px !important; max-width: 340px !important; min-width: 300px !important; animation: slideInRight 0.3s ease-out !important;`;
             document.body.appendChild(container);
         }
         container.style.display = uiState.visible ? 'block' : 'none';
@@ -454,30 +454,31 @@
             let inputHtml;
             if (field.type === 'select') {
                 const options = field.options.map(opt => `<option value="${opt.value}" ${field.value === opt.value ? 'selected' : ''}>${opt.text}</option>`).join('');
-                inputHtml = `<select class="on-page-input" data-field-index="${index}" style="width: 100%; padding: 4px; border: 1px solid #ccc; border-radius: 4px;">${options}</select>`;
+                inputHtml = `<select class="on-page-input" data-field-index="${index}" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; transition: border-color 0.2s, box-shadow 0.2s;">${options}</select>`;
+                return `<div class="field-container"><label class="field-label">${field.name}</label>${inputHtml}</div>`;
             } else if (field.type === 'checkbox') {
-                return `<label style="display: flex; align-items: center;"><input type="checkbox" style="width: fit-content;" class="on-page-input" data-field-index="${index}" ${field.value ? 'checked' : ''}> <span style="margin-left: 5px; width: 100%;">${field.name}</span></label>`;
+                return `<label class="checkbox-field"><input type="checkbox" class="on-page-input" data-field-index="${index}" ${field.value ? 'checked' : ''}> <span>${field.name}</span></label>`;
             } else if (field.type === 'radio') {
-                return `<label style="display: flex; align-items: center;"><input type="radio" style="width: fit-content;" class="on-page-input" name="${fieldData.name}" data-field-index="${index}" ${field.value ? 'checked' : ''}> <span style="margin-left: 5px; width: 100%;">${field.name}</span></label>`;
+                return `<label class="checkbox-field"><input type="radio" class="on-page-input" name="${fieldData.name}" data-field-index="${index}" ${field.value ? 'checked' : ''}> <span>${field.name}</span></label>`;
             } else if (field.type === 'virtual') {
-                return `<div style="margin-bottom: 8px;"><label style="font-weight: bold; display: block; margin-bottom: 4px;">${field.name}: </label><span>${field.value}</span></div>`;
+                return `<div class="field-container"><label class="field-label">${field.name}:</label><span class="virtual-value">${field.value}</span></div>`;
             } else if (field.type === 'labelWithDivText') {
-                return `<div style="display: flex; align-items: center;"><label style="font-weight: bold;">${field.labelText}</label><div style="margin-left: 8px; margin-top:0px; color: #333;">${field.divText}</div></div>`;
+                return `<div class="field-container label-with-text"><label class="field-label">${field.labelText}</label><span class="virtual-value">${field.divText}</span></div>`;
             } else if (field.type === 'kendo_widget') {
                 // Handle Kendo widget - will be rendered separately after HTML insertion
-                return `<div class="kendo-widget-placeholder" data-field-index="${index}" data-field-selector="${field.selector}"></div>`;
+                return `<div class="field-container"><label class="field-label">${field.name}</label><div class="kendo-widget-placeholder" data-field-index="${index}" data-field-selector="${field.selector}"></div></div>`;
             } else {
-                inputHtml = `<input type="text" class="on-page-input" data-field-index="${index}" value="${field.value || ''}" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;">`;
+                inputHtml = `<input type="text" class="on-page-input" data-field-index="${index}" value="${field.value || ''}" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; transition: border-color 0.2s, box-shadow 0.2s;">`;
+                return `<div class="field-container"><label class="field-label">${field.name}</label>${inputHtml}</div>`;
             }
-            return `<div style="margin-bottom: 8px;"><label style="font-weight: bold; display: block; margin-bottom: 4px;">${field.name}</label>${inputHtml}</div>`;
         }).join('');
 
         container.innerHTML = `
-            <div style="font-weight: bold; margin-bottom: 8px; color: #007cba;">${fieldData.name}</div>
-            <div>${fieldsHtml}</div>
-            <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px;">
-                <button id="confirm-button-page">✓</button>
-                <button id="skip-button-page">Skip</button>
+            <div class="step-title">${fieldData.name}</div>
+            <div class="fields-container">${fieldsHtml}</div>
+            <div class="button-row">
+                <button id="skip-button-page" class="skip-btn">Skip</button>
+                <button id="confirm-button-page" class="confirm-btn">✓ Confirm</button>
             </div>`;
         document.getElementById('confirm-button-page').addEventListener('click', () => handleConfirmField(currentIndex));
         document.getElementById('skip-button-page').addEventListener('click', () => handleSkipField(currentIndex));
@@ -573,7 +574,7 @@
         }).join('');
 
         container.innerHTML = `
-            <div style="font-weight: bold; margin-bottom: 12px; color: #007cba;">Checklist Progress</div>
+            <div class="step-title">Checklist Progress</div>
             <div style="display: flex; flex-direction: column;">${itemsHtml}</div>
         `;
 

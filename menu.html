@@ -4,76 +4,171 @@
     <meta charset="UTF-8">
     <title>Processing Checklist Menu</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 10px;
-            width: 200px;
-            text-align: center;
+        * {
+            box-sizing: border-box;
         }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            margin: 0;
+            padding: 16px;
+            width: 240px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+        }
+
         button {
             width: 100%;
-            margin-bottom: 10px;
-            padding: 8px;
-            border: 1px solid #ccc;
-            border-radius: 3px;
+            margin-bottom: 12px;
+            padding: 12px 16px;
+            border: none;
+            border-radius: 8px;
             cursor: pointer;
-            background-color: #f5f5f5;
-            transition: background-color 0.2s, opacity 0.2s;
+            background: white;
+            color: #333;
+            font-size: 14px;
+            font-weight: 500;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
+
         button:hover:not(:disabled) {
-            background-color: #e9e9e9;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            background: #f8f9fa;
         }
+
+        button:active:not(:disabled) {
+            transform: translateY(0);
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+        }
+
         button:disabled {
             opacity: 0.5;
             cursor: not-allowed;
-            background-color: #ddd;
+            background: #e9ecef;
+            transform: none;
         }
-        button:last-child {
-            margin-bottom: 0;
-        }
-        .checkbox-container {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin-bottom: 10px;
-            padding: 5px;
-            font-size: 12px;
-        }
-        .checkbox-container input[type="checkbox"] {
-            margin-right: 5px;
-            cursor: pointer;
-        }
-        .checkbox-container label {
-            cursor: pointer;
-            user-select: none;
-        }
-        .view-mode-section {
+
+        .section {
+            background: white;
+            border-radius: 12px;
+            padding: 16px;
             margin-bottom: 12px;
-            padding: 8px;
-            background-color: #f9f9f9;
-            border-radius: 6px;
-            text-align: left;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+            animation: slideIn 0.3s ease-out;
         }
-        .view-mode-section h4 {
-            margin: 0 0 8px 0;
-            font-size: 12px;
-            font-weight: bold;
-            color: #555;
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
+
+        .section-title {
+            margin: 0 0 12px 0;
+            font-size: 13px;
+            font-weight: 600;
+            color: #495057;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
         .view-mode-option {
             display: flex;
             align-items: center;
-            margin-bottom: 6px;
-            font-size: 12px;
-        }
-        .view-mode-option input[type="radio"] {
-            margin-right: 6px;
+            margin-bottom: 10px;
+            padding: 8px;
+            border-radius: 6px;
+            transition: background-color 0.2s;
             cursor: pointer;
         }
+
+        .view-mode-option:hover {
+            background-color: #f8f9fa;
+        }
+
+        .view-mode-option input[type="radio"] {
+            margin: 0 10px 0 0;
+            cursor: pointer;
+            width: 18px;
+            height: 18px;
+            accent-color: #667eea;
+        }
+
         .view-mode-option label {
             cursor: pointer;
             user-select: none;
+            flex: 1;
+            font-size: 13px;
+            font-weight: 500;
+            color: #495057;
+        }
+
+        .default-button {
+            width: 100%;
+            padding: 8px 12px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            margin-top: 8px;
+            transition: all 0.2s;
+        }
+
+        .default-button:hover {
+            background: #5568d3;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 6px rgba(102, 126, 234, 0.4);
+        }
+
+        .default-button:active {
+            transform: translateY(0);
+        }
+
+        .default-info {
+            margin-top: 8px;
+            font-size: 11px;
+            color: #6c757d;
+            text-align: center;
+            font-style: italic;
+        }
+
+        .checkbox-container {
+            display: flex;
+            align-items: center;
+            padding: 8px;
+            border-radius: 6px;
+            transition: background-color 0.2s;
+            cursor: pointer;
+        }
+
+        .checkbox-container:hover {
+            background-color: #f8f9fa;
+        }
+
+        .checkbox-container input[type="checkbox"] {
+            margin: 0 10px 0 0;
+            cursor: pointer;
+            width: 18px;
+            height: 18px;
+            accent-color: #667eea;
+        }
+
+        .checkbox-container label {
+            cursor: pointer;
+            user-select: none;
+            font-size: 13px;
+            font-weight: 500;
+            color: #495057;
             flex: 1;
         }
     </style>
@@ -83,8 +178,8 @@
     <button id="popout-button">Pop-up Window</button>
     <button id="reset-button">Reset</button>
 
-    <div class="view-mode-section">
-        <h4>View Mode</h4>
+    <div class="section">
+        <div class="section-title">View Mode</div>
         <div class="view-mode-option">
             <input type="radio" id="view-mode-single" name="view-mode" value="single" checked>
             <label for="view-mode-single">Single Step View</label>
@@ -93,15 +188,15 @@
             <input type="radio" id="view-mode-full" name="view-mode" value="full">
             <label for="view-mode-full">Full Checklist View</label>
         </div>
-        <div class="checkbox-container" style="margin-top: 8px;">
-            <input type="checkbox" id="set-as-default">
-            <label for="set-as-default">Set as default</label>
-        </div>
+        <button class="default-button" id="set-as-default-button">Set as Default for New Tabs</button>
+        <div class="default-info" id="default-info">Default: Single Step View</div>
     </div>
 
-    <div class="checkbox-container">
-        <input type="checkbox" id="default-ui-visible">
-        <label for="default-ui-visible">Show UI by default</label>
+    <div class="section">
+        <div class="checkbox-container">
+            <input type="checkbox" id="default-ui-visible">
+            <label for="default-ui-visible">Show UI by default</label>
+        </div>
     </div>
     <script src="menu.js"></script>
 </body>

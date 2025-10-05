@@ -349,7 +349,7 @@
         }
 
         display.innerHTML = `
-            <div style="font-weight: bold; margin-bottom: 12px; color: #007cba; font-size: 14px;">Checklist Progress</div>
+            <div class="step-title">Checklist Progress</div>
             <div style="max-height: 500px; overflow-y: auto; display: flex; flex-direction: column;">${itemsHtml}</div>
         `;
 
@@ -393,30 +393,30 @@
             if (field.type === 'select') {
                 const options = field.options.map(opt => `<option value="${opt.value}" ${field.value === opt.value ? 'selected' : ''}>${opt.text}</option>`).join('');
                 inputHtml = `<select class="display-input" data-field-index="${index}">${options}</select>`;
-                return `<div class="field-group"><b>${field.name}</b>${inputHtml}</div>`;
+                return `<div class="field-container"><label class="field-label">${field.name}</label>${inputHtml}</div>`;
             } else if (field.type === 'checkbox') {
-                return `<label class="field-group checkbox-label"><input type="checkbox" class="display-input" data-field-index="${index}" ${field.value ? 'checked' : ''}> <span>${field.name}</span></label>`;
+                return `<label class="checkbox-field"><input type="checkbox" class="display-input" data-field-index="${index}" ${field.value ? 'checked' : ''}> <span>${field.name}</span></label>`;
             } else if (field.type === 'radio') {
-                return `<label class="field-group radio-label"><input type="radio" class="display-input" name="${fieldData.name}" data-field-index="${index}" ${field.value ? 'checked' : ''}> <span>${field.name}</span></label>`;
+                return `<label class="checkbox-field"><input type="radio" class="display-input" name="${fieldData.name}" data-field-index="${index}" ${field.value ? 'checked' : ''}> <span>${field.name}</span></label>`;
             } else if (field.type === 'virtual') {
-                return `<div class="field-group"><b>${field.name}:</b> <span>${field.value}</span></div>`;
+                return `<div class="field-container"><label class="field-label">${field.name}:</label><span class="virtual-value">${field.value}</span></div>`;
             } else if (field.type === 'labelWithDivText') {
-                return `<div class="field-group label-with-text"><b>${field.labelText}</b><span>${field.divText}</span></div>`;
+                return `<div class="field-container label-with-text"><label class="field-label">${field.labelText}</label><span class="virtual-value">${field.divText}</span></div>`;
             } else if (field.type === 'kendo_widget') {
                 // Handle Kendo widget - will be rendered separately after HTML insertion
-                return `<div class="field-group"><b>${field.name}</b><div class="kendo-widget-placeholder" data-field-index="${index}" data-field-selector="${field.selector}"></div></div>`;
+                return `<div class="field-container"><label class="field-label">${field.name}</label><div class="kendo-widget-placeholder" data-field-index="${index}" data-field-selector="${field.selector}"></div></div>`;
             } else {
                 inputHtml = `<input type="text" class="display-input" data-field-index="${index}" value="${field.value || ''}">`;
-                return `<div class="field-group"><b>${field.name}</b>${inputHtml}</div>`;
+                return `<div class="field-container"><label class="field-label">${field.name}</label>${inputHtml}</div>`;
             }
         }).join('');
 
         display.innerHTML = `
-            <div id="step-name">${fieldData.name}</div>
-            <div id="display-content">${fieldsHtml}</div>
-            <div id="button-container">
-                <button id="confirm-button">✓</button>
-                <button id="skip-button">Skip</button>
+            <div class="step-title">${fieldData.name}</div>
+            <div class="fields-container">${fieldsHtml}</div>
+            <div class="button-row">
+                <button id="skip-button" class="skip-btn">Skip</button>
+                <button id="confirm-button" class="confirm-btn">✓ Confirm</button>
             </div>
         `;
         setupEventListeners(fieldData);
@@ -451,35 +451,54 @@
     function resizeWindow() {
         // Wait for DOM to render and styles to apply
         setTimeout(() => {
-            // Force layout recalculation
-            document.body.style.overflow = 'hidden';
-
             // Get the next-field-display element which contains our content
             const displayElement = document.getElementById('next-field-display');
             if (!displayElement) return;
 
-            // Get the bounding rect which gives us the actual rendered size
-            const contentRect = displayElement.getBoundingClientRect();
+            // Use getBoundingClientRect for accurate height measurement
+            const displayRect = displayElement.getBoundingClientRect();
 
-            // Calculate needed dimensions including body padding
+            // Also check scrollHeight in case content overflows
+            const scrollHeight = displayElement.scrollHeight;
+
+            // Use the larger of the two measurements
+            const contentHeight = Math.max(displayRect.height, scrollHeight);
+
+            // Calculate body padding and policy number display height
             const bodyStyles = window.getComputedStyle(document.body);
             const paddingTop = parseInt(bodyStyles.paddingTop) || 0;
             const paddingBottom = parseInt(bodyStyles.paddingBottom) || 0;
-            const paddingLeft = parseInt(bodyStyles.paddingLeft) || 0;
-            const paddingRight = parseInt(bodyStyles.paddingRight) || 0;
 
-            // Calculate total needed size
-            const neededWidth = Math.ceil(contentRect.width + paddingLeft + paddingRight);
-            const neededHeight = Math.ceil(contentRect.height + paddingTop + paddingBottom);
+            // Account for policy number display at top
+            const policyDisplay = document.getElementById('policy-number-display');
+            const policyHeight = policyDisplay ? policyDisplay.offsetHeight : 0;
 
-            // Update window size - keep consistent width, adjust height
+            // Calculate total needed height
+            const neededHeight = contentHeight + paddingTop + paddingBottom + policyHeight;
+
+            // Update window size with buffer for window chrome
+            // Use 30px buffer (reduced from 70px to eliminate gap)
+            // Cap at 850px and add scrollbar if content exceeds
             ext.windows.getCurrent().then((window) => {
+                const calculatedHeight = neededHeight + 30;
+                const finalHeight = Math.round(Math.min(Math.max(calculatedHeight, 180), 850));
+                console.log('[Popout Resize]', {
+                    contentHeight,
+                    scrollHeight,
+                    displayRectHeight: displayRect.height,
+                    paddingTop,
+                    paddingBottom,
+                    policyHeight,
+                    neededHeight,
+                    calculatedHeight,
+                    finalHeight
+                });
                 ext.windows.update(window.id, {
-                    width: 300, // Fixed consistent width
-                    height: Math.min(Math.max(neededHeight + 50, 180), 700) // Extra buffer for buttons
+                    width: 300,
+                    height: finalHeight // Now properly rounded to integer
                 });
             });
-        }, 100);
+        }, 200);
     }
 
     function displayError(message) {

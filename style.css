@@ -1,25 +1,253 @@
 /* General Body Styles */
 body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     line-height: 1.6;
     color: #333;
 }
 
-/* On-Page UI Container */
-#processing-checklist-container {
-    position: fixed !important;
-    top: 20px !important;
-    right: 20px !important;
-    z-index: 10000 !important;
-    background: #ffffff !important;
-    border: 1px solid #e0e0e0 !important;
-    border-radius: 12px !important;
-    padding: 16px !important;
-    box-shadow: 0 5px 15px rgba(0,0,0,0.1) !important;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+/* Animations */
+@keyframes slideInRight {
+    from {
+        opacity: 0;
+        transform: translateX(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+/* Modern Field Styles */
+.step-title {
+    font-size: 18px !important;
+    font-weight: 600 !important;
+    color: #1a202c !important;
+    margin-bottom: 16px !important;
+    padding-bottom: 12px !important;
+    border-bottom: 2px solid #e2e8f0 !important;
+}
+
+.fields-container {
+    margin-bottom: 16px !important;
+}
+
+.field-container {
+    margin-bottom: 16px !important;
+}
+
+.field-label {
+    display: block !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    color: #4a5568 !important;
+    margin-bottom: 6px !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.5px !important;
+}
+
+.checkbox-field {
+    display: flex !important;
+    align-items: center !important;
+    padding: 10px !important;
+    border-radius: 8px !important;
+    transition: background-color 0.2s !important;
+    cursor: pointer !important;
+    margin-bottom: 8px !important;
+}
+
+.checkbox-field:hover {
+    background-color: #f7fafc !important;
+}
+
+.checkbox-field input[type="checkbox"],
+.checkbox-field input[type="radio"] {
+    width: 20px !important;
+    height: 20px !important;
+    margin: 0 12px 0 0 !important;
+    cursor: pointer !important;
+    accent-color: #667eea !important;
+}
+
+.checkbox-field span {
+    flex: 1 !important;
     font-size: 14px !important;
-    max-width: 320px !important;
-    min-width: 280px !important;
+    color: #2d3748 !important;
+}
+
+.virtual-value {
+    display: block !important;
+    padding: 10px 12px !important;
+    background-color: #f7fafc !important;
+    border-radius: 6px !important;
+    color: #2d3748 !important;
+    font-size: 14px !important;
+}
+
+.label-with-text {
+    display: flex !important;
+    align-items: center !important;
+}
+
+.label-with-text .virtual-value {
+    margin-left: 8px !important;
+    display: inline-block !important;
+}
+
+/* Input Focus States */
+.on-page-input:focus,
+.display-input:focus {
+    outline: none !important;
+    border-color: #667eea !important;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1) !important;
+}
+
+/* Modern Button Styles */
+.button-row {
+    display: flex !important;
+    gap: 10px !important;
+    margin-top: 20px !important;
+}
+
+.confirm-btn {
+    flex: 1 !important;
+    padding: 12px 20px !important;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 8px !important;
+    font-size: 15px !important;
+    font-weight: 600 !important;
+    cursor: pointer !important;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3) !important;
+    line-height: 1.2 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    min-height: 44px !important;
+}
+
+.confirm-btn:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4) !important;
+}
+
+.confirm-btn:active {
+    transform: translateY(0) !important;
+}
+
+.skip-btn {
+    padding: 12px 20px !important;
+    background: #e2e8f0 !important;
+    color: #4a5568 !important;
+    border: none !important;
+    border-radius: 8px !important;
+    font-size: 14px !important;
+    font-weight: 600 !important;
+    cursor: pointer !important;
+    transition: all 0.2s !important;
+    line-height: 1.2 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    min-height: 44px !important;
+}
+
+.skip-btn:hover {
+    background: #cbd5e0 !important;
+    transform: translateY(-1px) !important;
+}
+
+.skip-btn:active {
+    transform: translateY(0) !important;
+}
+
+/* Legacy button support (old IDs) - High specificity to override external CSS */
+#processing-checklist-container #confirm-button-page,
+#processing-checklist-container #confirm-button,
+button#confirm-button-page,
+button#confirm-button {
+    flex: 1 !important;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+    color: white !important;
+    border: none !important;
+    padding: 12px 20px !important;
+    border-radius: 8px !important;
+    cursor: pointer !important;
+    font-size: 15px !important;
+    font-weight: 600 !important;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3) !important;
+    line-height: 1.2 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    min-height: 44px !important;
+    height: 44px !important;
+    max-height: 44px !important;
+    box-sizing: border-box !important;
+}
+
+#processing-checklist-container #confirm-button-page:hover,
+#processing-checklist-container #confirm-button:hover,
+button#confirm-button-page:hover,
+button#confirm-button:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4) !important;
+}
+
+#processing-checklist-container #confirm-button-page:active,
+#processing-checklist-container #confirm-button:active,
+button#confirm-button-page:active,
+button#confirm-button:active {
+    transform: translateY(0) !important;
+}
+
+#processing-checklist-container #skip-button-page,
+#processing-checklist-container #skip-button,
+button#skip-button-page,
+button#skip-button {
+    background: #e2e8f0 !important;
+    color: #4a5568 !important;
+    border: none !important;
+    padding: 12px 20px !important;
+    border-radius: 8px !important;
+    cursor: pointer !important;
+    font-size: 14px !important;
+    font-weight: 600 !important;
+    transition: all 0.2s !important;
+    line-height: 1.2 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    min-height: 44px !important;
+    height: 44px !important;
+    max-height: 44px !important;
+    box-sizing: border-box !important;
+}
+
+#processing-checklist-container #skip-button-page:hover,
+#processing-checklist-container #skip-button:hover,
+button#skip-button-page:hover,
+button#skip-button:hover {
+    background: #cbd5e0 !important;
+    transform: translateY(-1px) !important;
+}
+
+#processing-checklist-container #skip-button-page:active,
+#processing-checklist-container #skip-button:active,
+button#skip-button-page:active,
+button#skip-button:active {
+    transform: translateY(0) !important;
 }
 
 /* Full Checklist View Container */
@@ -158,46 +386,7 @@ body {
     box-sizing: border-box;
 }
 
-#button-container, #processing-checklist-container div:last-child {
-    display: flex;
-    justify-content: flex-end;
-    margin-top: 15px;
-    gap: 8px;
-}
-
-#confirm-button, #confirm-button-page {
-    background-color: #28a745;
-    color: white;
-    border: none;
-    border-radius: 50%;
-    cursor: pointer;
-    font-size: 20px;
-    width: 36px;
-    height: 36px;
-    line-height: 36px;
-    text-align: center;
-    transition: background-color 0.2s ease-in-out;
-}
-
-#confirm-button:hover, #confirm-button-page:hover {
-    background-color: #218838;
-}
-
-#skip-button, #skip-button-page {
-    background-color: #ffc107;
-    color: #333;
-    padding: 8px 15px;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 14px;
-    font-weight: 500;
-    transition: background-color 0.2s ease-in-out;
-}
-
-#skip-button:hover, #skip-button-page:hover {
-    background-color: #e0a800;
-}
+/* Old button styles removed - now using .button-row, .confirm-btn, .skip-btn classes defined above */
 
 .completion-message {
     color: #28a745;

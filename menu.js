@@ -114,8 +114,8 @@
                 radio.addEventListener('change', handleViewModeChange);
             });
 
-            // Handle "Set as default" checkbox
-            document.getElementById('set-as-default').addEventListener('change', handleSetAsDefaultChange);
+            // Handle "Set as default" button
+            document.getElementById('set-as-default-button').addEventListener('click', handleSetAsDefaultClick);
 
         } catch (error) {
             console.error(LOG_PREFIX, "Failed to connect to background script:", error);
@@ -139,12 +139,19 @@
                 fullRadio.checked = true;
             }
 
-            // Update "Set as default" checkbox
-            const setAsDefaultCheckbox = document.getElementById('set-as-default');
-            setAsDefaultCheckbox.checked = (currentViewMode === defaultViewMode);
+            // Update default info text
+            updateDefaultInfoText(defaultViewMode);
 
             dbg("Loaded view mode settings:", { currentViewMode, defaultViewMode });
         });
+    }
+
+    function updateDefaultInfoText(defaultViewMode) {
+        const defaultInfo = document.getElementById('default-info');
+        if (defaultInfo) {
+            const modeText = defaultViewMode === 'single' ? 'Single Step View' : 'Full Checklist View';
+            defaultInfo.textContent = `Default: ${modeText}`;
+        }
     }
 
     function handleViewModeChange(e) {
@@ -156,34 +163,37 @@
         // Save to tab-specific storage
         ext.storage.local.set({ [`viewMode_${currentTabId}`]: newMode });
 
-        // If "Set as default" is checked, also save to defaultViewMode
-        const setAsDefaultCheckbox = document.getElementById('set-as-default');
-        if (setAsDefaultCheckbox.checked) {
-            ext.storage.local.set({ defaultViewMode: newMode });
-        }
-
         // Send message to content script and popout to update their displays
         if (port) {
             port.postMessage({ action: 'changeViewMode', tabId: currentTabId, mode: newMode });
         }
     }
 
-    function handleSetAsDefaultChange(e) {
-        dbg("Set as default changed:", e.target.checked);
-
+    function handleSetAsDefaultClick() {
         if (!currentTabId) return;
 
         // Get current view mode
         const singleRadio = document.getElementById('view-mode-single');
         const currentMode = singleRadio.checked ? 'single' : 'full';
 
-        if (e.target.checked) {
-            // Save current mode as default
-            ext.storage.local.set({ defaultViewMode: currentMode });
-        } else {
-            // Remove default (will fall back to 'single')
-            ext.storage.local.remove('defaultViewMode');
-        }
+        // Save current mode as default
+        ext.storage.local.set({ defaultViewMode: currentMode }, () => {
+            dbg("Set default view mode to:", currentMode);
+
+            // Update the info text
+            updateDefaultInfoText(currentMode);
+
+            // Show visual feedback
+            const button = document.getElementById('set-as-default-button');
+            const originalText = button.textContent;
+            button.textContent = '✓ Saved!';
+            button.style.background = '#28a745';
+
+            setTimeout(() => {
+                button.textContent = originalText;
+                button.style.background = '';
+            }, 1500);
+        });
     }
 
     init();
