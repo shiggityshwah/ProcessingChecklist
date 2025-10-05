@@ -68,6 +68,17 @@
                     };
                 }
 
+                // Validate table types
+                const tableValidationError = this.validateTableTypes(config.checklist);
+                if (tableValidationError) {
+                    return {
+                        error: {
+                            type: 'VALIDATION_ERROR',
+                            message: tableValidationError
+                        }
+                    };
+                }
+
                 return {
                     metadata: config.metadata || {},
                     policyNumber: config.policy_number || { selector: '#PolicyNumber' },
@@ -172,6 +183,95 @@
                     if (field.type === 'kendo_widget') {
                         if (!field.selector) {
                             return `Item "${item.name}" (index ${i}), field "${field.name}": kendo_widget requires "selector" property`;
+                        }
+                    }
+                }
+            }
+
+            return null; // All valid
+        },
+
+        /**
+         * Validate table type configuration
+         * @param {Array} checklist - The checklist items array
+         * @returns {string|null} Error message or null if valid
+         */
+        validateTableTypes: function(checklist) {
+            for (let i = 0; i < checklist.length; i++) {
+                const item = checklist[i];
+
+                if (item.type !== 'table') {
+                    continue; // Only validate table types
+                }
+
+                // Required properties for table type
+                if (!item.table_selector) {
+                    return `Item "${item.name}" (index ${i}): table type requires "table_selector" property`;
+                }
+
+                if (!item.columns || !Array.isArray(item.columns)) {
+                    return `Item "${item.name}" (index ${i}): table type requires "columns" array`;
+                }
+
+                if (item.columns.length === 0) {
+                    return `Item "${item.name}" (index ${i}): table must have at least one column`;
+                }
+
+                // Validate dynamic property
+                if (item.hasOwnProperty('dynamic') && typeof item.dynamic !== 'boolean') {
+                    return `Item "${item.name}" (index ${i}): "dynamic" property must be a boolean`;
+                }
+
+                // Validate row_selector
+                if (!item.row_selector) {
+                    return `Item "${item.name}" (index ${i}): table type requires "row_selector" property`;
+                }
+
+                // Validate columns
+                const validColumnTypes = ['text', 'checkbox', 'select', 'label', 'kendo_widget'];
+                for (let j = 0; j < item.columns.length; j++) {
+                    const col = item.columns[j];
+
+                    if (!col.name) {
+                        return `Item "${item.name}" (index ${i}), column ${j}: missing required "name" property`;
+                    }
+
+                    if (!col.selector) {
+                        return `Item "${item.name}" (index ${i}), column "${col.name}": missing required "selector" property`;
+                    }
+
+                    if (!col.type) {
+                        return `Item "${item.name}" (index ${i}), column "${col.name}": missing required "type" property`;
+                    }
+
+                    if (!validColumnTypes.includes(col.type)) {
+                        return `Item "${item.name}" (index ${i}), column "${col.name}": invalid type "${col.type}". Valid types: ${validColumnTypes.join(', ')}`;
+                    }
+
+                    // Validate label type specific properties
+                    if (col.type === 'label' && !col.extract) {
+                        return `Item "${item.name}" (index ${i}), column "${col.name}": label type requires "extract" property (e.g., "text", "innerHTML")`;
+                    }
+                }
+
+                // Validate row_identifier if present
+                if (item.row_identifier) {
+                    if (typeof item.row_identifier.column_index !== 'number') {
+                        return `Item "${item.name}" (index ${i}): row_identifier.column_index must be a number`;
+                    }
+                    if (item.row_identifier.column_index >= item.columns.length) {
+                        return `Item "${item.name}" (index ${i}): row_identifier.column_index (${item.row_identifier.column_index}) exceeds number of columns`;
+                    }
+                }
+
+                // Validate new_row_trigger if present
+                if (item.new_row_trigger) {
+                    if (!Array.isArray(item.new_row_trigger.columns)) {
+                        return `Item "${item.name}" (index ${i}): new_row_trigger.columns must be an array`;
+                    }
+                    for (const colIdx of item.new_row_trigger.columns) {
+                        if (typeof colIdx !== 'number' || colIdx >= item.columns.length) {
+                            return `Item "${item.name}" (index ${i}): new_row_trigger contains invalid column index ${colIdx}`;
                         }
                     }
                 }

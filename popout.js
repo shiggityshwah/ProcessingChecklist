@@ -307,7 +307,32 @@
     }
 
     function updateFieldValues(fieldData) {
-        if (!fieldData || !fieldData.fields) return;
+        if (!fieldData) return;
+
+        // Handle table type
+        if (fieldData.type === 'table') {
+            const cellInputs = document.querySelectorAll('.table-cell-input-popout');
+            cellInputs.forEach(input => {
+                const rowIndex = parseInt(input.getAttribute('data-row'), 10);
+                const colIndex = parseInt(input.getAttribute('data-col'), 10);
+                const value = fieldData.tableData?.rows[rowIndex]?.[`col${colIndex}`];
+
+                if (value !== undefined) {
+                    if (input.type === 'checkbox') {
+                        if (input.checked !== value) input.checked = value;
+                    } else {
+                        // Only update if different and not currently focused
+                        if (input !== document.activeElement && input.value !== value) {
+                            input.value = value;
+                        }
+                    }
+                }
+            });
+            return;
+        }
+
+        // Handle regular fields
+        if (!fieldData.fields) return;
         fieldData.fields.forEach((field, index) => {
             const inputElement = document.querySelector(`.display-input[data-field-index="${index}"]`);
             if (inputElement) {
@@ -374,6 +399,61 @@
         resizeWindow();
     }
 
+    /**
+     * Render table UI for display in popout
+     * @param {Object} tableData - Table data with rows and column info
+     * @param {Object} itemConfig - Table item configuration (columns, dynamic)
+     * @returns {string} HTML string for table display
+     */
+    function renderTableUI(tableData, itemConfig) {
+        if (!tableData || !tableData.rows) {
+            return '<div class="table-empty">No data</div>';
+        }
+
+        const { rows, rowCount } = tableData;
+
+        if (rowCount === 0) {
+            return '<div class="table-empty">Empty table</div>';
+        }
+
+        // Build table header
+        const headerHtml = itemConfig.columns
+            .map(col => `<th>${col.name}</th>`)
+            .join('');
+
+        // Build table rows with editable inputs (same as on-page UI)
+        const rowsHtml = rows.map((row, rowIndex) => {
+            const cells = itemConfig.columns.map((col, colIndex) => {
+                const value = row[`col${colIndex}`];
+                let cellHtml = '';
+
+                if (col.type === 'checkbox') {
+                    cellHtml = `<input type="checkbox" class="table-cell-input-popout" data-row="${rowIndex}" data-col="${colIndex}" ${value ? 'checked' : ''} style="cursor: pointer; margin: 0;">`;
+                } else if (col.type === 'select') {
+                    cellHtml = `<input type="text" class="table-cell-input-popout" data-row="${rowIndex}" data-col="${colIndex}" value="${value || ''}" placeholder="—">`;
+                } else if (col.type === 'label') {
+                    const displayValue = value || '<span style="color: #cbd5e0; font-style: italic;">—</span>';
+                    cellHtml = `<span style="font-size: 12px; padding: 6px 8px; display: block;">${displayValue}</span>`;
+                } else {
+                    cellHtml = `<input type="text" class="table-cell-input-popout" data-row="${rowIndex}" data-col="${colIndex}" value="${value || ''}" placeholder="—">`;
+                }
+
+                return `<td>${cellHtml}</td>`;
+            }).join('');
+
+            return `<tr data-row-index="${rowIndex}">${cells}</tr>`;
+        }).join('');
+
+        return `
+            <div class="mini-table-container">
+                <table class="mini-table">
+                    <thead><tr>${headerHtml}</tr></thead>
+                    <tbody>${rowsHtml}</tbody>
+                </table>
+            </div>
+        `;
+    }
+
     function renderField(fieldData, policyNumber, viewMode) {
         viewMode = viewMode || 'single';
         const display = document.getElementById('next-field-display');
@@ -385,6 +465,26 @@
         if (!fieldData) {
             display.innerHTML = '<div class="completion-message">All fields checked!</div>';
             resizeWindow();
+            return;
+        }
+
+        // Handle table type
+        if (fieldData.type === 'table') {
+            const tableHtml = renderTableUI(fieldData.tableData, { columns: fieldData.columns, dynamic: fieldData.dynamic });
+            display.innerHTML = `
+                <div class="step-title">${fieldData.name}</div>
+                ${tableHtml}
+                <div class="button-row">
+                    <button id="skip-button" class="skip-btn">Skip</button>
+                    <button id="confirm-button" class="confirm-btn">✓ Confirm</button>
+                </div>
+            `;
+            setupEventListeners(fieldData);
+
+            // Attach listeners to popout table inputs
+            attachPopoutTableInputListeners(fieldData);
+
+            resizeWindow(true); // Pass true to indicate table type for wider window
             return;
         }
 
@@ -427,6 +527,43 @@
         resizeWindow();
     }
 
+    /**
+     * Attach event listeners to popout table inputs
+     */
+    function attachPopoutTableInputListeners(fieldData) {
+        const inputs = document.querySelectorAll('.table-cell-input-popout');
+
+        inputs.forEach(input => {
+            const rowIndex = parseInt(input.getAttribute('data-row'), 10);
+            const colIndex = parseInt(input.getAttribute('data-col'), 10);
+            const col = fieldData.columns[colIndex];
+
+            if (!col) return;
+
+            const eventType = (col.type === 'checkbox' || col.type === 'select') ? 'change' : 'input';
+
+            input.addEventListener(eventType, () => {
+                const newValue = input.type === 'checkbox' ? input.checked : input.value;
+
+                // Update the table data in fieldData
+                if (!fieldData.tableData.rows[rowIndex]) return;
+
+                fieldData.tableData.rows[rowIndex][`col${colIndex}`] = newValue;
+
+                // Send message to content script to update the actual form
+                if (port && isConnected) {
+                    port.postMessage({
+                        action: 'updateTableCell',
+                        index: currentIndex,
+                        rowIndex: rowIndex,
+                        colIndex: colIndex,
+                        value: newValue
+                    });
+                }
+            });
+        });
+    }
+
     function renderKendoWidgetsPopout(container, fieldData) {
         const placeholders = container.querySelectorAll('.kendo-widget-placeholder');
         placeholders.forEach(placeholder => {
@@ -448,7 +585,7 @@
         });
     }
 
-    function resizeWindow() {
+    function resizeWindow(isTable = false) {
         // Wait for DOM to render and styles to apply
         setTimeout(() => {
             // Get the next-field-display element which contains our content
@@ -482,6 +619,8 @@
             ext.windows.getCurrent().then((window) => {
                 const calculatedHeight = neededHeight + 30;
                 const finalHeight = Math.round(Math.min(Math.max(calculatedHeight, 180), 850));
+                const finalWidth = isTable ? 450 : 300; // Wider for tables
+
                 console.log('[Popout Resize]', {
                     contentHeight,
                     scrollHeight,
@@ -491,11 +630,13 @@
                     policyHeight,
                     neededHeight,
                     calculatedHeight,
-                    finalHeight
+                    finalHeight,
+                    finalWidth,
+                    isTable
                 });
                 ext.windows.update(window.id, {
-                    width: 300,
-                    height: finalHeight // Now properly rounded to integer
+                    width: finalWidth,
+                    height: finalHeight
                 });
             });
         }, 200);

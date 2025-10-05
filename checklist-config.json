@@ -420,7 +420,27 @@
     },
     {
       "name": "Coverage",
-      "type": "custom",
+      "type": "table",
+      "dynamic": true,
+       "table_selector": "#coveragesTable > table:nth-child(1)",
+      "columns": [
+    {
+      "name": "Code",
+      "selector": ".coverage-code-search",
+      "type": "text"
+    },
+    {
+      "name": "Coverage",
+      "selector": "input.select-coverage",
+      "type": "text"
+    },
+    {
+      "name": "Premium",
+      "selector": ".coverage-premium",
+      "type": "text"
+    }
+  ],
+  "row_selector": "tbody tr",
       "highlight_zones": [
         {
           "top": {"selector": "#coveragesTable", "edge": "top", "offset": -11},
@@ -431,8 +451,8 @@
         }
       ],
       "table_id": "coveragesTable",
-      "container_selector": "#coveragesTable",
-      "fields": []
+      "container_selector": "#coveragesTable"
+      
     },
     {
       "name": "Reason Code",

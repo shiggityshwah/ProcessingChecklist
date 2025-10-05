@@ -81,6 +81,21 @@
             checklist = config.checklist;
             configLoaded = true;
             console.log(LOG_PREFIX, "Configuration loaded successfully:", config.metadata);
+
+            // Log table items for debugging
+            const tableItems = checklist.filter(item => item.type === 'table');
+            if (tableItems.length > 0) {
+                console.log(LOG_PREFIX, `[Table] Found ${tableItems.length} table item(s) in config:`);
+                tableItems.forEach((item, idx) => {
+                    console.log(LOG_PREFIX, `[Table] ${idx + 1}. "${item.name}"`, {
+                        table_selector: item.table_selector,
+                        row_selector: item.row_selector,
+                        dynamic: item.dynamic,
+                        columns: item.columns.map(c => `${c.name} (${c.type})`).join(', ')
+                    });
+                });
+            }
+
             return true;
         } catch (error) {
             console.error(LOG_PREFIX, "Failed to load configuration:", error);
@@ -188,6 +203,7 @@
                 ext.storage.local.set({ [keys.checklistState]: storedState }, () => {
                     injectConfirmationCheckboxes(storedState);
                     attachListenersToPageElements();
+                    initializeTableWatchers();
                     updateAndBroadcast(storedState, uiState, viewMode);
                     setTimeout(() => {
                         isInitializing = false;
@@ -196,6 +212,7 @@
             } else {
                 injectConfirmationCheckboxes(storedState);
                 attachListenersToPageElements();
+                initializeTableWatchers();
                 updateAndBroadcast(storedState, uiState, viewMode);
                 setTimeout(() => {
                     isInitializing = false;
@@ -323,6 +340,368 @@
         return -1; // All items are processed
     }
 
+    /**
+     * Extract value from a table cell based on column type
+     * @param {Element} cell - The cell element
+     * @param {Object} column - Column configuration
+     * @returns {any} Extracted value
+     */
+    function extractCellValue(cell, column) {
+        if (!cell) {
+            console.debug(LOG_PREFIX, `[Table] extractCellValue: cell is null for column "${column.name}"`);
+            return '';
+        }
+
+        try {
+            const element = cell.querySelector(column.selector);
+
+            if (!element) {
+                console.debug(LOG_PREFIX, `[Table] extractCellValue: selector "${column.selector}" not found in cell for column "${column.name}"`);
+                return '';
+            }
+
+            let value = '';
+            switch (column.type) {
+                case 'text':
+                    value = element.value || '';
+                    break;
+                case 'checkbox':
+                    value = element.checked || false;
+                    break;
+                case 'select':
+                    value = element.value || '';
+                    break;
+                case 'label':
+                    if (column.extract === 'text') {
+                        value = element.textContent?.trim() || '';
+                    } else if (column.extract === 'innerHTML') {
+                        value = element.innerHTML || '';
+                    } else {
+                        value = element.textContent?.trim() || '';
+                    }
+                    break;
+                case 'kendo_widget':
+                    if (typeof KendoWidgetUtils !== 'undefined' && KendoWidgetUtils.isKendoAvailable()) {
+                        value = KendoWidgetUtils.getWidgetValue(element) || '';
+                    } else {
+                        value = element.value || '';
+                    }
+                    break;
+                default:
+                    value = element.value || element.textContent?.trim() || '';
+            }
+
+            console.debug(LOG_PREFIX, `[Table] extractCellValue: column "${column.name}" (${column.type}) = "${value}"`);
+            return value;
+        } catch (e) {
+            console.warn(LOG_PREFIX, `[Table] Error extracting cell value for column ${column.name}:`, e);
+            return '';
+        }
+    }
+
+    /**
+     * Check if a row has any non-empty values
+     * @param {Object} rowData - Row data object
+     * @returns {boolean} True if row has at least one non-empty value
+     */
+    function isRowFilled(rowData) {
+        return Object.values(rowData).some(val => {
+            if (typeof val === 'boolean') return val;
+            if (typeof val === 'string') return val.trim() !== '';
+            return !!val;
+        });
+    }
+
+    /**
+     * Extract all row data from a table
+     * @param {Object} itemConfig - Table item configuration
+     * @returns {Object} Table data with rows array and row count
+     */
+    function getTableData(itemConfig) {
+        console.log(LOG_PREFIX, `[Table] getTableData called for "${itemConfig.name}"`);
+        console.log(LOG_PREFIX, `[Table] Table selector: "${itemConfig.table_selector}"`);
+        console.log(LOG_PREFIX, `[Table] Row selector: "${itemConfig.row_selector}"`);
+        console.log(LOG_PREFIX, `[Table] Columns:`, itemConfig.columns);
+
+        const table = document.querySelector(itemConfig.table_selector);
+        if (!table) {
+            console.warn(LOG_PREFIX, `[Table] Table element NOT FOUND with selector: ${itemConfig.table_selector}`);
+            console.log(LOG_PREFIX, `[Table] Available tables on page:`, document.querySelectorAll('table'));
+            return { rows: [], rowCount: 0 };
+        }
+
+        console.log(LOG_PREFIX, `[Table] Table element found:`, table);
+
+        const rows = table.querySelectorAll(itemConfig.row_selector);
+        console.log(LOG_PREFIX, `[Table] Found ${rows.length} rows with selector "${itemConfig.row_selector}"`);
+
+        const data = [];
+
+        rows.forEach((row, rowIndex) => {
+            console.log(LOG_PREFIX, `[Table] Processing row ${rowIndex}:`, row);
+            const rowData = {};
+
+            itemConfig.columns.forEach((col, colIndex) => {
+                console.log(LOG_PREFIX, `[Table] Processing column ${colIndex} "${col.name}" with selector "${col.selector}"`);
+
+                // Try to find the cell element
+                let cell = null;
+
+                // First, try querySelector on the row for the column selector
+                const element = row.querySelector(col.selector);
+                if (element) {
+                    console.log(LOG_PREFIX, `[Table] Found element directly in row for column "${col.name}":`, element);
+                    // For direct element matches
+                    rowData[`col${colIndex}`] = extractCellValue(row, col);
+                } else {
+                    console.log(LOG_PREFIX, `[Table] Element not found directly, trying cell-based approach for column "${col.name}"`);
+                    // For cell-based selectors like td:nth-child(1)
+                    const cells = row.querySelectorAll('td');
+                    console.log(LOG_PREFIX, `[Table] Found ${cells.length} td cells in row ${rowIndex}`);
+
+                    if (cells[colIndex]) {
+                        cell = cells[colIndex];
+                        console.log(LOG_PREFIX, `[Table] Using cell at index ${colIndex}:`, cell);
+                        const cellElement = cell.querySelector(col.selector) || cell;
+                        console.log(LOG_PREFIX, `[Table] Cell element for extraction:`, cellElement);
+
+                        if (col.type === 'label') {
+                            rowData[`col${colIndex}`] = col.extract === 'text'
+                                ? cellElement.textContent?.trim() || ''
+                                : cellElement.innerHTML || '';
+                            console.log(LOG_PREFIX, `[Table] Extracted label value: "${rowData[`col${colIndex}`]}"`);
+                        } else if (col.type === 'checkbox') {
+                            const checkbox = cell.querySelector('input[type="checkbox"]');
+                            rowData[`col${colIndex}`] = checkbox ? checkbox.checked : false;
+                            console.log(LOG_PREFIX, `[Table] Extracted checkbox value: ${rowData[`col${colIndex}`]}`);
+                        } else {
+                            rowData[`col${colIndex}`] = cellElement.value || cellElement.textContent?.trim() || '';
+                            console.log(LOG_PREFIX, `[Table] Extracted text value: "${rowData[`col${colIndex}`]}"`);
+                        }
+                    } else {
+                        console.log(LOG_PREFIX, `[Table] No cell found at index ${colIndex} for column "${col.name}"`);
+                        rowData[`col${colIndex}`] = '';
+                    }
+                }
+            });
+
+            console.log(LOG_PREFIX, `[Table] Row ${rowIndex} data:`, rowData);
+            console.log(LOG_PREFIX, `[Table] Row ${rowIndex} is filled:`, isRowFilled(rowData));
+
+            // Always include all rows (even empty ones) to show table structure
+            data.push(rowData);
+            console.log(LOG_PREFIX, `[Table] Row ${rowIndex} ADDED to data (filled: ${isRowFilled(rowData)})`);
+        });
+
+        console.log(LOG_PREFIX, `[Table] Final table data for "${itemConfig.name}":`, { rows: data, rowCount: data.length });
+        return { rows: data, rowCount: data.length };
+    }
+
+    /**
+     * Watch for row changes in dynamic tables using MutationObserver
+     * @param {Object} itemConfig - Table item configuration
+     * @param {number} itemIndex - Index of the item in checklist
+     */
+    function setupTableWatcher(itemConfig, itemIndex) {
+        if (!itemConfig.dynamic) return;
+
+        const table = document.querySelector(itemConfig.table_selector);
+        if (!table) {
+            console.warn(LOG_PREFIX, `Cannot watch table - not found: ${itemConfig.table_selector}`);
+            return;
+        }
+
+        const tbody = table.querySelector('tbody') || table;
+
+        const observer = new MutationObserver((mutations) => {
+            // Check if rows were added or removed
+            const hasStructureChange = mutations.some(m => m.type === 'childList' && m.addedNodes.length > 0);
+
+            if (hasStructureChange) {
+                console.log(LOG_PREFIX, `[Table] Structure change detected in "${itemConfig.name}" - reattaching listeners`);
+                // Reattach listeners to new rows
+                attachTableInputListeners(itemConfig, itemIndex);
+            }
+
+            const newData = getTableData(itemConfig);
+            updateTableState(itemIndex, newData);
+        });
+
+        observer.observe(tbody, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            attributeFilter: ['value', 'checked']
+        });
+
+        console.log(LOG_PREFIX, `Table watcher initialized for: ${itemConfig.name}`);
+    }
+
+    /**
+     * Initialize watchers for all dynamic tables in the checklist
+     */
+    function initializeTableWatchers() {
+        checklist.forEach((item, index) => {
+            if (item.type === 'table') {
+                if (item.dynamic) {
+                    setupTableWatcher(item, index);
+                }
+                // Also attach input listeners for real-time sync
+                attachTableInputListeners(item, index);
+            }
+        });
+    }
+
+    /**
+     * Attach event listeners to table cell inputs in the UI (bidirectional sync)
+     * @param {number} itemIndex - Index of the table item
+     */
+    function attachTableCellInputListeners(itemIndex) {
+        const step = checklist[itemIndex];
+        if (step.type !== 'table') return;
+
+        console.log(LOG_PREFIX, `[Table] Attaching UI cell input listeners for "${step.name}"`);
+
+        const table = document.querySelector(step.table_selector);
+        if (!table) {
+            console.warn(LOG_PREFIX, `[Table] Cannot find table for syncing: ${step.table_selector}`);
+            return;
+        }
+
+        const rows = table.querySelectorAll(step.row_selector);
+        const cellInputs = document.querySelectorAll('.table-cell-input');
+
+        cellInputs.forEach(input => {
+            const rowIndex = parseInt(input.getAttribute('data-row'), 10);
+            const colIndex = parseInt(input.getAttribute('data-col'), 10);
+            const col = step.columns[colIndex];
+
+            if (!col || rowIndex >= rows.length) return;
+
+            const row = rows[rowIndex];
+            const formElement = row.querySelector(col.selector);
+
+            if (!formElement) {
+                console.warn(LOG_PREFIX, `[Table] Form element not found for row ${rowIndex}, col ${colIndex}`);
+                return;
+            }
+
+            const eventType = (col.type === 'checkbox' || col.type === 'select') ? 'change' : 'input';
+
+            // Sync from UI input to form input
+            input.addEventListener(eventType, () => {
+                if (isInitializing) return;
+
+                const newValue = input.type === 'checkbox' ? input.checked : input.value;
+                console.log(LOG_PREFIX, `[Table] UI input changed - syncing to form: row ${rowIndex}, col "${col.name}" = "${newValue}"`);
+
+                // Update the actual form element
+                if (formElement.type === 'checkbox') {
+                    formElement.checked = newValue;
+                } else {
+                    formElement.value = newValue;
+                }
+
+                // Trigger change event on form element to ensure any form logic runs
+                formElement.dispatchEvent(new Event(eventType, { bubbles: true }));
+
+                // Update table state and broadcast to popout
+                const tableData = getTableData(step);
+                const tableStateKey = `tableState_${myTabId}_${itemIndex}`;
+
+                ext.storage.local.set({ [tableStateKey]: tableData }, () => {
+                    const keys = getStorageKeys();
+                    ext.storage.local.get(keys.checklistState, (result) => {
+                        broadcastUpdate(result[keys.checklistState]);
+                    });
+                });
+            });
+        });
+
+        console.log(LOG_PREFIX, `[Table] Attached ${cellInputs.length} UI cell input listeners`);
+    }
+
+    /**
+     * Attach event listeners to table inputs for real-time updates
+     * @param {Object} itemConfig - Table item configuration
+     * @param {number} itemIndex - Index of the item in checklist
+     */
+    function attachTableInputListeners(itemConfig, itemIndex) {
+        console.log(LOG_PREFIX, `[Table] Attaching input listeners for "${itemConfig.name}"`);
+
+        const table = document.querySelector(itemConfig.table_selector);
+        if (!table) {
+            console.warn(LOG_PREFIX, `[Table] Cannot attach listeners - table not found: ${itemConfig.table_selector}`);
+            return;
+        }
+
+        const rows = table.querySelectorAll(itemConfig.row_selector);
+        console.log(LOG_PREFIX, `[Table] Attaching listeners to ${rows.length} rows`);
+
+        rows.forEach((row, rowIndex) => {
+            itemConfig.columns.forEach((col, colIndex) => {
+                const element = row.querySelector(col.selector);
+                if (!element) return;
+
+                const eventType = (col.type === 'checkbox' || col.type === 'select') ? 'change' : 'input';
+
+                element.addEventListener(eventType, () => {
+                    if (isInitializing) return;
+
+                    console.log(LOG_PREFIX, `[Table] Input changed in "${itemConfig.name}" row ${rowIndex}, column "${col.name}"`);
+
+                    // Re-extract table data and update state
+                    const tableData = getTableData(itemConfig);
+                    const tableStateKey = `tableState_${myTabId}_${itemIndex}`;
+
+                    ext.storage.local.set({ [tableStateKey]: tableData }, () => {
+                        // If this table is currently displayed, update the UI
+                        if (currentIndex === itemIndex) {
+                            const fieldData = getFieldData(itemIndex);
+                            const keys = getStorageKeys();
+                            ext.storage.local.get(keys.checklistState, (result) => {
+                                updateOnPageUIValues(fieldData);
+                                broadcastUpdate(result[keys.checklistState]);
+                            });
+                        }
+                    });
+                });
+            });
+        });
+
+        console.log(LOG_PREFIX, `[Table] Input listeners attached for "${itemConfig.name}"`);
+    }
+
+    /**
+     * Update table state in storage
+     * @param {number} itemIndex - Index of the table item
+     * @param {Object} tableData - New table data
+     */
+    function updateTableState(itemIndex, tableData) {
+        const keys = getStorageKeys();
+        const tableStateKey = `tableState_${myTabId}_${itemIndex}`;
+
+        ext.storage.local.get([tableStateKey, keys.checklistState], (result) => {
+            const currentState = result[tableStateKey];
+            const newStateStr = JSON.stringify(tableData);
+            const currentStateStr = JSON.stringify(currentState);
+
+            if (newStateStr !== currentStateStr) {
+                console.log(LOG_PREFIX, `[Table] updateTableState: Table data changed for item ${itemIndex}`);
+
+                ext.storage.local.set({ [tableStateKey]: tableData }, () => {
+                    // Trigger UI update if this table is currently displayed
+                    if (currentIndex === itemIndex) {
+                        console.log(LOG_PREFIX, `[Table] updateTableState: Updating UI for currently displayed table`);
+                        const fieldData = getFieldData(itemIndex);
+                        updateOnPageUIValues(fieldData);
+                        broadcastUpdate(result[keys.checklistState]);
+                    }
+                });
+            }
+        });
+    }
+
     function getFieldData(index) {
         if (index === -1) return null;
         const step = checklist[index];
@@ -379,6 +758,22 @@
             });
         } else if (step.type === 'virtual') {
             fieldData.name = step.name;
+        } else if (step.type === 'table') {
+            console.log(LOG_PREFIX, `[Table] getFieldData: Processing table type for "${step.name}"`);
+            // Get table data from storage or extract fresh
+            const tableStateKey = `tableState_${myTabId}_${index}`;
+            const tableData = getTableData(step);
+
+            console.log(LOG_PREFIX, `[Table] getFieldData: Extracted table data:`, tableData);
+
+            // Store in storage for future use
+            ext.storage.local.set({ [tableStateKey]: tableData });
+
+            fieldData.tableData = tableData;
+            fieldData.columns = step.columns;
+            fieldData.dynamic = step.dynamic || false;
+
+            console.log(LOG_PREFIX, `[Table] getFieldData: Final fieldData for table:`, fieldData);
         } else if (step.type === 'custom') {
             try {
                 const table = document.getElementById(step.table_id);
@@ -413,7 +808,35 @@
     }
 
     function updateOnPageUIValues(fieldData) {
-        if (!fieldData || !fieldData.fields) return;
+        if (!fieldData) return;
+
+        // Handle table type - update values without re-rendering to preserve focus
+        if (fieldData.type === 'table') {
+            console.log(LOG_PREFIX, `[Table] updateOnPageUIValues: Updating table values for "${fieldData.name}"`);
+
+            // Update existing input values without re-rendering
+            const cellInputs = document.querySelectorAll('.table-cell-input');
+            cellInputs.forEach(input => {
+                const rowIndex = parseInt(input.getAttribute('data-row'), 10);
+                const colIndex = parseInt(input.getAttribute('data-col'), 10);
+                const value = fieldData.tableData.rows[rowIndex]?.[`col${colIndex}`];
+
+                if (value !== undefined) {
+                    if (input.type === 'checkbox') {
+                        if (input.checked !== value) input.checked = value;
+                    } else {
+                        // Only update if different and not currently focused (to preserve typing)
+                        if (input !== document.activeElement && input.value !== value) {
+                            input.value = value;
+                        }
+                    }
+                }
+            });
+            return;
+        }
+
+        // Handle regular fields
+        if (!fieldData.fields) return;
         fieldData.fields.forEach((field, index) => {
             const inputElement = document.querySelector(`.on-page-input[data-field-index="${index}"]`);
             if (inputElement) {
@@ -424,6 +847,70 @@
                 }
             }
         });
+    }
+
+    /**
+     * Render table UI for display in on-page UI or popout
+     * @param {Object} tableData - Table data with rows and column info
+     * @param {Object} itemConfig - Table item configuration
+     * @returns {string} HTML string for table display
+     */
+    function renderTableUI(tableData, itemConfig) {
+        console.log(LOG_PREFIX, `[Table] renderTableUI: called with tableData:`, tableData);
+        console.log(LOG_PREFIX, `[Table] renderTableUI: itemConfig:`, itemConfig);
+
+        if (!tableData || !tableData.rows) {
+            console.log(LOG_PREFIX, `[Table] renderTableUI: No data - returning empty message`);
+            return '<div class="table-empty">No data</div>';
+        }
+
+        const { rows, rowCount } = tableData;
+        console.log(LOG_PREFIX, `[Table] renderTableUI: rowCount = ${rowCount}`);
+
+        if (rowCount === 0) {
+            console.log(LOG_PREFIX, `[Table] renderTableUI: Empty table - returning empty message`);
+            return '<div class="table-empty">Empty table</div>';
+        }
+
+        // Build table header
+        const headerHtml = itemConfig.columns
+            .map(col => `<th>${col.name}</th>`)
+            .join('');
+
+        // Build table rows with editable inputs
+        const rowsHtml = rows.map((row, rowIndex) => {
+            const cells = itemConfig.columns.map((col, colIndex) => {
+                const value = row[`col${colIndex}`];
+                let cellHtml = '';
+
+                if (col.type === 'checkbox') {
+                    cellHtml = `<input type="checkbox" class="table-cell-input" data-row="${rowIndex}" data-col="${colIndex}" ${value ? 'checked' : ''} style="cursor: pointer; margin: 0;">`;
+                } else if (col.type === 'select') {
+                    // For selects, we'd need options - for now show as text input
+                    cellHtml = `<input type="text" class="table-cell-input" data-row="${rowIndex}" data-col="${colIndex}" value="${value || ''}" placeholder="—">`;
+                } else if (col.type === 'label') {
+                    // Labels are read-only
+                    const displayValue = value || '<span style="color: #cbd5e0; font-style: italic;">—</span>';
+                    cellHtml = `<span style="font-size: 12px; padding: 6px 8px; display: block;">${displayValue}</span>`;
+                } else {
+                    // Text inputs
+                    cellHtml = `<input type="text" class="table-cell-input" data-row="${rowIndex}" data-col="${colIndex}" value="${value || ''}" placeholder="—">`;
+                }
+
+                return `<td>${cellHtml}</td>`;
+            }).join('');
+
+            return `<tr data-row-index="${rowIndex}">${cells}</tr>`;
+        }).join('');
+
+        return `
+            <div class="mini-table-container">
+                <table class="mini-table">
+                    <thead><tr>${headerHtml}</tr></thead>
+                    <tbody>${rowsHtml}</tbody>
+                </table>
+            </div>
+        `;
     }
 
     function renderOnPageUI(fieldData, state, uiState, viewMode) {
@@ -450,6 +937,31 @@
             container.innerHTML = '<div style="color: #28a745; font-weight: bold; text-align: center;">All fields checked!</div>';
             return;
         }
+
+        // Handle table type
+        if (fieldData.type === 'table') {
+            console.log(LOG_PREFIX, `[Table] renderOnPageUI: Rendering table type "${fieldData.name}"`);
+            console.log(LOG_PREFIX, `[Table] renderOnPageUI: Table data:`, fieldData.tableData);
+            console.log(LOG_PREFIX, `[Table] renderOnPageUI: Columns:`, fieldData.columns);
+
+            const tableHtml = renderTableUI(fieldData.tableData, { columns: fieldData.columns, dynamic: fieldData.dynamic });
+            console.log(LOG_PREFIX, `[Table] renderOnPageUI: Generated HTML length:`, tableHtml.length);
+
+            container.innerHTML = `
+                <div class="step-title">${fieldData.name}</div>
+                ${tableHtml}
+                <div class="button-row">
+                    <button id="skip-button-page" class="skip-btn">Skip</button>
+                    <button id="confirm-button-page" class="confirm-btn">✓ Confirm</button>
+                </div>`;
+            document.getElementById('confirm-button-page').addEventListener('click', () => handleConfirmField(currentIndex));
+            document.getElementById('skip-button-page').addEventListener('click', () => handleSkipField(currentIndex));
+
+            // Attach listeners to table cell inputs for bidirectional sync
+            attachTableCellInputListeners(currentIndex);
+            return;
+        }
+
         let fieldsHtml = fieldData.fields.map((field, index) => {
             let inputHtml;
             if (field.type === 'select') {
@@ -614,6 +1126,7 @@
                 ext.storage.local.get(keys.checklistState, r => broadcastUpdate(r[keys.checklistState]));
                 break;
             case 'updateFieldValue': handleUpdateFieldValue(message, false); break;
+            case 'updateTableCell': handleUpdateTableCell(message); break;
             case 'confirmField': handleConfirmField(message.index); break;
             case 'skipField': handleSkipField(message.index); break;
             case 'toggleUI': toggleOnPageUI(); break;
@@ -625,6 +1138,35 @@
                 }
                 break;
         }
+    }
+
+    function handleUpdateTableCell({ index, rowIndex, colIndex, value }) {
+        const step = checklist[index];
+        if (!step || step.type !== 'table') return;
+
+        const table = document.querySelector(step.table_selector);
+        if (!table) return;
+
+        const rows = table.querySelectorAll(step.row_selector);
+        if (rowIndex >= rows.length) return;
+
+        const row = rows[rowIndex];
+        const col = step.columns[colIndex];
+        if (!col) return;
+
+        const formElement = row.querySelector(col.selector);
+        if (!formElement) return;
+
+        // Update the form element
+        if (formElement.type === 'checkbox') {
+            formElement.checked = value;
+        } else {
+            formElement.value = value;
+        }
+
+        // Trigger change event
+        const eventType = (col.type === 'checkbox' || col.type === 'select') ? 'change' : 'input';
+        formElement.dispatchEvent(new Event(eventType, { bubbles: true }));
     }
 
     function toggleOnPageUI() {

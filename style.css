@@ -468,3 +468,141 @@ input[type="checkbox"] {
     color: #999 !important;
     font-style: italic;
 }
+
+/* Mini Table Styles for Table Type Items */
+.mini-table-container {
+    margin: 12px 0;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    overflow: hidden;
+    background-color: white;
+}
+
+.mini-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+
+.mini-table thead {
+    background-color: #f7fafc;
+    border-bottom: 2px solid #e2e8f0;
+}
+
+.mini-table th {
+    padding: 8px 10px;
+    text-align: left;
+    font-weight: 600;
+    color: #4a5568;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 120px;
+}
+
+.mini-table tbody {
+    max-height: 200px;
+    overflow-y: auto;
+    display: block;
+}
+
+.mini-table thead,
+.mini-table tbody tr {
+    display: table;
+    width: 100%;
+    table-layout: fixed;
+}
+
+.mini-table td {
+    padding: 0;
+    border-bottom: 1px solid #f0f0f0;
+    color: #2d3748;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 150px;
+}
+
+.mini-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.mini-table tbody tr:hover {
+    background-color: #f7fafc;
+}
+
+/* Highlight filled rows with subtle background */
+.mini-table tbody tr.filled-row {
+    background-color: rgba(102, 126, 234, 0.03);
+}
+
+.table-row-count {
+    padding: 8px 10px;
+    text-align: center;
+    font-size: 11px;
+    color: #718096;
+    background-color: #f7fafc;
+    border-top: 1px solid #e2e8f0;
+    font-weight: 500;
+}
+
+.table-empty {
+    padding: 20px;
+    text-align: center;
+    color: #a0aec0;
+    font-size: 13px;
+    font-style: italic;
+}
+
+/* Table cell inputs */
+.table-cell-input {
+    font-family: inherit;
+    font-size: 12px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    width: 100%;
+    border: none;
+    padding: 6px 8px;
+    box-sizing: border-box;
+    background: transparent;
+}
+
+.table-cell-input:focus {
+    outline: none;
+    background: #f7fafc;
+    border: 1px solid #667eea !important;
+    box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1) !important;
+    padding: 5px 7px; /* Adjust for border */
+}
+
+.table-cell-input::placeholder {
+    color: #cbd5e0;
+    font-style: italic;
+}
+
+/* Popout table cell inputs - same styling */
+.table-cell-input-popout {
+    font-family: inherit;
+    font-size: 12px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    width: 100%;
+    border: none;
+    padding: 6px 8px;
+    box-sizing: border-box;
+    background: transparent;
+}
+
+.table-cell-input-popout:focus {
+    outline: none;
+    background: #f7fafc;
+    border: 1px solid #667eea !important;
+    box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1) !important;
+    padding: 5px 7px;
+}
+
+.table-cell-input-popout::placeholder {
+    color: #cbd5e0;
+    font-style: italic;
+}
