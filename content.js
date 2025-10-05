@@ -362,6 +362,15 @@
                         } else {
                             individualFieldData.divText = '';
                         }
+                    } else if (field.type === 'kendo_widget') {
+                        // Extract value from Kendo widget
+                        if (typeof KendoWidgetUtils !== 'undefined' && KendoWidgetUtils.isKendoAvailable()) {
+                            individualFieldData.value = KendoWidgetUtils.getWidgetValue(element) || '';
+                        } else {
+                            // Fallback to element value
+                            individualFieldData.value = element.value || '';
+                        }
+                        individualFieldData.selector = field.selector;
                     } else {
                         individualFieldData.value = element.value;
                     }
@@ -454,6 +463,9 @@
                 return `<div style="margin-bottom: 8px;"><label style="font-weight: bold; display: block; margin-bottom: 4px;">${field.name}: </label><span>${field.value}</span></div>`;
             } else if (field.type === 'labelWithDivText') {
                 return `<div style="display: flex; align-items: center;"><label style="font-weight: bold;">${field.labelText}</label><div style="margin-left: 8px; margin-top:0px; color: #333;">${field.divText}</div></div>`;
+            } else if (field.type === 'kendo_widget') {
+                // Handle Kendo widget - will be rendered separately after HTML insertion
+                return `<div class="kendo-widget-placeholder" data-field-index="${index}" data-field-selector="${field.selector}"></div>`;
             } else {
                 inputHtml = `<input type="text" class="on-page-input" data-field-index="${index}" value="${field.value || ''}" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;">`;
             }
@@ -476,6 +488,63 @@
                 const value = input.type === 'checkbox' ? input.checked : input.value;
                 handleUpdateFieldValue({ index: currentIndex, fieldIndex, value }, true);
             });
+        });
+
+        // Initialize Kendo widgets after HTML is inserted
+        renderKendoWidgets(container, fieldData);
+    }
+
+    function renderKendoWidgets(container, fieldData) {
+        const placeholders = container.querySelectorAll('.kendo-widget-placeholder');
+        placeholders.forEach(placeholder => {
+            const fieldIndex = parseInt(placeholder.getAttribute('data-field-index'), 10);
+            const field = fieldData.fields[fieldIndex];
+            const selector = field.selector;
+
+            // Check if KendoWidgetUtils is available
+            if (typeof KendoWidgetUtils === 'undefined') {
+                console.warn(LOG_PREFIX, "KendoWidgetUtils not loaded - falling back to basic input");
+                placeholder.innerHTML = `<input type="text" class="on-page-input" data-field-index="${fieldIndex}" value="${field.value || ''}" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">`;
+                return;
+            }
+
+            // Check if Kendo is available
+            if (!KendoWidgetUtils.isKendoAvailable()) {
+                console.log(LOG_PREFIX, `Kendo UI not available - using fallback for field "${field.name}"`);
+                placeholder.innerHTML = KendoWidgetUtils.createFallbackInput(field, field.value);
+                const input = placeholder.querySelector('input');
+                if (input) {
+                    KendoWidgetUtils.setupFallbackSync(input, selector);
+                }
+                return;
+            }
+
+            // Try to detect original widget
+            const widgetType = KendoWidgetUtils.detectWidgetType(document.querySelector(selector));
+
+            if (!widgetType) {
+                console.log(LOG_PREFIX, `No Kendo widget detected for "${field.name}" - using read-only display`);
+                placeholder.innerHTML = KendoWidgetUtils.createReadOnlyDisplay(field, field.value);
+                KendoWidgetUtils.setupFocusButtons(placeholder);
+                return;
+            }
+
+            console.log(LOG_PREFIX, `Detected ${widgetType} widget for field "${field.name}"`);
+
+            // For now, use fallback with sync (widget cloning will be added in future iteration)
+            placeholder.innerHTML = KendoWidgetUtils.createFallbackInput(field, field.value);
+            const input = placeholder.querySelector('input');
+            if (input) {
+                input.classList.add('on-page-input');
+                input.setAttribute('data-field-index', fieldIndex);
+                KendoWidgetUtils.setupFallbackSync(input, selector);
+
+                // Add event listener for value changes
+                input.addEventListener('change', () => {
+                    if (isInitializing) return;
+                    handleUpdateFieldValue({ index: currentIndex, fieldIndex, value: input.value }, true);
+                });
+            }
         });
     }
 

@@ -402,6 +402,9 @@
                 return `<div class="field-group"><b>${field.name}:</b> <span>${field.value}</span></div>`;
             } else if (field.type === 'labelWithDivText') {
                 return `<div class="field-group label-with-text"><b>${field.labelText}</b><span>${field.divText}</span></div>`;
+            } else if (field.type === 'kendo_widget') {
+                // Handle Kendo widget - will be rendered separately after HTML insertion
+                return `<div class="field-group"><b>${field.name}</b><div class="kendo-widget-placeholder" data-field-index="${index}" data-field-selector="${field.selector}"></div></div>`;
             } else {
                 inputHtml = `<input type="text" class="display-input" data-field-index="${index}" value="${field.value || ''}">`;
                 return `<div class="field-group"><b>${field.name}</b>${inputHtml}</div>`;
@@ -417,7 +420,32 @@
             </div>
         `;
         setupEventListeners(fieldData);
+
+        // Initialize Kendo widgets after HTML is inserted
+        renderKendoWidgetsPopout(display, fieldData);
+
         resizeWindow();
+    }
+
+    function renderKendoWidgetsPopout(container, fieldData) {
+        const placeholders = container.querySelectorAll('.kendo-widget-placeholder');
+        placeholders.forEach(placeholder => {
+            const fieldIndex = parseInt(placeholder.getAttribute('data-field-index'), 10);
+            const field = fieldData.fields[fieldIndex];
+            const selector = field.selector;
+
+            // Check if KendoWidgetUtils is available
+            if (typeof KendoWidgetUtils === 'undefined') {
+                console.warn("[Popout] KendoWidgetUtils not loaded - falling back to basic input");
+                placeholder.innerHTML = `<input type="text" class="display-input" data-field-index="${fieldIndex}" value="${field.value || ''}">`;
+                return;
+            }
+
+            // Popout doesn't have direct access to page widgets, so use read-only display
+            console.log("[Popout] Rendering read-only display for Kendo widget:", field.name);
+            placeholder.innerHTML = KendoWidgetUtils.createReadOnlyDisplay(field, field.value);
+            KendoWidgetUtils.setupFocusButtons(placeholder);
+        });
     }
 
     function resizeWindow() {

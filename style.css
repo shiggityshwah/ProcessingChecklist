@@ -251,3 +251,31 @@ input[type="checkbox"] {
     border-radius: 3px;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
+
+/* Kendo Widget Styles */
+.kendo-widget-placeholder {
+    margin-top: 4px;
+}
+
+.kendo-widget-readonly {
+    margin-top: 4px;
+}
+
+.kendo-widget-readonly > div:first-child {
+    word-break: break-word;
+}
+
+.focus-original-widget:hover {
+    background-color: #006ba3 !important;
+}
+
+.fallback-date-input,
+.fallback-numeric-input,
+.fallback-text-input {
+    font-family: Arial, sans-serif !important;
+}
+
+.fallback-text-input::placeholder {
+    color: #999 !important;
+    font-style: italic;
+}

@@ -47,12 +47,23 @@
                 }
 
                 // Validate highlight_zones if present
-                const validationError = this.validateHighlightZones(config.checklist);
-                if (validationError) {
+                const zonesValidationError = this.validateHighlightZones(config.checklist);
+                if (zonesValidationError) {
                     return {
                         error: {
                             type: 'VALIDATION_ERROR',
-                            message: validationError
+                            message: zonesValidationError
+                        }
+                    };
+                }
+
+                // Validate field types
+                const fieldValidationError = this.validateFieldTypes(config.checklist);
+                if (fieldValidationError) {
+                    return {
+                        error: {
+                            type: 'VALIDATION_ERROR',
+                            message: fieldValidationError
                         }
                     };
                 }
@@ -124,6 +135,44 @@
                     // Validate show_checkbox if present
                     if (zone.hasOwnProperty('show_checkbox') && typeof zone.show_checkbox !== 'boolean') {
                         return `Item "${item.name}" (index ${i}), zone ${j}: show_checkbox must be a boolean`;
+                    }
+                }
+            }
+
+            return null; // All valid
+        },
+
+        /**
+         * Validate field types in checklist items
+         * @param {Array} checklist - The checklist items array
+         * @returns {string|null} Error message or null if valid
+         */
+        validateFieldTypes: function(checklist) {
+            const validTypes = ['text', 'checkbox', 'select', 'radio', 'virtual', 'labelWithDivText', 'kendo_widget'];
+
+            for (let i = 0; i < checklist.length; i++) {
+                const item = checklist[i];
+
+                if (!item.fields || !Array.isArray(item.fields)) {
+                    continue; // Some items may not have fields (virtual, custom)
+                }
+
+                for (let j = 0; j < item.fields.length; j++) {
+                    const field = item.fields[j];
+
+                    if (!field.type) {
+                        return `Item "${item.name}" (index ${i}), field ${j}: missing required "type" property`;
+                    }
+
+                    if (!validTypes.includes(field.type)) {
+                        return `Item "${item.name}" (index ${i}), field "${field.name}": invalid type "${field.type}". Valid types: ${validTypes.join(', ')}`;
+                    }
+
+                    // Validate kendo_widget specific properties
+                    if (field.type === 'kendo_widget') {
+                        if (!field.selector) {
+                            return `Item "${item.name}" (index ${i}), field "${field.name}": kendo_widget requires "selector" property`;
+                        }
                     }
                 }
             }
