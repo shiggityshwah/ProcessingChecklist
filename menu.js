@@ -76,6 +76,9 @@
                         toggleButton.style.opacity = '0.5';
                         toggleButton.style.cursor = 'not-allowed';
                     }
+
+                    // Load view mode settings after we have tab ID
+                    loadViewModeSettings();
                 }
             });
 
@@ -87,7 +90,7 @@
             });
 
             document.getElementById('popout-button').addEventListener('click', () => {
-                dbg("Open Checklist button clicked.");
+                dbg("Pop-up Window button clicked.");
                 if (port && currentTabId) {
                     port.postMessage({ action: 'openPopout', tabId: currentTabId });
                 }
@@ -106,8 +109,80 @@
                 ext.storage.local.set({ defaultUIVisible: e.target.checked });
             });
 
+            // Handle view mode radio buttons
+            document.querySelectorAll('input[name="view-mode"]').forEach(radio => {
+                radio.addEventListener('change', handleViewModeChange);
+            });
+
+            // Handle "Set as default" checkbox
+            document.getElementById('set-as-default').addEventListener('change', handleSetAsDefaultChange);
+
         } catch (error) {
             console.error(LOG_PREFIX, "Failed to connect to background script:", error);
+        }
+    }
+
+    function loadViewModeSettings() {
+        if (!currentTabId) return;
+
+        ext.storage.local.get([`viewMode_${currentTabId}`, 'defaultViewMode'], (result) => {
+            const currentViewMode = result[`viewMode_${currentTabId}`] || result.defaultViewMode || 'single';
+            const defaultViewMode = result.defaultViewMode || 'single';
+
+            // Update radio buttons
+            const singleRadio = document.getElementById('view-mode-single');
+            const fullRadio = document.getElementById('view-mode-full');
+
+            if (currentViewMode === 'single') {
+                singleRadio.checked = true;
+            } else {
+                fullRadio.checked = true;
+            }
+
+            // Update "Set as default" checkbox
+            const setAsDefaultCheckbox = document.getElementById('set-as-default');
+            setAsDefaultCheckbox.checked = (currentViewMode === defaultViewMode);
+
+            dbg("Loaded view mode settings:", { currentViewMode, defaultViewMode });
+        });
+    }
+
+    function handleViewModeChange(e) {
+        const newMode = e.target.value;
+        dbg("View mode changed to:", newMode);
+
+        if (!currentTabId) return;
+
+        // Save to tab-specific storage
+        ext.storage.local.set({ [`viewMode_${currentTabId}`]: newMode });
+
+        // If "Set as default" is checked, also save to defaultViewMode
+        const setAsDefaultCheckbox = document.getElementById('set-as-default');
+        if (setAsDefaultCheckbox.checked) {
+            ext.storage.local.set({ defaultViewMode: newMode });
+        }
+
+        // Send message to content script and popout to update their displays
+        if (port) {
+            port.postMessage({ action: 'changeViewMode', tabId: currentTabId, mode: newMode });
+        }
+    }
+
+    function handleSetAsDefaultChange(e) {
+        dbg("Set as default changed:", e.target.checked);
+
+        if (!currentTabId) return;
+
+        // Get current view mode
+        const singleRadio = document.getElementById('view-mode-single');
+        const currentMode = singleRadio.checked ? 'single' : 'full';
+
+        if (e.target.checked) {
+            // Save current mode as default
+            ext.storage.local.set({ defaultViewMode: currentMode });
+        } else {
+            // Remove default (will fall back to 'single')
+            ext.storage.local.remove('defaultViewMode');
         }
     }
 

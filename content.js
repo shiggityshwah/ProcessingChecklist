@@ -63,7 +63,8 @@
     function getStorageKeys() {
         return {
             checklistState: `checklistState_${myTabId}`,
-            uiState: `uiState_${myTabId}`
+            uiState: `uiState_${myTabId}`,
+            viewMode: `viewMode_${myTabId}`
         };
     }
 
@@ -131,15 +132,43 @@
             return;
         }
 
+        // Check if current page matches URL pattern
+        if (!isMatchingPage()) {
+            console.log(LOG_PREFIX, "Page does not match URL pattern - extension will not initialize");
+            return;
+        }
+
         connect();
         // Wait for tab ID from background script before initializing
     }
 
+    function isMatchingPage() {
+        const currentUrl = window.location.href;
+        const urlPattern = config?.metadata?.url_pattern;
+
+        if (!urlPattern) {
+            console.warn(LOG_PREFIX, "No URL pattern defined in config - allowing all pages");
+            return true;
+        }
+
+        // Split by | to support multiple patterns
+        const patterns = urlPattern.split('|').map(p => p.trim());
+
+        for (const pattern of patterns) {
+            if (currentUrl.includes(pattern)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     function initializeWithTabId() {
         const keys = getStorageKeys();
-        ext.storage.local.get([keys.checklistState, keys.uiState, 'defaultUIVisible'], (result) => {
+        ext.storage.local.get([keys.checklistState, keys.uiState, keys.viewMode, 'defaultUIVisible', 'defaultViewMode'], (result) => {
             let storedState = result[keys.checklistState];
             let uiState = result[keys.uiState];
+            let viewMode = result[keys.viewMode];
 
             if (!uiState) {
                 // Use the defaultUIVisible setting, defaulting to true if not set
@@ -148,12 +177,18 @@
                 ext.storage.local.set({ [keys.uiState]: uiState });
             }
 
+            if (!viewMode) {
+                // Use defaultViewMode, or fall back to 'single'
+                viewMode = result.defaultViewMode || 'single';
+                ext.storage.local.set({ [keys.viewMode]: viewMode });
+            }
+
             if (!storedState || storedState.length !== checklist.length) {
                 storedState = checklist.map(() => ({ processed: false, skipped: false }));
                 ext.storage.local.set({ [keys.checklistState]: storedState }, () => {
                     injectConfirmationCheckboxes(storedState);
                     attachListenersToPageElements();
-                    updateAndBroadcast(storedState, uiState);
+                    updateAndBroadcast(storedState, uiState, viewMode);
                     setTimeout(() => {
                         isInitializing = false;
                     }, 500);
@@ -161,7 +196,7 @@
             } else {
                 injectConfirmationCheckboxes(storedState);
                 attachListenersToPageElements();
-                updateAndBroadcast(storedState, uiState);
+                updateAndBroadcast(storedState, uiState, viewMode);
                 setTimeout(() => {
                     isInitializing = false;
                 }, 500);
@@ -177,9 +212,9 @@
                             return;
                         }
                         // Normal state update
-                        ext.storage.local.get(keys.uiState, (result) => {
+                        ext.storage.local.get([keys.uiState, keys.viewMode], (result) => {
                             const state = changes[keys.checklistState].newValue;
-                            updateAndBroadcast(state, result[keys.uiState]);
+                            updateAndBroadcast(state, result[keys.uiState], result[keys.viewMode]);
                         });
                     } else {
                         // Storage was removed (reset clicked) - recreate fresh state
@@ -225,11 +260,20 @@
                         });
                     }
                 } else if (changes[keys.uiState]) {
-                    ext.storage.local.get(keys.checklistState, (result) => {
+                    ext.storage.local.get([keys.checklistState, keys.viewMode], (result) => {
                         const checklistState = result[keys.checklistState];
+                        const viewMode = result[keys.viewMode] || 'single';
                         const nextIndex = findNextStep(checklistState);
                         const fieldData = getFieldData(nextIndex);
-                        renderOnPageUI(fieldData, checklistState, changes[keys.uiState].newValue);
+                        renderOnPageUI(fieldData, checklistState, changes[keys.uiState].newValue, viewMode);
+                    });
+                } else if (changes[keys.viewMode]) {
+                    // View mode changed - re-render UI
+                    ext.storage.local.get([keys.checklistState, keys.uiState], (result) => {
+                        const checklistState = result[keys.checklistState];
+                        const uiState = result[keys.uiState];
+                        const viewMode = changes[keys.viewMode].newValue || 'single';
+                        updateAndBroadcast(checklistState, uiState, viewMode);
                     });
                 }
             }
@@ -241,8 +285,16 @@
         const nextIndex = findNextStep(state);
         const fieldData = getFieldData(nextIndex);
         const policyNumber = getPolicyNumber();
+        const checklistNames = checklist.map(item => item.name);
         try {
-            port.postMessage({ action: 'updateDisplay', fieldData: fieldData, index: nextIndex, policyNumber: policyNumber });
+            port.postMessage({
+                action: 'updateDisplay',
+                fieldData: fieldData,
+                index: nextIndex,
+                policyNumber: policyNumber,
+                checklistNames: checklistNames,
+                state: state
+            });
         } catch (e) {
             console.error(LOG_PREFIX, "Failed to broadcast update:", e);
             handleDisconnect();
@@ -340,15 +392,13 @@
         return fieldData;
     }
 
-    function updateAndBroadcast(state, uiState) {
+    function updateAndBroadcast(state, uiState, viewMode) {
+        viewMode = viewMode || 'single';
         const nextIndex = findNextStep(state);
         const fieldData = getFieldData(nextIndex);
-        if (nextIndex !== currentIndex) {
-            currentIndex = nextIndex;
-            renderOnPageUI(fieldData, state, uiState);
-        } else {
-            updateOnPageUIValues(fieldData);
-        }
+        // Always re-render to ensure view mode switches properly
+        currentIndex = nextIndex;
+        renderOnPageUI(fieldData, state, uiState, viewMode);
         broadcastUpdate(state);
         updateItemVisuals(state);
     }
@@ -367,7 +417,8 @@
         });
     }
 
-    function renderOnPageUI(fieldData, state, uiState) {
+    function renderOnPageUI(fieldData, state, uiState, viewMode) {
+        viewMode = viewMode || 'single';
         let container = document.getElementById('processing-checklist-container');
         if (!container) {
             container = document.createElement('div');
@@ -376,6 +427,15 @@
             document.body.appendChild(container);
         }
         container.style.display = uiState.visible ? 'block' : 'none';
+
+        if (viewMode === 'full') {
+            renderFullChecklistView(container, state);
+            return;
+        }
+
+        // Single-step view (existing logic)
+        container.classList.remove('full-view');
+        container.style.maxHeight = '';
 
         if (!fieldData) {
             container.innerHTML = '<div style="color: #28a745; font-weight: bold; text-align: center;">All fields checked!</div>';
@@ -419,6 +479,60 @@
         });
     }
 
+    function renderFullChecklistView(container, state) {
+        container.classList.add('full-view');
+
+        // Calculate max height: window height - 250px
+        const maxHeight = window.innerHeight - 250;
+        container.style.maxHeight = `${maxHeight}px`;
+
+        let itemsHtml = checklist.map((item, index) => {
+            const itemState = state[index];
+            let statusClass = '';
+            if (itemState.processed) {
+                statusClass = 'confirmed';
+            } else if (itemState.skipped) {
+                statusClass = 'skipped';
+            }
+
+            return `
+                <div class="full-checklist-item ${statusClass}" data-item-index="${index}">
+                    <input type="checkbox" class="full-checklist-item-checkbox" data-item-index="${index}" ${itemState.processed ? 'checked' : ''}>
+                    <span class="full-checklist-item-name">${item.name}</span>
+                </div>
+            `;
+        }).join('');
+
+        container.innerHTML = `
+            <div style="font-weight: bold; margin-bottom: 12px; color: #007cba;">Checklist Progress</div>
+            <div style="display: flex; flex-direction: column;">${itemsHtml}</div>
+        `;
+
+        // Attach event listeners to checkboxes
+        container.querySelectorAll('.full-checklist-item-checkbox').forEach(checkbox => {
+            const itemIndex = parseInt(checkbox.getAttribute('data-item-index'), 10);
+            checkbox.addEventListener('change', () => {
+                if (isInitializing || isProgrammaticUpdate) return;
+                if (checkbox.checked) {
+                    handleConfirmField(itemIndex);
+                } else {
+                    unconfirmField(itemIndex);
+                }
+            });
+        });
+
+        // Update max height on window resize
+        window.addEventListener('resize', () => {
+            const keys = getStorageKeys();
+            ext.storage.local.get([keys.viewMode, keys.uiState], (result) => {
+                if (result[keys.viewMode] === 'full' && result[keys.uiState]?.visible) {
+                    const newMaxHeight = window.innerHeight - 250;
+                    container.style.maxHeight = `${newMaxHeight}px`;
+                }
+            });
+        });
+    }
+
     function handleMessage(message) {
         switch (message.action) {
             case 'init':
@@ -433,6 +547,13 @@
             case 'confirmField': handleConfirmField(message.index); break;
             case 'skipField': handleSkipField(message.index); break;
             case 'toggleUI': toggleOnPageUI(); break;
+            case 'changeViewMode':
+                // View mode changed from menu - update storage
+                if (message.mode) {
+                    const keys = getStorageKeys();
+                    ext.storage.local.set({ [keys.viewMode]: message.mode });
+                }
+                break;
         }
     }
 

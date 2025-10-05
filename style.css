@@ -22,6 +22,46 @@ body {
     min-width: 280px !important;
 }
 
+/* Full Checklist View Container */
+#processing-checklist-container.full-view {
+    overflow-y: auto !important;
+}
+
+/* Full Checklist View Item */
+.full-checklist-item {
+    display: flex !important;
+    align-items: center !important;
+    padding: 8px 0 !important;
+    border-bottom: 1px solid #f0f0f0 !important;
+    cursor: default !important;
+}
+
+.full-checklist-item:last-child {
+    border-bottom: none !important;
+}
+
+.full-checklist-item-checkbox {
+    width: 18px !important;
+    height: 18px !important;
+    margin-right: 10px !important;
+    cursor: pointer !important;
+    flex-shrink: 0 !important;
+}
+
+.full-checklist-item-name {
+    flex: 1 !important;
+    font-size: 14px !important;
+    color: #333 !important;
+}
+
+.full-checklist-item.confirmed .full-checklist-item-name {
+    color: #28a745 !important;
+}
+
+.full-checklist-item.skipped .full-checklist-item-name {
+    color: #ffc107 !important;
+}
+
 /* Skipped Item Visual Cue */
 .skipped-item {
     background-color: #fffbe6 !important; /* A light yellow background */

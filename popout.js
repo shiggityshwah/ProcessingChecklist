@@ -13,6 +13,7 @@
     let storagePollingTimer = null;
     let lastKnownState = null;
     let isConnected = false;
+    let checklistNames = []; // Store checklist item names
 
     const MAX_RECONNECT_ATTEMPTS = 10;
     const BASE_RECONNECT_DELAY = 1000; // 1 second
@@ -131,38 +132,59 @@
         connect();
 
         const storageKey = `checklistState_${boundTabId}`;
-        ext.storage.local.get(storageKey, (result) => {
+        const viewModeKey = `viewMode_${boundTabId}`;
+
+        ext.storage.local.get([storageKey, viewModeKey, 'defaultViewMode'], (result) => {
             if (result[storageKey]) {
-                handleStateChange(result[storageKey]);
+                handleStateChange(result[storageKey], result[viewModeKey] || result.defaultViewMode || 'single');
             }
         });
 
         ext.storage.onChanged.addListener((changes, namespace) => {
-            if (namespace === 'local' && changes[storageKey]) {
-                const newValue = changes[storageKey].newValue;
-                if (newValue) {
-                    handleStateChange(newValue);
+            if (namespace === 'local') {
+                if (changes[storageKey]) {
+                    const newValue = changes[storageKey].newValue;
+                    if (newValue) {
+                        ext.storage.local.get(viewModeKey, (result) => {
+                            handleStateChange(newValue, result[viewModeKey] || 'single');
+                        });
+                    }
+                    // If newValue is undefined, storage was cleared (reset)
+                    // The content script will recreate it and trigger another change
+                } else if (changes[viewModeKey]) {
+                    // View mode changed - re-render
+                    ext.storage.local.get(storageKey, (result) => {
+                        if (result[storageKey]) {
+                            handleStateChange(result[storageKey], changes[viewModeKey].newValue || 'single');
+                        }
+                    });
                 }
-                // If newValue is undefined, storage was cleared (reset)
-                // The content script will recreate it and trigger another change
             }
         });
-        renderField(null); // Initial loading state
+        renderField(null, null, 'single'); // Initial loading state
     }
 
-    function handleStateChange(state) {
+    function handleStateChange(state, viewMode) {
+        viewMode = viewMode || 'single';
         const nextIndex = findNextStep(state);
 
         // Always update lastKnownState
         lastKnownState = state;
 
+        if (viewMode === 'full') {
+            // Render full checklist view
+            renderFullChecklistViewPopout(state);
+            return;
+        }
+
+        // Single-step view
         if (port && isConnected) {
             port.postMessage({ action: 'getUpdatedFieldData', index: nextIndex });
         } else {
             // Fallback: When disconnected, show a simplified view
             // The popout will show basic info until reconnection
             if (nextIndex === -1) {
-                renderField(null, null);
+                renderField(null, null, viewMode);
             } else {
                 // Show placeholder until we can get real data
                 const placeholderData = {
@@ -171,7 +193,7 @@
                 };
                 if (nextIndex !== currentIndex) {
                     currentIndex = nextIndex;
-                    renderField(placeholderData, null);
+                    renderField(placeholderData, null, viewMode);
                 }
             }
         }
@@ -206,6 +228,13 @@
             return;
         }
 
+        // Handle view mode change
+        if (message.action === 'changeViewMode') {
+            const viewModeKey = `viewMode_${boundTabId}`;
+            ext.storage.local.set({ [viewModeKey]: message.mode });
+            return;
+        }
+
         // Handle reset complete message
         if (message.action === 'resetComplete') {
             const display = document.getElementById('next-field-display');
@@ -224,16 +253,34 @@
         }
 
         if (message.action === 'updateDisplay') {
-            if (message.index !== currentIndex) {
-                currentIndex = message.index;
-                renderField(message.fieldData, message.policyNumber);
-            } else {
-                updateFieldValues(message.fieldData);
+            // Store checklist names for full view
+            if (message.checklistNames) {
+                checklistNames = message.checklistNames;
             }
-            // Update policy number if provided
-            if (message.policyNumber !== undefined) {
-                updatePolicyNumber(message.policyNumber);
+            if (message.state) {
+                lastKnownState = message.state;
             }
+
+            // Check current view mode
+            const viewModeKey = `viewMode_${boundTabId}`;
+            ext.storage.local.get(viewModeKey, (result) => {
+                const viewMode = result[viewModeKey] || 'single';
+
+                if (viewMode === 'full') {
+                    renderFullChecklistViewPopout(message.state || lastKnownState);
+                } else {
+                    if (message.index !== currentIndex) {
+                        currentIndex = message.index;
+                        renderField(message.fieldData, message.policyNumber, viewMode);
+                    } else {
+                        updateFieldValues(message.fieldData);
+                    }
+                    // Update policy number if provided
+                    if (message.policyNumber !== undefined) {
+                        updatePolicyNumber(message.policyNumber);
+                    }
+                }
+            });
         }
     }
 
@@ -273,7 +320,62 @@
         });
     }
 
-    function renderField(fieldData, policyNumber) {
+    function renderFullChecklistViewPopout(state) {
+        const display = document.getElementById('next-field-display');
+        if (!display) return;
+
+        if (!state) return;
+
+        const checklistCount = state.length;
+        let itemsHtml = '';
+
+        for (let i = 0; i < checklistCount; i++) {
+            const itemState = state[i];
+            let statusClass = '';
+            if (itemState.processed) {
+                statusClass = 'confirmed';
+            } else if (itemState.skipped) {
+                statusClass = 'skipped';
+            }
+
+            const itemName = checklistNames[i] || `Item ${i + 1}`;
+
+            itemsHtml += `
+                <div class="full-checklist-item ${statusClass}" style="display: flex; align-items: center; padding: 8px 0; border-bottom: 1px solid #f0f0f0;">
+                    <input type="checkbox" class="full-checklist-item-checkbox" data-item-index="${i}" ${itemState.processed ? 'checked' : ''} style="margin-right: 10px; cursor: pointer; flex-shrink: 0;">
+                    <span class="full-checklist-item-name" style="flex: 1; font-size: 13px; color: ${itemState.processed ? '#28a745' : (itemState.skipped ? '#ffc107' : '#333')};">${itemName}</span>
+                </div>
+            `;
+        }
+
+        display.innerHTML = `
+            <div style="font-weight: bold; margin-bottom: 12px; color: #007cba; font-size: 14px;">Checklist Progress</div>
+            <div style="max-height: 500px; overflow-y: auto; display: flex; flex-direction: column;">${itemsHtml}</div>
+        `;
+
+        // Attach event listeners
+        display.querySelectorAll('.full-checklist-item-checkbox').forEach(checkbox => {
+            const itemIndex = parseInt(checkbox.getAttribute('data-item-index'), 10);
+            checkbox.addEventListener('change', () => {
+                const storageKey = `checklistState_${boundTabId}`;
+                ext.storage.local.get(storageKey, (result) => {
+                    if (result[storageKey]) {
+                        const newState = [...result[storageKey]];
+                        newState[itemIndex] = {
+                            processed: checkbox.checked,
+                            skipped: false
+                        };
+                        ext.storage.local.set({ [storageKey]: newState });
+                    }
+                });
+            });
+        });
+
+        resizeWindow();
+    }
+
+    function renderField(fieldData, policyNumber, viewMode) {
+        viewMode = viewMode || 'single';
         const display = document.getElementById('next-field-display');
         if (!display) return;
 

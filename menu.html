@@ -8,7 +8,7 @@
             font-family: Arial, sans-serif;
             margin: 0;
             padding: 10px;
-            width: 150px;
+            width: 200px;
             text-align: center;
         }
         button {
@@ -48,12 +48,57 @@
             cursor: pointer;
             user-select: none;
         }
+        .view-mode-section {
+            margin-bottom: 12px;
+            padding: 8px;
+            background-color: #f9f9f9;
+            border-radius: 6px;
+            text-align: left;
+        }
+        .view-mode-section h4 {
+            margin: 0 0 8px 0;
+            font-size: 12px;
+            font-weight: bold;
+            color: #555;
+        }
+        .view-mode-option {
+            display: flex;
+            align-items: center;
+            margin-bottom: 6px;
+            font-size: 12px;
+        }
+        .view-mode-option input[type="radio"] {
+            margin-right: 6px;
+            cursor: pointer;
+        }
+        .view-mode-option label {
+            cursor: pointer;
+            user-select: none;
+            flex: 1;
+        }
     </style>
 </head>
 <body>
     <button id="toggle-ui-button">Toggle On-Page UI</button>
-    <button id="popout-button">Open Checklist</button>
+    <button id="popout-button">Pop-up Window</button>
     <button id="reset-button">Reset</button>
+
+    <div class="view-mode-section">
+        <h4>View Mode</h4>
+        <div class="view-mode-option">
+            <input type="radio" id="view-mode-single" name="view-mode" value="single" checked>
+            <label for="view-mode-single">Single Step View</label>
+        </div>
+        <div class="view-mode-option">
+            <input type="radio" id="view-mode-full" name="view-mode" value="full">
+            <label for="view-mode-full">Full Checklist View</label>
+        </div>
+        <div class="checkbox-container" style="margin-top: 8px;">
+            <input type="checkbox" id="set-as-default">
+            <label for="set-as-default">Set as default</label>
+        </div>
+    </div>
+
     <div class="checkbox-container">
         <input type="checkbox" id="default-ui-visible">
         <label for="default-ui-visible">Show UI by default</label>
