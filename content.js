@@ -2408,44 +2408,99 @@
     }
 
     /**
+     * Restore UI elements (checkboxes and zones)
+     * This is called when elements might be missing from the DOM
+     */
+    function restoreUIElements() {
+        if (!configLoaded || !myTabId) return;
+
+        const keys = getStorageKeys();
+        ext.storage.local.get([keys.checklistState, keys.uiState, keys.viewMode], (result) => {
+            if (!result[keys.checklistState]) return;
+
+            // Check if any checkboxes are missing
+            let missingCount = 0;
+            checklist.forEach((step, index) => {
+                const hasTraditionalCheckbox = document.getElementById(`checklist-confirm-cb-${index}`);
+                const hasZoneCheckboxes = zoneCheckboxes.has(index);
+
+                if (!hasTraditionalCheckbox && !hasZoneCheckboxes) {
+                    missingCount++;
+                }
+            });
+
+            if (missingCount > 0) {
+                console.log(LOG_PREFIX, `Found ${missingCount} items with missing checkboxes - reinjecting`);
+
+                // Clear existing zone tracking to force recreation
+                zoneCheckboxes.clear();
+                highlightZones.clear();
+
+                // Reinject all checkboxes
+                injectConfirmationCheckboxes(result[keys.checklistState]);
+            }
+
+            // Always update visual states and recalculate positions
+            updateItemVisuals(result[keys.checklistState]);
+            recalculateZoneCheckboxes();
+
+            // Restart position observer if it was stopped
+            if (!positionObserver) {
+                startPositionObserver();
+            }
+        });
+    }
+
+    /**
      * Handle page visibility changes (e.g., when download dialogs appear)
      * This ensures checkboxes and zones are restored when the page becomes visible again
      */
+    let visibilityRecoveryInterval = null;
+
     document.addEventListener('visibilitychange', () => {
         if (!document.hidden && configLoaded && myTabId) {
-            console.log(LOG_PREFIX, "Page became visible - checking for missing UI elements");
+            console.log(LOG_PREFIX, "Page became visible - starting recovery process");
 
-            // Wait a brief moment for the page to stabilize after becoming visible
-            setTimeout(() => {
-                const keys = getStorageKeys();
-                ext.storage.local.get([keys.checklistState, keys.uiState, keys.viewMode], (result) => {
-                    if (result[keys.checklistState]) {
-                        // Check if checkboxes are missing from DOM
-                        const firstCheckbox = document.getElementById('checklist-confirm-cb-0');
-                        const checkboxesMissing = !firstCheckbox;
+            // Clear any existing recovery interval
+            if (visibilityRecoveryInterval) {
+                clearInterval(visibilityRecoveryInterval);
+                visibilityRecoveryInterval = null;
+            }
 
-                        if (checkboxesMissing) {
-                            console.log(LOG_PREFIX, "Checkboxes missing - reinjecting all UI elements");
-                            // Checkboxes were removed, need to reinject everything
-                            injectConfirmationCheckboxes(result[keys.checklistState]);
-                        }
+            // Immediate attempt
+            setTimeout(() => restoreUIElements(), 100);
 
-                        // Always update visual states and recalculate positions
-                        updateItemVisuals(result[keys.checklistState]);
-                        recalculateZoneCheckboxes();
+            // Periodic recovery attempts for 10 seconds
+            // This handles cases where DOM isn't fully settled immediately
+            let attemptCount = 0;
+            visibilityRecoveryInterval = setInterval(() => {
+                attemptCount++;
+                console.log(LOG_PREFIX, `Recovery attempt ${attemptCount}/10`);
+                restoreUIElements();
 
-                        // Restart position observer if it was stopped
-                        if (!positionObserver) {
-                            startPositionObserver();
-                        }
-                    }
-                });
-            }, 100);
+                // Stop after 10 attempts (10 seconds)
+                if (attemptCount >= 10) {
+                    clearInterval(visibilityRecoveryInterval);
+                    visibilityRecoveryInterval = null;
+                    console.log(LOG_PREFIX, "Recovery process completed");
+                }
+            }, 1000);
+        } else if (document.hidden) {
+            // Page became hidden - stop recovery attempts
+            if (visibilityRecoveryInterval) {
+                clearInterval(visibilityRecoveryInterval);
+                visibilityRecoveryInterval = null;
+                console.log(LOG_PREFIX, "Page hidden - stopping recovery process");
+            }
         }
     });
 
     // Cleanup on page unload
     window.addEventListener('beforeunload', () => {
+        if (visibilityRecoveryInterval) {
+            clearInterval(visibilityRecoveryInterval);
+            visibilityRecoveryInterval = null;
+        }
         stopPositionObserver();
         removeAllHighlightZones();
         removeAllZoneCheckboxes();
