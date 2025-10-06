@@ -1868,14 +1868,22 @@
 
     function injectConfirmationCheckboxes(state) {
         checklist.forEach((step, index) => {
-            // Skip traditional checkbox injection if this item uses zone checkboxes
+            // Try zone checkboxes if this item uses them
             if (itemUsesZoneCheckboxes(index)) {
-                console.log(LOG_PREFIX, `Skipping traditional checkbox for item "${step.name}" - using zone checkboxes`);
-                // Inject zone checkboxes instead
-                injectZoneCheckboxes(index, state);
-                return;
+                const zoneSuccess = injectZoneCheckboxes(index, state);
+
+                if (zoneSuccess) {
+                    console.log(LOG_PREFIX, `Using zone checkboxes for item "${step.name}"`);
+                    return; // Zone checkboxes succeeded, don't inject traditional checkbox
+                } else {
+                    console.warn(LOG_PREFIX,
+                        `Zone checkboxes failed for item "${step.name}" - falling back to traditional checkbox`
+                    );
+                    // Fall through to inject traditional checkbox
+                }
             }
 
+            // Inject traditional checkbox (either zones not used, or zones failed)
             const container = getElementForStep(index);
             if (container && !document.getElementById(`checklist-confirm-cb-${index}`)) {
                 const checkbox = document.createElement('input');
@@ -1902,13 +1910,14 @@
      * Inject zone-based checkboxes for an item
      * @param {number} index - The checklist item index
      * @param {Array} state - The checklist state array
+     * @returns {boolean} True if at least one checkbox was successfully created, false otherwise
      */
     function injectZoneCheckboxes(index, state) {
         const step = checklist[index];
-        if (!step.highlight_zones || step.highlight_zones.length === 0) return;
+        if (!step.highlight_zones || step.highlight_zones.length === 0) return false;
 
         // Don't re-inject if already exists
-        if (zoneCheckboxes.has(index)) return;
+        if (zoneCheckboxes.has(index)) return true;
 
         const itemState = state && state[index] ? state[index] : { processed: false, skipped: false };
         const checkboxes = [];
@@ -1944,7 +1953,11 @@
 
         if (checkboxes.length > 0) {
             zoneCheckboxes.set(index, checkboxes);
+            return true;
         }
+
+        // All zone checkboxes failed - return false to trigger fallback
+        return false;
     }
 
     function updateOnPageCheckbox(index, isChecked) {
@@ -1964,11 +1977,14 @@
         state.forEach((itemState, index) => {
             const step = checklist[index];
 
-            // Handle highlight zones if defined
+            // Try highlight zones if defined
+            let zonesSucceeded = false;
             if (step && step.highlight_zones && step.highlight_zones.length > 0) {
-                updateHighlightZones(index, itemState);
-            } else {
-                // Fallback to container highlighting
+                zonesSucceeded = updateHighlightZones(index, itemState);
+            }
+
+            // Fallback to container highlighting if zones not defined or all failed
+            if (!zonesSucceeded) {
                 const container = getElementForStep(index);
                 if (container) {
                     container.classList.remove('skipped-item', 'confirmed-item');
@@ -1977,6 +1993,12 @@
                     } else if (itemState.processed) {
                         container.classList.add('confirmed-item');
                     }
+                }
+            } else {
+                // Zones succeeded - make sure container highlighting is removed
+                const container = getElementForStep(index);
+                if (container) {
+                    container.classList.remove('skipped-item', 'confirmed-item');
                 }
             }
 
@@ -2124,13 +2146,14 @@
      * Create or update highlight zones for a checklist item
      * @param {number} index - The checklist item index
      * @param {Object} itemState - The state object {processed, skipped}
+     * @returns {boolean} True if at least one zone was successfully created, false otherwise
      */
     function updateHighlightZones(index, itemState) {
         // Remove existing zones for this index (but NOT checkboxes - they stay visible)
         removeHighlightZones(index);
 
         const step = checklist[index];
-        if (!step.highlight_zones || step.highlight_zones.length === 0) return;
+        if (!step.highlight_zones || step.highlight_zones.length === 0) return false;
 
         // Determine state class
         let stateClass = '';
@@ -2141,7 +2164,7 @@
         }
 
         // If no state, don't create zones (but checkboxes remain visible)
-        if (!stateClass) return;
+        if (!stateClass) return true; // Return true because zones aren't needed, not failed
 
         const zoneDivs = [];
 
@@ -2178,7 +2201,11 @@
 
         if (zoneDivs.length > 0) {
             highlightZones.set(index, zoneDivs);
+            return true;
         }
+
+        // All zones failed - return false to trigger fallback
+        return false;
     }
 
     /**
@@ -2379,6 +2406,43 @@
             console.log(LOG_PREFIX, "Position observer stopped");
         }
     }
+
+    /**
+     * Handle page visibility changes (e.g., when download dialogs appear)
+     * This ensures checkboxes and zones are restored when the page becomes visible again
+     */
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden && configLoaded && myTabId) {
+            console.log(LOG_PREFIX, "Page became visible - checking for missing UI elements");
+
+            // Wait a brief moment for the page to stabilize after becoming visible
+            setTimeout(() => {
+                const keys = getStorageKeys();
+                ext.storage.local.get([keys.checklistState, keys.uiState, keys.viewMode], (result) => {
+                    if (result[keys.checklistState]) {
+                        // Check if checkboxes are missing from DOM
+                        const firstCheckbox = document.getElementById('checklist-confirm-cb-0');
+                        const checkboxesMissing = !firstCheckbox;
+
+                        if (checkboxesMissing) {
+                            console.log(LOG_PREFIX, "Checkboxes missing - reinjecting all UI elements");
+                            // Checkboxes were removed, need to reinject everything
+                            injectConfirmationCheckboxes(result[keys.checklistState]);
+                        }
+
+                        // Always update visual states and recalculate positions
+                        updateItemVisuals(result[keys.checklistState]);
+                        recalculateZoneCheckboxes();
+
+                        // Restart position observer if it was stopped
+                        if (!positionObserver) {
+                            startPositionObserver();
+                        }
+                    }
+                });
+            }, 100);
+        }
+    });
 
     // Cleanup on page unload
     window.addEventListener('beforeunload', () => {

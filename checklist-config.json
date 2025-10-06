@@ -382,7 +382,7 @@
       "highlight_zones": [
         {
           "top": {"selector": ".tab-content-row", "edge": "top", "offset": 0},
-          "bottom": {"selector": "div.row-buffer:nth-child(7) > div:nth-child(3)", "edge": "bottom", "offset": 12},
+          "bottom": {"selector": "#coveragesTable", "edge": "top", "offset": -12},
           "left": {"selector": ".transaction-edit:has(#transactionEffectiveDate", "edge": "left", "offset": 1},
           "right": {"selector": ".transaction-edit:has(#transactionEffectiveDate", "edge": "right", "offset": -3},
           "show_checkbox": true
