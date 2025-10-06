@@ -228,6 +228,12 @@
             return;
         }
 
+        // Handle policy number update
+        if (message.action === 'updatePolicyNumber') {
+            updatePolicyNumber(message.policyNumber);
+            return;
+        }
+
         // Handle view mode change
         if (message.action === 'changeViewMode') {
             const viewModeKey = `viewMode_${boundTabId}`;
@@ -271,9 +277,11 @@
                 } else {
                     if (message.index !== currentIndex) {
                         currentIndex = message.index;
-                        renderField(message.fieldData, message.policyNumber, viewMode);
+                        renderField(message.fieldData, message.policyNumber, viewMode, message.canGoBack);
                     } else {
                         updateFieldValues(message.fieldData);
+                        // Update back button state
+                        updateBackButtonState(message.canGoBack);
                     }
                     // Update policy number if provided
                     if (message.policyNumber !== undefined) {
@@ -288,6 +296,13 @@
         const policyNumberDisplay = document.getElementById('policy-number-display');
         if (policyNumberDisplay) {
             policyNumberDisplay.textContent = policyNumber || 'No Policy #';
+        }
+    }
+
+    function updateBackButtonState(canGoBack) {
+        const backButton = document.getElementById('back-button');
+        if (backButton) {
+            backButton.disabled = !canGoBack;
         }
     }
 
@@ -375,7 +390,7 @@
 
         display.innerHTML = `
             <div class="step-title">Checklist Progress</div>
-            <div style="max-height: 500px; overflow-y: auto; display: flex; flex-direction: column;">${itemsHtml}</div>
+            <div style="max-height: 850px; overflow-y: auto; display: flex; flex-direction: column;">${itemsHtml}</div>
         `;
 
         // Attach event listeners
@@ -396,7 +411,95 @@
             });
         });
 
+        // Request policy number update when rendering full view
+        if (port && isConnected) {
+            port.postMessage({ action: 'getPolicyNumber' });
+        }
+
         resizeWindow();
+    }
+
+    /**
+     * Render fees table UI for display in popout
+     * @param {Object} fieldData - Field data containing feeRows and summary
+     * @returns {string} HTML string for fees table display
+     */
+    function renderFeesTableUI(fieldData) {
+        if (!fieldData.feeRows || fieldData.feeRows.length === 0) {
+            return '<div class="table-empty">No fees data</div>';
+        }
+
+        // Build fee rows HTML
+        const feeRowsHtml = fieldData.feeRows.map(fee => {
+            return `
+                <div class="fees-table-row">
+                    <div class="fee-name">${fee.name}</div>
+                    <div class="fee-taxable">
+                        <input type="checkbox" ${fee.taxable ? 'checked' : ''}
+                               data-fee-index="${fee.index}"
+                               data-fee-type="taxable"
+                               data-taxable-checkbox-id="${fee.taxableCheckboxId}"
+                               class="fee-input-taxable-popout"
+                               style="cursor: pointer;">
+                    </div>
+                    <div class="fee-amount">
+                        <input type="text"
+                               value="${fee.amount}"
+                               data-fee-index="${fee.index}"
+                               data-fee-type="amount"
+                               data-amount-input-id="${fee.amountInputId}"
+                               class="fee-input-amount-popout"
+                               placeholder="$0.00">
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        // Build summary section HTML
+        let summaryHtml = '';
+        if (fieldData.summary) {
+            const warningHtml = fieldData.summary.showHighPremiumWarning ? `
+                <div class="fees-summary-row warning-row">
+                    <div class="fees-summary-label" style="color: #dc3545; font-weight: bold;">
+                        The Taxable Premium exceeds $500,000. Please verify before continuing.
+                    </div>
+                </div>
+            ` : '';
+
+            summaryHtml = `
+                <div class="fees-summary">
+                    <div class="fees-summary-row">
+                        <div class="fees-summary-label">Total Fees:</div>
+                        <div class="fees-summary-value" data-summary-type="totalFees">${fieldData.summary.totalFees}</div>
+                    </div>
+                    <div class="fees-summary-row">
+                        <div class="fees-summary-label">Taxable Premium (Includes Fees):</div>
+                        <div class="fees-summary-value" data-summary-type="taxablePremium">${fieldData.summary.taxablePremium}</div>
+                    </div>
+                    ${warningHtml}
+                    <div class="fees-summary-row tax-row">
+                        <div class="fees-summary-label"><strong>Estimated CA SL State Tax (3%):</strong></div>
+                        <div class="fees-summary-value" data-summary-type="caStateTax"><strong>${fieldData.summary.caStateTax}</strong></div>
+                    </div>
+                    <div class="fees-summary-row stamping-fee-row">
+                        <div class="fees-summary-label"><strong>${fieldData.summary.estimatedStampingFeeLabel}</strong></div>
+                        <div class="fees-summary-value" data-summary-type="estimatedStampingFee"><strong>${fieldData.summary.estimatedStampingFee}</strong></div>
+                    </div>
+                </div>
+            `;
+        }
+
+        return `
+            <div class="fees-table-container">
+                <div class="fees-table-header">
+                    <div class="fee-name-header">Fee Name</div>
+                    <div class="fee-taxable-header">Taxable</div>
+                    <div class="fee-amount-header">Fee Amount</div>
+                </div>
+                ${feeRowsHtml}
+                ${summaryHtml}
+            </div>
+        `;
     }
 
     /**
@@ -454,8 +557,9 @@
         `;
     }
 
-    function renderField(fieldData, policyNumber, viewMode) {
+    function renderField(fieldData, policyNumber, viewMode, canGoBack) {
         viewMode = viewMode || 'single';
+        canGoBack = canGoBack !== undefined ? canGoBack : false;
         const display = document.getElementById('next-field-display');
         if (!display) return;
 
@@ -475,6 +579,7 @@
                 <div class="step-title">${fieldData.name}</div>
                 ${tableHtml}
                 <div class="button-row">
+                    <button id="back-button" class="back-btn" ${!canGoBack ? 'disabled' : ''}>← Back</button>
                     <button id="skip-button" class="skip-btn">Skip</button>
                     <button id="confirm-button" class="confirm-btn">✓ Confirm</button>
                 </div>
@@ -485,6 +590,24 @@
             attachPopoutTableInputListeners(fieldData);
 
             resizeWindow(true); // Pass true to indicate table type for wider window
+            return;
+        }
+
+        // Handle custom type (fees table)
+        if (fieldData.type === 'custom' && fieldData.feeRows) {
+            const feesTableHtml = renderFeesTableUI(fieldData);
+            display.innerHTML = `
+                <div class="step-title">${fieldData.name}</div>
+                ${feesTableHtml}
+                <div class="button-row">
+                    <button id="back-button" class="back-btn" ${!canGoBack ? 'disabled' : ''}>← Back</button>
+                    <button id="skip-button" class="skip-btn">Skip</button>
+                    <button id="confirm-button" class="confirm-btn">✓ Confirm</button>
+                </div>
+            `;
+            setupEventListeners(fieldData);
+            attachPopoutFeesTableListeners(); // Attach fees input listeners
+            resizeWindowForFees(); // Use fixed sizing for fees table
             return;
         }
 
@@ -515,6 +638,7 @@
             <div class="step-title">${fieldData.name}</div>
             <div class="fields-container">${fieldsHtml}</div>
             <div class="button-row">
+                <button id="back-button" class="back-btn" ${!canGoBack ? 'disabled' : ''}>← Back</button>
                 <button id="skip-button" class="skip-btn">Skip</button>
                 <button id="confirm-button" class="confirm-btn">✓ Confirm</button>
             </div>
@@ -525,6 +649,62 @@
         renderKendoWidgetsPopout(display, fieldData);
 
         resizeWindow();
+    }
+
+    /**
+     * Attach event listeners to popout fees table inputs
+     */
+    function attachPopoutFeesTableListeners() {
+        const taxableInputs = document.querySelectorAll('.fee-input-taxable-popout');
+        const amountInputs = document.querySelectorAll('.fee-input-amount-popout');
+
+        // Attach listeners for taxable checkboxes
+        taxableInputs.forEach(input => {
+            input.addEventListener('change', () => {
+                const checkboxId = input.getAttribute('data-taxable-checkbox-id');
+                const feeIndex = input.getAttribute('data-fee-index');
+
+                console.log('[Popout Fees] Taxable checkbox changed:', checkboxId, input.checked);
+
+                // Send message to content script to update form
+                if (port && isConnected) {
+                    port.postMessage({
+                        action: 'updateFeeTaxable',
+                        checkboxId: checkboxId,
+                        value: input.checked
+                    });
+                }
+            });
+        });
+
+        // Attach listeners for amount inputs
+        amountInputs.forEach(input => {
+            input.addEventListener('blur', () => {
+                const amountInputId = input.getAttribute('data-amount-input-id');
+                const feeIndex = input.getAttribute('data-fee-index');
+
+                console.log('[Popout Fees] Amount input changed:', amountInputId, input.value);
+
+                // Send message to content script to update form
+                if (port && isConnected) {
+                    port.postMessage({
+                        action: 'updateFeeAmount',
+                        amountInputId: amountInputId,
+                        value: input.value
+                    });
+                }
+            });
+
+            // Also handle Enter key
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    input.blur();
+                }
+            });
+        });
+
+        console.log('[Popout Fees] Attached listeners to', taxableInputs.length, 'taxable checkboxes and', amountInputs.length, 'amount inputs');
     }
 
     /**
@@ -619,7 +799,7 @@
             ext.windows.getCurrent().then((window) => {
                 const calculatedHeight = neededHeight + 30;
                 const finalHeight = Math.round(Math.min(Math.max(calculatedHeight, 180), 850));
-                const finalWidth = isTable ? 450 : 300; // Wider for tables
+                const finalWidth = isTable ? 450 : 350; // Wider for tables, min 330 for back button
 
                 console.log('[Popout Resize]', {
                     contentHeight,
@@ -642,6 +822,25 @@
         }, 200);
     }
 
+    function resizeWindowForFees() {
+        // Fixed size for fees table to avoid resizing issues
+        setTimeout(() => {
+            ext.windows.getCurrent().then((window) => {
+                const finalHeight = 650; // Fixed height as specified
+                const finalWidth = 362;  // Fixed width as specified
+
+                console.log('[Popout Resize - Fees] Using fixed dimensions:', {
+                    finalHeight,
+                    finalWidth
+                });
+                ext.windows.update(window.id, {
+                    width: finalWidth,
+                    height: finalHeight
+                });
+            });
+        }, 200);
+    }
+
     function displayError(message) {
         const display = document.getElementById('next-field-display');
         if (display) {
@@ -651,6 +850,15 @@
     }
 
     function setupEventListeners(fieldData) {
+        const backButton = document.getElementById('back-button');
+        if (backButton && !backButton.disabled) {
+            backButton.addEventListener('click', () => {
+                if (port && isConnected) {
+                    port.postMessage({ action: 'goBackToPreviousStep' });
+                }
+            });
+        }
+
         document.getElementById('confirm-button').addEventListener('click', () => {
             if (port && isConnected) {
                 port.postMessage({ action: 'confirmField', index: currentIndex });

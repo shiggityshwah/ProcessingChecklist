@@ -117,6 +117,44 @@ body {
     margin-top: 20px !important;
 }
 
+.back-btn {
+    padding: 12px 20px !important;
+    background: #cbd5e0 !important;
+    color: #2d3748 !important;
+    border: none !important;
+    border-radius: 8px !important;
+    font-size: 14px !important;
+    font-weight: 600 !important;
+    cursor: pointer !important;
+    transition: all 0.2s !important;
+    line-height: 1.2 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    max-height: 44px !important;
+}
+
+.back-btn:hover {
+    background: #a0aec0 !important;
+    transform: translateY(-1px) !important;
+}
+
+.back-btn:active {
+    transform: translateY(0) !important;
+}
+
+.back-btn:disabled {
+    background: #e2e8f0 !important;
+    color: #a0aec0 !important;
+    cursor: not-allowed !important;
+    opacity: 0.6 !important;
+}
+
+.back-btn:disabled:hover {
+    transform: none !important;
+    background: #e2e8f0 !important;
+}
+
 .confirm-btn {
     flex: 1 !important;
     padding: 12px 20px !important;
@@ -133,7 +171,7 @@ body {
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
-    min-height: 44px !important;
+    max-height: 44px !important;
 }
 
 .confirm-btn:hover {
@@ -603,6 +641,200 @@ input[type="checkbox"] {
 }
 
 .table-cell-input-popout::placeholder {
+    color: #cbd5e0;
+    font-style: italic;
+}
+
+/* Fees Table Styles */
+.fees-table-container {
+    margin: 12px 0;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    overflow: hidden;
+    background-color: white;
+}
+
+.fees-table-header {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: 10px;
+    padding: 10px 12px;
+    background-color: #f7fafc;
+    border-bottom: 2px solid #e2e8f0;
+    font-weight: 600;
+    color: #4a5568;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.fee-name-header {
+    text-align: left;
+}
+
+.fee-taxable-header {
+    text-align: center;
+    width: 60px;
+}
+
+.fee-amount-header {
+    text-align: right;
+    width: 100px;
+}
+
+.fees-table-row {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: 10px;
+    padding: 10px 12px;
+    border-bottom: 1px solid #f0f0f0;
+    transition: background-color 0.2s;
+}
+
+.fees-table-row:hover {
+    background-color: #f7fafc;
+}
+
+.fees-table-row:last-of-type {
+    border-bottom: 2px solid #e2e8f0;
+}
+
+.fee-name {
+    font-size: 13px;
+    color: #2d3748;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+}
+
+.fee-taxable {
+    width: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.fee-input-taxable {
+    cursor: pointer;
+    width: 16px !important;
+    height: 16px !important;
+    margin: 0 !important;
+    transform: none !important;
+}
+
+.fee-amount {
+    width: 100px;
+    text-align: right;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+}
+
+.fee-amount-display {
+    font-size: 13px;
+    color: #2d3748;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Fees Summary Section */
+.fees-summary {
+    padding: 12px;
+    background-color: #fafafa;
+    border-top: 2px solid #e2e8f0;
+}
+
+.fees-summary-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+    font-size: 13px;
+}
+
+.fees-summary-row.warning-row {
+    padding: 8px 10px;
+    margin: 6px 0;
+    background-color: #fff3cd;
+    border: 1px solid #ffc107;
+    border-radius: 4px;
+}
+
+.fees-summary-row.warning-row .fees-summary-label {
+    flex: 1;
+    text-align: center;
+}
+
+.fees-summary-row.tax-row {
+    padding-top: 10px;
+    border-top: 1px solid #e2e8f0;
+}
+
+.fees-summary-row.stamping-fee-row {
+    margin-top: 4px;
+}
+
+.fees-summary-label {
+    color: #4a5568;
+    font-size: 12px;
+}
+
+.fees-summary-value {
+    color: #2d3748;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    font-size: 13px;
+}
+
+.fees-summary-row.tax-row .fees-summary-label,
+.fees-summary-row.tax-row .fees-summary-value,
+.fees-summary-row.stamping-fee-row .fees-summary-label,
+.fees-summary-row.stamping-fee-row .fees-summary-value {
+    font-size: 13px;
+}
+
+/* Fee amount input field styling */
+.fee-input-amount {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid #e2e8f0;
+    border-radius: 4px;
+    font-size: 13px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.fee-input-amount:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.fee-input-amount::placeholder {
+    color: #cbd5e0;
+    font-style: italic;
+}
+
+/* Fee amount input field styling for popout */
+.fee-input-amount-popout {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid #e2e8f0;
+    border-radius: 4px;
+    font-size: 13px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.fee-input-amount-popout:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.fee-input-amount-popout::placeholder {
     color: #cbd5e0;
     font-style: italic;
 }

@@ -207,6 +207,8 @@
                     updateAndBroadcast(storedState, uiState, viewMode);
                     setTimeout(() => {
                         isInitializing = false;
+                        // Start position observer after initialization
+                        startPositionObserver();
                     }, 500);
                 });
             } else {
@@ -216,6 +218,8 @@
                 updateAndBroadcast(storedState, uiState, viewMode);
                 setTimeout(() => {
                     isInitializing = false;
+                    // Start position observer after initialization
+                    startPositionObserver();
                 }, 500);
             }
         });
@@ -303,6 +307,7 @@
         const fieldData = getFieldData(nextIndex);
         const policyNumber = getPolicyNumber();
         const checklistNames = checklist.map(item => item.name);
+        const hasBackStep = canGoBack(state);
         try {
             port.postMessage({
                 action: 'updateDisplay',
@@ -310,7 +315,8 @@
                 index: nextIndex,
                 policyNumber: policyNumber,
                 checklistNames: checklistNames,
-                state: state
+                state: state,
+                canGoBack: hasBackStep
             });
         } catch (e) {
             console.error(LOG_PREFIX, "Failed to broadcast update:", e);
@@ -776,20 +782,111 @@
             console.log(LOG_PREFIX, `[Table] getFieldData: Final fieldData for table:`, fieldData);
         } else if (step.type === 'custom') {
             try {
-                const table = document.getElementById(step.table_id);
-                if (table) {
-                    // Custom logic to parse the table
-                    fieldData.fields = Array.from(table.querySelectorAll('tbody tr')).map(row => {
-                        const cells = row.querySelectorAll('td');
-                        const rowData = {};
-                        // This is a placeholder. The actual implementation will depend on the table structure.
-                        rowData.name = cells[0]?.innerText || 'Unknown';
-                        rowData.value = cells[1]?.innerText || '';
-                        return rowData;
-                    });
+                // Handle fees table specifically
+                if (step.table_id === 'feesTable') {
+                    const tableSelector = 'div.col-md-7:nth-child(2) > div:nth-child(1) > table:nth-child(1)';
+                    const table = document.querySelector(tableSelector);
+
+                    if (table) {
+                        const rows = table.querySelectorAll('tbody tr');
+                        const feeRows = [];
+
+                        // Parse each fee row
+                        rows.forEach((row, index) => {
+                            const cells = row.querySelectorAll('td');
+                            if (cells.length >= 3) {
+                                let feeName = '';
+
+                                // Extract fee name
+                                if (index === 3) {
+                                    // OTHER FEE row - check for custom name
+                                    const customNameInput = row.querySelector('#TransactionFees_3__OtherFeeType');
+                                    const customName = customNameInput ? customNameInput.value.trim() : '';
+                                    feeName = customName || 'OTHER FEE';
+                                } else {
+                                    // Regular fee rows - get static name
+                                    const firstCell = cells[0];
+                                    const textNodes = Array.from(firstCell.childNodes)
+                                        .filter(node => node.nodeType === Node.TEXT_NODE)
+                                        .map(node => node.textContent.trim())
+                                        .filter(text => text.length > 0);
+                                    feeName = textNodes[0] || '';
+                                }
+
+                                // Extract taxable checkbox
+                                const taxableCheckbox = cells[1].querySelector('input[type="checkbox"]');
+                                const isTaxable = taxableCheckbox ? taxableCheckbox.checked : false;
+
+                                // Extract fee amount - try Kendo widget first, then visible input
+                                const feeAmountCell = cells[2];
+                                const kendoInput = feeAmountCell.querySelector('.k-formatted-value');
+                                const hiddenInput = feeAmountCell.querySelector('input[id*="FeeAmount"]');
+                                let feeAmount = '';
+
+                                if (kendoInput) {
+                                    feeAmount = kendoInput.value || kendoInput.textContent.trim() || '$0.00';
+                                } else if (hiddenInput) {
+                                    feeAmount = hiddenInput.value || '0';
+                                    // Format as currency if it's a number
+                                    if (!isNaN(parseFloat(feeAmount))) {
+                                        feeAmount = `$${parseFloat(feeAmount).toFixed(2)}`;
+                                    }
+                                } else {
+                                    feeAmount = '$0.00';
+                                }
+
+                                feeRows.push({
+                                    index: index,
+                                    name: feeName,
+                                    taxable: isTaxable,
+                                    amount: feeAmount,
+                                    taxableCheckboxId: taxableCheckbox?.id || '',
+                                    amountInputId: hiddenInput?.id || ''
+                                });
+                            }
+                        });
+
+                        fieldData.feeRows = feeRows;
+
+                        // Extract summary values
+                        const totalFeesEl = document.querySelector('#totalFees');
+                        const taxablePremiumEl = document.querySelector('#taxablePremium');
+                        const caStateTaxEl = document.querySelector('#caStateTax');
+                        const estimatedStampingFeePctEl = document.querySelector('#estimatedStampingFeePct');
+                        const estimatedStampingFeeEl = document.querySelector('#estimatedStampingFee');
+                        const highPremiumWarningEl = document.querySelector('#highPremiumWarning');
+
+                        fieldData.summary = {
+                            totalFees: totalFeesEl ? totalFeesEl.textContent.trim() : '$0.00',
+                            taxablePremium: taxablePremiumEl ? taxablePremiumEl.textContent.trim() : '$0.00',
+                            caStateTax: caStateTaxEl ? caStateTaxEl.textContent.trim() : '$0.00',
+                            estimatedStampingFeeLabel: estimatedStampingFeePctEl ? estimatedStampingFeePctEl.textContent.trim() : 'Estimated Stamping Fee:',
+                            estimatedStampingFee: estimatedStampingFeeEl ? estimatedStampingFeeEl.textContent.trim() : '$0.00',
+                            showHighPremiumWarning: highPremiumWarningEl ?
+                                window.getComputedStyle(highPremiumWarningEl).display !== 'none' : false
+                        };
+                    } else {
+                        fieldData.feeRows = [];
+                        fieldData.summary = null;
+                    }
+                } else {
+                    // Generic custom table handling (fallback)
+                    const table = document.getElementById(step.table_id);
+                    if (table) {
+                        // Custom logic to parse the table
+                        fieldData.fields = Array.from(table.querySelectorAll('tbody tr')).map(row => {
+                            const cells = row.querySelectorAll('td');
+                            const rowData = {};
+                            // This is a placeholder. The actual implementation will depend on the table structure.
+                            rowData.name = cells[0]?.innerText || 'Unknown';
+                            rowData.value = cells[1]?.innerText || '';
+                            return rowData;
+                        });
+                    }
                 }
             } catch (e) {
                 console.error(LOG_PREFIX, `Error parsing custom table ${step.table_id}:`, e);
+                fieldData.fields = fieldData.fields || [];
                 fieldData.fields.push({ name: `Error parsing ${step.name}`, type: 'error', value: '' });
             }
         }
@@ -847,6 +944,352 @@
                 }
             }
         });
+    }
+
+    // MutationObserver for fees table summary
+    let feesTableSummaryObserver = null;
+
+    /**
+     * Start observing fees table summary values for changes
+     * @param {number} itemIndex - Index of the fees table item
+     */
+    function startFeesTableSummaryObserver(itemIndex) {
+        // Stop any existing observer
+        if (feesTableSummaryObserver) {
+            feesTableSummaryObserver.disconnect();
+        }
+
+        // Find all summary elements
+        const totalFeesEl = document.querySelector('#totalFees');
+        const taxablePremiumEl = document.querySelector('#taxablePremium');
+        const caStateTaxEl = document.querySelector('#caStateTax');
+        const estimatedStampingFeeEl = document.querySelector('#estimatedStampingFee');
+        const highPremiumWarningEl = document.querySelector('#highPremiumWarning');
+
+        const elementsToObserve = [totalFeesEl, taxablePremiumEl, caStateTaxEl, estimatedStampingFeeEl, highPremiumWarningEl].filter(el => el);
+
+        if (elementsToObserve.length === 0) {
+            console.warn(LOG_PREFIX, '[Fees] No summary elements found to observe');
+            return;
+        }
+
+        feesTableSummaryObserver = new MutationObserver(() => {
+            if (isInitializing) return;
+            // Re-extract and update UI
+            updateFeesTableSummary(itemIndex);
+        });
+
+        elementsToObserve.forEach(element => {
+            feesTableSummaryObserver.observe(element, {
+                childList: true,
+                characterData: true,
+                subtree: true,
+                attributes: true,
+                attributeFilter: ['style'] // For highPremiumWarning display changes
+            });
+        });
+
+        console.log(LOG_PREFIX, `[Fees] Started observing ${elementsToObserve.length} summary elements`);
+    }
+
+    /**
+     * Update fees table summary display in UI
+     * @param {number} itemIndex - Index of the fees table item
+     */
+    function updateFeesTableSummary(itemIndex) {
+        if (currentIndex !== itemIndex) return;
+
+        const totalFeesEl = document.querySelector('#totalFees');
+        const taxablePremiumEl = document.querySelector('#taxablePremium');
+        const caStateTaxEl = document.querySelector('#caStateTax');
+        const estimatedStampingFeePctEl = document.querySelector('#estimatedStampingFeePct');
+        const estimatedStampingFeeEl = document.querySelector('#estimatedStampingFee');
+        const highPremiumWarningEl = document.querySelector('#highPremiumWarning');
+
+        // Update UI summary elements
+        const uiTotalFees = document.querySelector('.fees-summary [data-summary-type="totalFees"]');
+        const uiTaxablePremium = document.querySelector('.fees-summary [data-summary-type="taxablePremium"]');
+        const uiCaStateTax = document.querySelector('.fees-summary [data-summary-type="caStateTax"]');
+        const uiStampingFee = document.querySelector('.fees-summary [data-summary-type="estimatedStampingFee"]');
+        const uiWarningRow = document.querySelector('.fees-summary .warning-row');
+
+        if (uiTotalFees && totalFeesEl) {
+            uiTotalFees.textContent = totalFeesEl.textContent.trim();
+        }
+        if (uiTaxablePremium && taxablePremiumEl) {
+            uiTaxablePremium.textContent = taxablePremiumEl.textContent.trim();
+        }
+        if (uiCaStateTax && caStateTaxEl) {
+            uiCaStateTax.textContent = caStateTaxEl.textContent.trim();
+        }
+        if (uiStampingFee && estimatedStampingFeeEl) {
+            uiStampingFee.textContent = estimatedStampingFeeEl.textContent.trim();
+        }
+
+        // Handle warning visibility
+        if (uiWarningRow && highPremiumWarningEl) {
+            const isVisible = window.getComputedStyle(highPremiumWarningEl).display !== 'none';
+            uiWarningRow.style.display = isVisible ? 'flex' : 'none';
+        }
+    }
+
+    /**
+     * Attach event listeners to fees table inputs for bidirectional sync
+     * @param {number} itemIndex - Index of the fees table item
+     */
+    function attachFeesTableListeners(itemIndex) {
+        console.log(LOG_PREFIX, `[Fees] Attaching listeners for fees table`);
+
+        const tableSelector = 'div.col-md-7:nth-child(2) > div:nth-child(1) > table:nth-child(1)';
+        const formTable = document.querySelector(tableSelector);
+
+        if (!formTable) {
+            console.warn(LOG_PREFIX, '[Fees] Form table not found');
+            return;
+        }
+
+        // Attach listeners to UI inputs for syncing TO the form
+        const uiTaxableInputs = document.querySelectorAll('.fee-input-taxable');
+        const uiAmountInputs = document.querySelectorAll('.fee-input-amount');
+
+        uiTaxableInputs.forEach(input => {
+            const checkboxId = input.getAttribute('data-taxable-checkbox-id');
+            const formCheckbox = document.querySelector(`#${checkboxId}`);
+
+            if (!formCheckbox) {
+                console.warn(LOG_PREFIX, `[Fees] Form checkbox not found: ${checkboxId}`);
+                return;
+            }
+
+            // Sync from UI to form
+            input.addEventListener('change', () => {
+                if (isInitializing || isProgrammaticUpdate) return;
+                console.log(LOG_PREFIX, `[Fees] UI taxable checkbox changed: ${checkboxId} = ${input.checked}`);
+                formCheckbox.checked = input.checked;
+                formCheckbox.dispatchEvent(new Event('change', { bubbles: true }));
+            });
+
+            // Sync from form to UI
+            formCheckbox.addEventListener('change', () => {
+                if (isInitializing || isProgrammaticUpdate) return;
+                console.log(LOG_PREFIX, `[Fees] Form taxable checkbox changed: ${checkboxId} = ${formCheckbox.checked}`);
+                if (input.checked !== formCheckbox.checked) {
+                    input.checked = formCheckbox.checked;
+                }
+            });
+        });
+
+        uiAmountInputs.forEach(input => {
+            const amountInputId = input.getAttribute('data-amount-input-id');
+            const formInput = document.querySelector(`#${amountInputId}`);
+
+            if (!formInput) {
+                console.warn(LOG_PREFIX, `[Fees] Form amount input not found: ${amountInputId}`);
+                return;
+            }
+
+            // Sync from UI to form (on blur and Enter key)
+            const syncUIToForm = () => {
+                if (isInitializing || isProgrammaticUpdate) return;
+                console.log(LOG_PREFIX, `[Fees] UI amount input changed: ${amountInputId} = ${input.value}`);
+
+                // Parse value and update hidden input
+                let numericValue = input.value.replace(/[$,]/g, '');
+                if (!isNaN(parseFloat(numericValue))) {
+                    const parsedValue = parseFloat(numericValue);
+                    formInput.value = parsedValue.toFixed(2);
+
+                    // Try to update the Kendo widget if available
+                    const feeIndex = input.getAttribute('data-fee-index');
+                    const formRow = formTable.querySelectorAll('tbody tr')[feeIndex];
+                    if (formRow) {
+                        // Try to find and update the Kendo widget
+                        if (typeof window.jQuery !== 'undefined' && typeof window.kendo !== 'undefined') {
+                            const $ = window.jQuery;
+                            // Method 1: Try to get widget from the hidden input with data-role
+                            let kendoWidget = $(formInput).data('kendoNumericTextBox');
+
+                            if (kendoWidget) {
+                                console.log(LOG_PREFIX, `[Fees] Updating Kendo widget (method 1) to: ${parsedValue}`);
+                                kendoWidget.value(parsedValue);
+                            } else {
+                                // Method 2: Try to find the wrapper and get widget from it
+                                const kendoWrapper = formInput.closest('.k-numerictextbox');
+                                if (kendoWrapper) {
+                                    kendoWidget = $(kendoWrapper).data('kendoNumericTextBox');
+                                    if (kendoWidget) {
+                                        console.log(LOG_PREFIX, `[Fees] Updating Kendo widget (method 2) to: ${parsedValue}`);
+                                        kendoWidget.value(parsedValue);
+                                    }
+                                }
+                            }
+
+                            if (!kendoWidget) {
+                                console.warn(LOG_PREFIX, `[Fees] Kendo widget not found for ${amountInputId}, updating hidden input only`);
+                            }
+                        } else {
+                            console.warn(LOG_PREFIX, `[Fees] jQuery or Kendo not available (jQuery: ${typeof window.jQuery}, Kendo: ${typeof window.kendo})`);
+                        }
+                    }
+                } else {
+                    formInput.value = '0';
+                }
+
+                // Trigger change event on form input
+                formInput.dispatchEvent(new Event('input', { bubbles: true }));
+                formInput.dispatchEvent(new Event('change', { bubbles: true }));
+            };
+
+            input.addEventListener('blur', syncUIToForm);
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    input.blur(); // This will trigger the blur event
+                }
+            });
+
+            // Sync from form to UI (watch the Kendo formatted value)
+            const feeIndex = input.getAttribute('data-fee-index');
+            const formRow = formTable.querySelectorAll('tbody tr')[feeIndex];
+            if (formRow) {
+                const kendoInput = formRow.querySelector('.k-formatted-value');
+                if (kendoInput) {
+                    // Watch for changes to the Kendo widget's formatted value
+                    const observer = new MutationObserver(() => {
+                        if (isInitializing || isProgrammaticUpdate) return;
+                        const newValue = kendoInput.value || kendoInput.textContent?.trim() || '$0.00';
+                        if (input !== document.activeElement && input.value !== newValue) {
+                            console.log(LOG_PREFIX, `[Fees] Form Kendo value changed: ${amountInputId} = ${newValue}`);
+                            input.value = newValue;
+                        }
+                    });
+
+                    observer.observe(kendoInput, {
+                        attributes: true,
+                        attributeFilter: ['value'],
+                        characterData: true,
+                        childList: true,
+                        subtree: true
+                    });
+                }
+
+                // Also watch the hidden input for direct changes
+                const hiddenObserver = new MutationObserver(() => {
+                    if (isInitializing || isProgrammaticUpdate) return;
+                    const newRawValue = formInput.value;
+                    if (input !== document.activeElement && newRawValue) {
+                        const formattedValue = `$${parseFloat(newRawValue).toFixed(2)}`;
+                        if (input.value !== formattedValue) {
+                            console.log(LOG_PREFIX, `[Fees] Form hidden input changed: ${amountInputId} = ${formattedValue}`);
+                            input.value = formattedValue;
+                        }
+                    }
+                });
+
+                hiddenObserver.observe(formInput, {
+                    attributes: true,
+                    attributeFilter: ['value']
+                });
+
+                // Also listen for input events on the hidden field
+                formInput.addEventListener('input', () => {
+                    if (isInitializing || isProgrammaticUpdate) return;
+                    const newRawValue = formInput.value;
+                    if (input !== document.activeElement && newRawValue) {
+                        const formattedValue = `$${parseFloat(newRawValue).toFixed(2)}`;
+                        if (input.value !== formattedValue) {
+                            console.log(LOG_PREFIX, `[Fees] Form hidden input event: ${amountInputId} = ${formattedValue}`);
+                            input.value = formattedValue;
+                        }
+                    }
+                });
+            }
+        });
+
+        console.log(LOG_PREFIX, `[Fees] Attached listeners to ${uiTaxableInputs.length} taxable checkboxes and ${uiAmountInputs.length} amount inputs`);
+    }
+
+    /**
+     * Render fees table UI for display in on-page UI or popout
+     * @param {Object} fieldData - Field data containing feeRows and summary
+     * @returns {string} HTML string for fees table display
+     */
+    function renderFeesTableUI(fieldData) {
+        if (!fieldData.feeRows || fieldData.feeRows.length === 0) {
+            return '<div class="table-empty">No fees data</div>';
+        }
+
+        // Build fee rows HTML
+        const feeRowsHtml = fieldData.feeRows.map(fee => {
+            return `
+                <div class="fees-table-row">
+                    <div class="fee-name">${fee.name}</div>
+                    <div class="fee-taxable">
+                        <input type="checkbox" ${fee.taxable ? 'checked' : ''}
+                               data-fee-index="${fee.index}"
+                               data-fee-type="taxable"
+                               data-taxable-checkbox-id="${fee.taxableCheckboxId}"
+                               class="fee-input-taxable"
+                               style="cursor: pointer;">
+                    </div>
+                    <div class="fee-amount">
+                        <input type="text"
+                               value="${fee.amount}"
+                               data-fee-index="${fee.index}"
+                               data-fee-type="amount"
+                               data-amount-input-id="${fee.amountInputId}"
+                               class="fee-input-amount"
+                               placeholder="$0.00">
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        // Build summary section HTML
+        let summaryHtml = '';
+        if (fieldData.summary) {
+            const warningHtml = fieldData.summary.showHighPremiumWarning ? `
+                <div class="fees-summary-row warning-row">
+                    <div class="fees-summary-label" style="color: #dc3545; font-weight: bold;">
+                        The Taxable Premium exceeds $500,000. Please verify before continuing.
+                    </div>
+                </div>
+            ` : '';
+
+            summaryHtml = `
+                <div class="fees-summary">
+                    <div class="fees-summary-row">
+                        <div class="fees-summary-label">Total Fees:</div>
+                        <div class="fees-summary-value" data-summary-type="totalFees">${fieldData.summary.totalFees}</div>
+                    </div>
+                    <div class="fees-summary-row">
+                        <div class="fees-summary-label">Taxable Premium (Includes Fees):</div>
+                        <div class="fees-summary-value" data-summary-type="taxablePremium">${fieldData.summary.taxablePremium}</div>
+                    </div>
+                    ${warningHtml}
+                    <div class="fees-summary-row tax-row">
+                        <div class="fees-summary-label"><strong>Estimated CA SL State Tax (3%):</strong></div>
+                        <div class="fees-summary-value" data-summary-type="caStateTax"><strong>${fieldData.summary.caStateTax}</strong></div>
+                    </div>
+                    <div class="fees-summary-row stamping-fee-row">
+                        <div class="fees-summary-label"><strong>${fieldData.summary.estimatedStampingFeeLabel}</strong></div>
+                        <div class="fees-summary-value" data-summary-type="estimatedStampingFee"><strong>${fieldData.summary.estimatedStampingFee}</strong></div>
+                    </div>
+                </div>
+            `;
+        }
+
+        return `
+            <div class="fees-table-container">
+                <div class="fees-table-header">
+                    <div class="fee-name-header">Fee Name</div>
+                    <div class="fee-taxable-header">Taxable</div>
+                    <div class="fee-amount-header">Fee Amount</div>
+                </div>
+                ${feeRowsHtml}
+                ${summaryHtml}
+            </div>
+        `;
     }
 
     /**
@@ -919,7 +1362,7 @@
         if (!container) {
             container = document.createElement('div');
             container.id = 'processing-checklist-container';
-            container.style.cssText = `position: fixed !important; top: 20px !important; right: 20px !important; z-index: 10000 !important; background: white !important; border: none !important; border-radius: 16px !important; padding: 20px !important; box-shadow: 0 8px 32px rgba(0,0,0,0.12) !important; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important; font-size: 14px !important; max-width: 340px !important; min-width: 300px !important; animation: slideInRight 0.3s ease-out !important;`;
+            container.style.cssText = `position: fixed !important; top: 20px !important; right: 20px !important; z-index: 10000 !important; background: white !important; border: none !important; border-radius: 16px !important; padding: 20px !important; box-shadow: 0 8px 32px rgba(0,0,0,0.12) !important; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important; font-size: 14px !important; max-width: 350px !important; min-width: 330px !important; animation: slideInRight 0.3s ease-out !important;`;
             document.body.appendChild(container);
         }
         container.style.display = uiState.visible ? 'block' : 'none';
@@ -947,18 +1390,53 @@
             const tableHtml = renderTableUI(fieldData.tableData, { columns: fieldData.columns, dynamic: fieldData.dynamic });
             console.log(LOG_PREFIX, `[Table] renderOnPageUI: Generated HTML length:`, tableHtml.length);
 
+            const hasBackStep = canGoBack(state);
             container.innerHTML = `
                 <div class="step-title">${fieldData.name}</div>
                 ${tableHtml}
                 <div class="button-row">
+                    <button id="back-button-page" class="back-btn" ${!hasBackStep ? 'disabled' : ''}>← Back</button>
                     <button id="skip-button-page" class="skip-btn">Skip</button>
                     <button id="confirm-button-page" class="confirm-btn">✓ Confirm</button>
                 </div>`;
             document.getElementById('confirm-button-page').addEventListener('click', () => handleConfirmField(currentIndex));
             document.getElementById('skip-button-page').addEventListener('click', () => handleSkipField(currentIndex));
+            if (hasBackStep) {
+                document.getElementById('back-button-page').addEventListener('click', () => handleGoBackToPreviousStep());
+            }
 
             // Attach listeners to table cell inputs for bidirectional sync
             attachTableCellInputListeners(currentIndex);
+            return;
+        }
+
+        // Handle custom type (fees table)
+        if (fieldData.type === 'custom' && fieldData.feeRows) {
+            console.log(LOG_PREFIX, `[Custom] renderOnPageUI: Rendering fees table "${fieldData.name}"`);
+
+            const feesTableHtml = renderFeesTableUI(fieldData);
+            const hasBackStep = canGoBack(state);
+
+            container.innerHTML = `
+                <div class="step-title">${fieldData.name}</div>
+                ${feesTableHtml}
+                <div class="button-row">
+                    <button id="back-button-page" class="back-btn" ${!hasBackStep ? 'disabled' : ''}>← Back</button>
+                    <button id="skip-button-page" class="skip-btn">Skip</button>
+                    <button id="confirm-button-page" class="confirm-btn">✓ Confirm</button>
+                </div>`;
+            document.getElementById('confirm-button-page').addEventListener('click', () => handleConfirmField(currentIndex));
+            document.getElementById('skip-button-page').addEventListener('click', () => handleSkipField(currentIndex));
+            if (hasBackStep) {
+                document.getElementById('back-button-page').addEventListener('click', () => handleGoBackToPreviousStep());
+            }
+
+            // Attach event listeners for fees table inputs
+            attachFeesTableListeners(currentIndex);
+
+            // Start observing summary values for changes
+            startFeesTableSummaryObserver(currentIndex);
+
             return;
         }
 
@@ -985,15 +1463,20 @@
             }
         }).join('');
 
+        const hasBackStep = canGoBack(state);
         container.innerHTML = `
             <div class="step-title">${fieldData.name}</div>
             <div class="fields-container">${fieldsHtml}</div>
             <div class="button-row">
+                <button id="back-button-page" class="back-btn" ${!hasBackStep ? 'disabled' : ''}>← Back</button>
                 <button id="skip-button-page" class="skip-btn">Skip</button>
                 <button id="confirm-button-page" class="confirm-btn">✓ Confirm</button>
             </div>`;
         document.getElementById('confirm-button-page').addEventListener('click', () => handleConfirmField(currentIndex));
         document.getElementById('skip-button-page').addEventListener('click', () => handleSkipField(currentIndex));
+        if (hasBackStep) {
+            document.getElementById('back-button-page').addEventListener('click', () => handleGoBackToPreviousStep());
+        }
         document.querySelectorAll('.on-page-input').forEach(input => {
             const fieldIndex = parseInt(input.getAttribute('data-field-index'), 10);
             input.addEventListener(input.type === 'checkbox' || input.type === 'select-one' || input.type === 'radio' ? 'change' : 'input', () => {
@@ -1127,8 +1610,12 @@
                 break;
             case 'updateFieldValue': handleUpdateFieldValue(message, false); break;
             case 'updateTableCell': handleUpdateTableCell(message); break;
+            case 'updateFeeTaxable': handleUpdateFeeTaxable(message); break;
+            case 'updateFeeAmount': handleUpdateFeeAmount(message); break;
             case 'confirmField': handleConfirmField(message.index); break;
             case 'skipField': handleSkipField(message.index); break;
+            case 'getPolicyNumber': handleGetPolicyNumber(); break;
+            case 'goBackToPreviousStep': handleGoBackToPreviousStep(); break;
             case 'toggleUI': toggleOnPageUI(); break;
             case 'changeViewMode':
                 // View mode changed from menu - update storage
@@ -1167,6 +1654,129 @@
         // Trigger change event
         const eventType = (col.type === 'checkbox' || col.type === 'select') ? 'change' : 'input';
         formElement.dispatchEvent(new Event(eventType, { bubbles: true }));
+    }
+
+    function handleUpdateFeeTaxable({ checkboxId, value }) {
+        console.log(LOG_PREFIX, `[Fees] Popout updating taxable: ${checkboxId} = ${value}`);
+        const checkbox = document.querySelector(`#${checkboxId}`);
+        if (checkbox) {
+            checkbox.checked = value;
+            checkbox.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+    }
+
+    function handleUpdateFeeAmount({ amountInputId, value }) {
+        console.log(LOG_PREFIX, `[Fees] Popout updating amount: ${amountInputId} = ${value}`);
+        const formInput = document.querySelector(`#${amountInputId}`);
+        if (formInput) {
+            // Parse value and update hidden input
+            let numericValue = value.replace(/[$,]/g, '');
+            if (!isNaN(parseFloat(numericValue))) {
+                const parsedValue = parseFloat(numericValue);
+                formInput.value = parsedValue.toFixed(2);
+
+                // Try to update the Kendo widget if available
+                if (typeof window.jQuery !== 'undefined' && typeof window.kendo !== 'undefined') {
+                    const $ = window.jQuery;
+                    let kendoWidget = $(formInput).data('kendoNumericTextBox');
+
+                    if (kendoWidget) {
+                        console.log(LOG_PREFIX, `[Fees] Updating Kendo widget from popout: ${parsedValue}`);
+                        kendoWidget.value(parsedValue);
+                    } else {
+                        const kendoWrapper = formInput.closest('.k-numerictextbox');
+                        if (kendoWrapper) {
+                            kendoWidget = $(kendoWrapper).data('kendoNumericTextBox');
+                            if (kendoWidget) {
+                                console.log(LOG_PREFIX, `[Fees] Updating Kendo widget from popout (method 2): ${parsedValue}`);
+                                kendoWidget.value(parsedValue);
+                            }
+                        }
+                    }
+                }
+            } else {
+                formInput.value = '0';
+            }
+
+            // Trigger change event
+            formInput.dispatchEvent(new Event('input', { bubbles: true }));
+            formInput.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+    }
+
+    function handleGetPolicyNumber() {
+        const policyNumber = getPolicyNumber();
+        console.log(LOG_PREFIX, `[Policy Number] Sending to popout: ${policyNumber}`);
+        port.postMessage({
+            action: 'updatePolicyNumber',
+            policyNumber: policyNumber
+        });
+    }
+
+    function canGoBack(state) {
+        if (!state) return false;
+
+        // Find the current step (first unprocessed/unskipped)
+        let currentStep = -1;
+        for (let i = 0; i < state.length; i++) {
+            if (!state[i].processed && !state[i].skipped) {
+                currentStep = i;
+                break;
+            }
+        }
+
+        // Find if there's a previous processed step (not skipped) before current
+        const searchLimit = currentStep >= 0 ? currentStep : state.length;
+        for (let i = searchLimit - 1; i >= 0; i--) {
+            if (state[i].processed && !state[i].skipped) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    function handleGoBackToPreviousStep() {
+        const keys = getStorageKeys();
+        ext.storage.local.get(keys.checklistState, (result) => {
+            const state = result[keys.checklistState];
+            if (!state) return;
+
+            // Find the current step (first unprocessed/unskipped)
+            let currentStep = -1;
+            for (let i = 0; i < state.length; i++) {
+                if (!state[i].processed && !state[i].skipped) {
+                    currentStep = i;
+                    break;
+                }
+            }
+
+            // Find the previous processed step (not skipped) before current
+            let previousIndex = -1;
+            const searchLimit = currentStep >= 0 ? currentStep : state.length;
+            for (let i = searchLimit - 1; i >= 0; i--) {
+                if (state[i].processed && !state[i].skipped) {
+                    previousIndex = i;
+                    break;
+                }
+            }
+
+            if (previousIndex === -1) {
+                console.log(LOG_PREFIX, '[Back] No previous processed step to go back to');
+                return;
+            }
+
+            console.log(LOG_PREFIX, `[Back] Going back to step ${previousIndex}`);
+
+            // Uncheck the previous step
+            const newState = [...state];
+            newState[previousIndex] = { processed: false, skipped: false };
+
+            // Save and broadcast
+            ext.storage.local.set({ [keys.checklistState]: newState }, () => {
+                broadcastUpdate(newState);
+            });
+        });
     }
 
     function toggleOnPageUI() {
@@ -1729,8 +2339,50 @@
         }, 250); // Debounce resize events
     });
 
+    /**
+     * MutationObserver to watch for DOM changes that might affect positioning
+     * This handles cases where elements move due to animations, dynamic content, etc.
+     */
+    let positionObserver = null;
+    let observerTimeout = null;
+
+    function startPositionObserver() {
+        if (positionObserver) return; // Already observing
+
+        positionObserver = new MutationObserver(() => {
+            // Debounce the recalculation to avoid excessive updates
+            clearTimeout(observerTimeout);
+            observerTimeout = setTimeout(() => {
+                recalculateHighlightZones();
+            }, 100);
+        });
+
+        // Observe the entire document body for:
+        // - childList: elements being added/removed
+        // - attributes: style/class changes that might affect layout
+        // - subtree: watch all descendants
+        positionObserver.observe(document.body, {
+            childList: true,
+            attributes: true,
+            attributeFilter: ['style', 'class'],
+            subtree: true
+        });
+
+        console.log(LOG_PREFIX, "Position observer started - will reposition elements on DOM changes");
+    }
+
+    function stopPositionObserver() {
+        if (positionObserver) {
+            positionObserver.disconnect();
+            positionObserver = null;
+            clearTimeout(observerTimeout);
+            console.log(LOG_PREFIX, "Position observer stopped");
+        }
+    }
+
     // Cleanup on page unload
     window.addEventListener('beforeunload', () => {
+        stopPositionObserver();
         removeAllHighlightZones();
         removeAllZoneCheckboxes();
     });

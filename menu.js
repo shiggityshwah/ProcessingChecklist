@@ -12,8 +12,8 @@
         if (!url) return false;
 
         // Default URL patterns - edit here to add more patterns
-        // These should match the patterns in checklist-config.yaml
-        const patterns = ['index.html', 'rapid.slacal.com/Policy/'];
+        // These should match the patterns in checklist-config.json
+        const patterns = ['index.html', 'rapid.slacal.com/Policy'];
 
         for (const p of patterns) {
             if (url.includes(p)) {
