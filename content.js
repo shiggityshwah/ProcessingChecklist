@@ -209,6 +209,8 @@
                         isInitializing = false;
                         // Start position observer after initialization
                         startPositionObserver();
+                        // Start periodic recovery check for script reloads (e.g., after downloads)
+                        startPeriodicRecoveryCheck();
                     }, 500);
                 });
             } else {
@@ -220,6 +222,8 @@
                     isInitializing = false;
                     // Start position observer after initialization
                     startPositionObserver();
+                    // Start periodic recovery check for script reloads (e.g., after downloads)
+                    startPeriodicRecoveryCheck();
                 }, 500);
             }
         });
@@ -2452,6 +2456,40 @@
     }
 
     /**
+     * Periodic recovery check to handle script reloads (e.g., after Firefox downloads)
+     * Runs every 2 seconds to detect and restore missing UI elements
+     */
+    let periodicRecoveryInterval = null;
+
+    function startPeriodicRecoveryCheck() {
+        // Don't start multiple intervals
+        if (periodicRecoveryInterval) return;
+
+        console.log(LOG_PREFIX, "Starting periodic recovery check (every 2 seconds)");
+
+        periodicRecoveryInterval = setInterval(() => {
+            if (!configLoaded || !myTabId) return;
+
+            // Quick check: are checkboxes missing?
+            const firstCheckbox = document.getElementById('checklist-confirm-cb-0');
+            const hasZoneCheckbox = zoneCheckboxes.size > 0;
+
+            if (!firstCheckbox && !hasZoneCheckbox) {
+                console.log(LOG_PREFIX, "Periodic check detected missing checkboxes - attempting recovery");
+                restoreUIElements();
+            }
+        }, 2000); // Check every 2 seconds
+    }
+
+    function stopPeriodicRecoveryCheck() {
+        if (periodicRecoveryInterval) {
+            clearInterval(periodicRecoveryInterval);
+            periodicRecoveryInterval = null;
+            console.log(LOG_PREFIX, "Periodic recovery check stopped");
+        }
+    }
+
+    /**
      * Handle page visibility changes (e.g., when download dialogs appear)
      * This ensures checkboxes and zones are restored when the page becomes visible again
      */
@@ -2501,6 +2539,7 @@
             clearInterval(visibilityRecoveryInterval);
             visibilityRecoveryInterval = null;
         }
+        stopPeriodicRecoveryCheck();
         stopPositionObserver();
         removeAllHighlightZones();
         removeAllZoneCheckboxes();
