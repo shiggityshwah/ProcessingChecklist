@@ -15,7 +15,9 @@
     window.trackingHelper = {
         currentUrlId: null,
         isReviewMode: false,
-        submissionNumber: null
+        submissionNumber: null,
+        updateMetadata: updateTrackingMetadata,
+        getSavedProgress: null  // Will be set by content.js to retrieve saved progress
     };
 
     /**
@@ -42,6 +44,82 @@
             return elem.textContent.trim();
         }
         return null;
+    }
+
+    /**
+     * Extract policy number from page
+     */
+    function extractPolicyNumber() {
+        const elem = document.querySelector('#PolicyNumber');
+        if (elem) {
+            return elem.value ? elem.value.trim() : elem.textContent.trim();
+        }
+        return null;
+    }
+
+    /**
+     * Extract primary insured from page
+     */
+    function extractPrimaryInsured() {
+        const elem = document.querySelector('#PrimaryInsuredName');
+        if (elem) {
+            return elem.value ? elem.value.trim() : elem.textContent.trim();
+        }
+        return null;
+    }
+
+    /**
+     * Extract total taxable premium from page
+     */
+    function extractTotalTaxablePremium() {
+        const elem = document.querySelector('#taxablePremium');
+        if (elem) {
+            return elem.textContent.trim();
+        }
+        return null;
+    }
+
+    /**
+     * Update all tracking metadata for current form
+     */
+    function updateTrackingMetadata() {
+        const urlId = window.trackingHelper.currentUrlId;
+        if (!urlId) return;
+
+        ext.storage.local.get('tracking_history', (result) => {
+            let history = result.tracking_history || [];
+            const index = history.findIndex(h => h.urlId === urlId);
+
+            if (index !== -1) {
+                let updated = false;
+
+                // Update policy number
+                const policyNumber = extractPolicyNumber();
+                if (policyNumber && policyNumber !== history[index].policyNumber) {
+                    history[index].policyNumber = policyNumber;
+                    updated = true;
+                }
+
+                // Update primary insured
+                const primaryInsured = extractPrimaryInsured();
+                if (primaryInsured && primaryInsured !== history[index].primaryNamedInsured) {
+                    history[index].primaryNamedInsured = primaryInsured;
+                    updated = true;
+                }
+
+                // Update total taxable premium
+                const premium = extractTotalTaxablePremium();
+                if (premium && premium !== history[index].totalTaxablePremium) {
+                    history[index].totalTaxablePremium = premium;
+                    updated = true;
+                }
+
+                if (updated) {
+                    ext.storage.local.set({ tracking_history: history });
+                    console.log(LOG_PREFIX, "Metadata updated for form:", urlId);
+                }
+            }
+        });
     }
 
     /**
@@ -95,14 +173,21 @@
                     const existingHistoryIndex = history.findIndex(h => h.urlId === urlId);
 
                     if (existingHistoryIndex === -1) {
+                        // Extract metadata from page
+                        const policyNumber = extractPolicyNumber() || form.policyNumber;
+                        const primaryInsured = extractPrimaryInsured();
+                        const pagePremium = extractTotalTaxablePremium();
+                        const totalPremium = pagePremium || form.premium;
+
                         // Add to history with initial progress
                         history.push({
                             ...form,
+                            policyNumber: policyNumber,
                             checkedProgress: { current: 0, total: 0, percentage: 0 },
                             reviewedProgress: null,
                             manuallyMarkedComplete: false,
-                            primaryNamedInsured: null,
-                            totalTaxablePremium: null,
+                            primaryNamedInsured: primaryInsured,
+                            totalTaxablePremium: totalPremium,
                             addedDate: form.addedDate || new Date().toISOString(),
                             movedToHistoryDate: new Date().toISOString(),
                             completedDate: null
@@ -123,14 +208,51 @@
                     console.log(LOG_PREFIX, "Form detected and moved to history:", urlId);
                 } else {
                     // Check if form is already in history (reopening)
-                    const existingHistoryIndex = history.findIndex(h => h.urlId === urlId);
+                    let existingHistoryIndex = history.findIndex(h => h.urlId === urlId);
 
-                    if (existingHistoryIndex !== -1) {
-                        // Update submission number if missing
+                    if (existingHistoryIndex === -1) {
+                        // Not in queue, not in history - add directly to history
+                        const policyNumber = extractPolicyNumber();
+                        const primaryInsured = extractPrimaryInsured();
+                        const totalPremium = extractTotalTaxablePremium();
+
+                        if (policyNumber) {
+                            history.push({
+                                urlId: urlId,
+                                url: window.location.href,
+                                policyNumber: policyNumber,
+                                submissionNumber: submissionNumber || '',
+                                premium: totalPremium || '',
+                                broker: '',
+                                policyType: '',
+                                checkedProgress: { current: 0, total: 0, percentage: 0 },
+                                reviewedProgress: null,
+                                manuallyMarkedComplete: false,
+                                primaryNamedInsured: primaryInsured,
+                                totalTaxablePremium: totalPremium,
+                                addedDate: new Date().toISOString(),
+                                movedToHistoryDate: new Date().toISOString(),
+                                completedDate: null
+                            });
+                            ext.storage.local.set({ tracking_history: history });
+                            console.log(LOG_PREFIX, "New form auto-added to history:", urlId);
+                        }
+                    } else {
+                        // Update submission number and metadata if missing
                         if (submissionNumber && !history[existingHistoryIndex].submissionNumber) {
                             history[existingHistoryIndex].submissionNumber = submissionNumber;
-                            ext.storage.local.set({ tracking_history: history });
                         }
+
+                        // Update metadata on reconnect
+                        const policyNumber = extractPolicyNumber();
+                        const primaryInsured = extractPrimaryInsured();
+                        const totalPremium = extractTotalTaxablePremium();
+
+                        if (policyNumber) history[existingHistoryIndex].policyNumber = policyNumber;
+                        if (primaryInsured) history[existingHistoryIndex].primaryNamedInsured = primaryInsured;
+                        if (totalPremium) history[existingHistoryIndex].totalTaxablePremium = totalPremium;
+
+                        ext.storage.local.set({ tracking_history: history });
                         console.log(LOG_PREFIX, "Reopening tracked form:", urlId);
                     }
                 }

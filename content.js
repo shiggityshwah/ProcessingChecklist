@@ -262,6 +262,36 @@
         });
     }
 
+    function checkAndRestoreFromHistory(callback) {
+        // Extract URL ID from current page
+        const url = window.location.href;
+        const editMatch = url.match(/\/Edit\/(\d+)/);
+        if (!editMatch) {
+            callback(null);
+            return;
+        }
+
+        const urlId = editMatch[1];
+
+        // Check tracking history for this form
+        ext.storage.local.get('tracking_history', (result) => {
+            const history = result.tracking_history || [];
+            const historyItem = history.find(h => h.urlId === urlId);
+
+            if (historyItem && historyItem.checkedProgress) {
+                // Convert progress back to checklist state format
+                // We need to map which items were checked
+                console.log(LOG_PREFIX, "Restoring state from tracking history for:", urlId);
+
+                // For now, we can't restore individual item state since we only track totals
+                // Just return null to use fresh state
+                callback(null);
+            } else {
+                callback(null);
+            }
+        });
+    }
+
     function initializeWithTabId() {
         const keys = getStorageKeys();
         ext.storage.local.get([keys.checklistState, keys.uiState, keys.viewMode, 'defaultUIVisible', 'defaultViewMode'], (result) => {
@@ -282,24 +312,28 @@
                 ext.storage.local.set({ [keys.viewMode]: viewMode });
             }
 
+            // Check if we should restore state from tracking history
             if (!storedState || storedState.length !== checklist.length) {
-                storedState = checklist.map(() => ({ processed: false, skipped: false }));
-                ext.storage.local.set({ [keys.checklistState]: storedState }, () => {
-                    injectConfirmationCheckboxes(storedState);
-                    attachListenersToPageElements();
-                    initializeTableWatchers();
-                    updateAndBroadcast(storedState, uiState, viewMode);
-                    setTimeout(() => {
-                        isInitializing = false;
-                        // Start position observer after initialization
-                        startPositionObserver();
-                        // Start periodic recovery check for script reloads (e.g., after downloads)
-                        startPeriodicRecoveryCheck();
-                        // Detect and register form for tracking
-                        if (window.trackingHelper && window.trackingHelper.detectAndRegisterForm) {
-                            window.trackingHelper.detectAndRegisterForm();
-                        }
-                    }, 500);
+                // Try to restore from tracking history if this form exists there
+                checkAndRestoreFromHistory((restoredState) => {
+                    storedState = restoredState || checklist.map(() => ({ processed: false, skipped: false }));
+                    ext.storage.local.set({ [keys.checklistState]: storedState }, () => {
+                        injectConfirmationCheckboxes(storedState);
+                        attachListenersToPageElements();
+                        initializeTableWatchers();
+                        updateAndBroadcast(storedState, uiState, viewMode);
+                        setTimeout(() => {
+                            isInitializing = false;
+                            // Start position observer after initialization
+                            startPositionObserver();
+                            // Start periodic recovery check for script reloads (e.g., after downloads)
+                            startPeriodicRecoveryCheck();
+                            // Detect and register form for tracking
+                            if (window.trackingHelper && window.trackingHelper.detectAndRegisterForm) {
+                                window.trackingHelper.detectAndRegisterForm();
+                            }
+                        }, 500);
+                    });
                 });
             } else {
                 injectConfirmationCheckboxes(storedState);
@@ -999,11 +1033,19 @@
         broadcastUpdate(state);
         updateItemVisuals(state);
 
-        // Update tracking progress
-        if (window.trackingHelper && window.trackingHelper.updateProgress) {
-            const checkedCount = state.filter(item => item.processed).length;
-            const total = state.length;
-            window.trackingHelper.updateProgress(checkedCount, total);
+        // Update tracking progress and metadata
+        if (window.trackingHelper) {
+            if (window.trackingHelper.updateProgress) {
+                const checkedCount = state.filter(item => item.processed).length;
+                const total = state.length;
+                const isReview = window.trackingHelper.isReviewMode || false;
+                window.trackingHelper.updateProgress(checkedCount, total, isReview);
+            }
+
+            // Update metadata (policy number, primary insured, premium)
+            if (window.trackingHelper.updateMetadata) {
+                window.trackingHelper.updateMetadata();
+            }
         }
     }
 
@@ -1738,6 +1780,14 @@
                 if (message.mode) {
                     const keys = getStorageKeys();
                     ext.storage.local.set({ [keys.viewMode]: message.mode });
+                }
+                break;
+            case 'start-review':
+                // Enter review mode for this form
+                if (window.trackingHelper && window.trackingHelper.enterReviewMode) {
+                    window.trackingHelper.enterReviewMode();
+                    window.trackingHelper.applyReviewStyling();
+                    console.log(LOG_PREFIX, "Review mode activated");
                 }
                 break;
         }
