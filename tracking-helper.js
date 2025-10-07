@@ -21,6 +21,14 @@
     };
 
     /**
+     * Normalize policy number for comparison (remove spaces, slashes, dashes)
+     */
+    function normalizePolicyNumber(policyNumber) {
+        if (!policyNumber) return '';
+        return policyNumber.replace(/[\s\-\/]/g, '').toUpperCase();
+    }
+
+    /**
      * Extract URL ID from current page URL
      */
     function extractUrlId() {
@@ -143,12 +151,27 @@
                 let availableForms = result.tracking_availableForms || [];
                 let history = result.tracking_history || [];
 
-                // Find in available forms (check both exact match and temp_ prefix match)
-                let formIndex = availableForms.findIndex(f => f.urlId === urlId);
-                if (formIndex === -1) {
-                    // Check if this is a redirected BeginProcessing URL (temp_XXXXX -> real ID)
-                    formIndex = availableForms.findIndex(f => f.urlId.startsWith('temp_'));
-                }
+                // Extract current page data for matching
+                const currentPolicyNumber = extractPolicyNumber();
+                const currentSubmissionNumber = submissionNumber;
+
+                // Find matching form in available forms
+                let formIndex = availableForms.findIndex(f => {
+                    // Exact URL ID match
+                    if (f.urlId === urlId) return true;
+
+                    // For temp_ IDs (BeginProcessing URLs), match by submission and policy number
+                    if (f.urlId.startsWith('temp_')) {
+                        const submissionMatch = currentSubmissionNumber && f.submissionNumber &&
+                            currentSubmissionNumber === f.submissionNumber;
+                        const policyMatch = currentPolicyNumber && f.policyNumber &&
+                            normalizePolicyNumber(currentPolicyNumber) === normalizePolicyNumber(f.policyNumber);
+
+                        return submissionMatch || policyMatch;
+                    }
+
+                    return false;
+                });
 
                 if (formIndex !== -1) {
                     // Move from available to history
@@ -169,8 +192,17 @@
                     // Remove from available
                     availableForms.splice(formIndex, 1);
 
-                    // Check if already in history
-                    const existingHistoryIndex = history.findIndex(h => h.urlId === urlId);
+                    // Check if already in history (match by URL ID or normalized policy number)
+                    const existingHistoryIndex = history.findIndex(h => {
+                        if (h.urlId === urlId) return true;
+
+                        // Also check by normalized policy number to prevent duplicates
+                        if (currentPolicyNumber && h.policyNumber) {
+                            return normalizePolicyNumber(currentPolicyNumber) === normalizePolicyNumber(h.policyNumber);
+                        }
+
+                        return false;
+                    });
 
                     if (existingHistoryIndex === -1) {
                         // Extract metadata from page
@@ -208,7 +240,17 @@
                     console.log(LOG_PREFIX, "Form detected and moved to history:", urlId);
                 } else {
                     // Check if form is already in history (reopening)
-                    let existingHistoryIndex = history.findIndex(h => h.urlId === urlId);
+                    // Match by URL ID or normalized policy number
+                    let existingHistoryIndex = history.findIndex(h => {
+                        if (h.urlId === urlId) return true;
+
+                        // Also check by normalized policy number
+                        if (currentPolicyNumber && h.policyNumber) {
+                            return normalizePolicyNumber(currentPolicyNumber) === normalizePolicyNumber(h.policyNumber);
+                        }
+
+                        return false;
+                    });
 
                     if (existingHistoryIndex === -1) {
                         // Not in queue, not in history - add directly to history

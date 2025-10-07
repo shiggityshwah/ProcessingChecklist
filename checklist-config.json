@@ -29,7 +29,7 @@
       "selector": "#btnCopyOrLinkPolicy",
       "highlight_zones": [
         {
-          "top": {"selector": "#previousPolicyNumberContainer", "edge": "top", "offset": -4},
+          "top": {"selector": "div.details-row:nth-child(9)", "edge": "top", "offset": -4},
           "bottom": {"selector": "div.form-horizontal:nth-child(11)", "edge": "top", "offset": -6},
           "left": {"selector": "#policyDetail", "edge": "left", "offset": 0},
           "right": {"selector": "#policyDetail", "edge": "right", "offset": -2},
@@ -43,7 +43,7 @@
       "highlight_zones": [
         {
           "top": {"selector": "div.details-row:nth-child(8) > div:nth-child(1)", "edge": "top", "offset": -5},
-          "bottom": {"selector": "#previousPolicyNumberContainer", "edge": "top", "offset": -5},
+          "bottom": {"selector": "div.details-row:nth-child(9)", "edge": "top", "offset": -5},
           "left": {"selector": "#policyDetail", "edge": "left", "offset": 0},
           "right": {"selector": "#policyDetail", "edge": "right", "offset": -2},
           "show_checkbox": true

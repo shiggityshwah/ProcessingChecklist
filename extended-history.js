@@ -109,7 +109,7 @@
                     <th>Primary Named Insured</th>
                     <th>Total Taxable Premium</th>
                     <th>Added</th>
-                    <th>Moved to History</th>
+                    <th>Started</th>
                     <th>Completed</th>
                 </tr>
             </thead>
