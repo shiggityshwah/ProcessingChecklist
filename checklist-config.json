@@ -2,7 +2,7 @@
   "metadata": {
     "form_name": "Insurance Policy Processing Form",
     "description": "Tracks progress when processing insurance policy applications",
-    "url_pattern": "index.html|rapid.slacal.com/Policy",
+    "url_pattern": "index.html|rapid.slacal.com/Policy/TransactionDetails/Edit/",
     "config_version": "1.0"
   },
   "policy_number": {

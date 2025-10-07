@@ -173,8 +173,20 @@
                     return false;
                 });
 
-                if (formIndex !== -1) {
-                    // Move from available to history
+                // Check if already in history first (to avoid removing from queue on refresh)
+                const existingHistoryIndex = history.findIndex(h => {
+                    if (h.urlId === urlId) return true;
+
+                    // Also check by normalized policy number to prevent duplicates
+                    if (currentPolicyNumber && h.policyNumber) {
+                        return normalizePolicyNumber(currentPolicyNumber) === normalizePolicyNumber(h.policyNumber);
+                    }
+
+                    return false;
+                });
+
+                if (formIndex !== -1 && existingHistoryIndex === -1) {
+                    // Found in queue AND not in history - move from queue to history
                     const form = availableForms[formIndex];
 
                     // Update URL ID if this was a temp ID
@@ -192,44 +204,25 @@
                     // Remove from available
                     availableForms.splice(formIndex, 1);
 
-                    // Check if already in history (match by URL ID or normalized policy number)
-                    const existingHistoryIndex = history.findIndex(h => {
-                        if (h.urlId === urlId) return true;
+                    // Extract metadata from page
+                    const policyNumber = extractPolicyNumber() || form.policyNumber;
+                    const primaryInsured = extractPrimaryInsured();
+                    const pagePremium = extractTotalTaxablePremium();
+                    const totalPremium = pagePremium || form.premium;
 
-                        // Also check by normalized policy number to prevent duplicates
-                        if (currentPolicyNumber && h.policyNumber) {
-                            return normalizePolicyNumber(currentPolicyNumber) === normalizePolicyNumber(h.policyNumber);
-                        }
-
-                        return false;
+                    // Add to history with initial progress
+                    history.push({
+                        ...form,
+                        policyNumber: policyNumber,
+                        checkedProgress: { current: 0, total: 0, percentage: 0 },
+                        reviewedProgress: null,
+                        manuallyMarkedComplete: false,
+                        primaryNamedInsured: primaryInsured,
+                        totalTaxablePremium: totalPremium,
+                        addedDate: form.addedDate || new Date().toISOString(),
+                        movedToHistoryDate: new Date().toISOString(),
+                        completedDate: null
                     });
-
-                    if (existingHistoryIndex === -1) {
-                        // Extract metadata from page
-                        const policyNumber = extractPolicyNumber() || form.policyNumber;
-                        const primaryInsured = extractPrimaryInsured();
-                        const pagePremium = extractTotalTaxablePremium();
-                        const totalPremium = pagePremium || form.premium;
-
-                        // Add to history with initial progress
-                        history.push({
-                            ...form,
-                            policyNumber: policyNumber,
-                            checkedProgress: { current: 0, total: 0, percentage: 0 },
-                            reviewedProgress: null,
-                            manuallyMarkedComplete: false,
-                            primaryNamedInsured: primaryInsured,
-                            totalTaxablePremium: totalPremium,
-                            addedDate: form.addedDate || new Date().toISOString(),
-                            movedToHistoryDate: new Date().toISOString(),
-                            completedDate: null
-                        });
-                    } else {
-                        // Update movedToHistoryDate if not already set
-                        if (!history[existingHistoryIndex].movedToHistoryDate) {
-                            history[existingHistoryIndex].movedToHistoryDate = new Date().toISOString();
-                        }
-                    }
 
                     // Save changes
                     ext.storage.local.set({
@@ -238,64 +231,50 @@
                     });
 
                     console.log(LOG_PREFIX, "Form detected and moved to history:", urlId);
+                } else if (existingHistoryIndex !== -1) {
+                    // Already in history - just update metadata if needed
+                    if (!history[existingHistoryIndex].movedToHistoryDate) {
+                        history[existingHistoryIndex].movedToHistoryDate = new Date().toISOString();
+                    }
+
+                    // Update metadata on reconnect
+                    const policyNumber = extractPolicyNumber();
+                    const primaryInsured = extractPrimaryInsured();
+                    const totalPremium = extractTotalTaxablePremium();
+
+                    if (policyNumber) history[existingHistoryIndex].policyNumber = policyNumber;
+                    if (primaryInsured) history[existingHistoryIndex].primaryNamedInsured = primaryInsured;
+                    if (totalPremium) history[existingHistoryIndex].totalTaxablePremium = totalPremium;
+
+                    ext.storage.local.set({ tracking_history: history });
+                    console.log(LOG_PREFIX, "Reconnected to existing history form:", urlId);
                 } else {
-                    // Check if form is already in history (reopening)
-                    // Match by URL ID or normalized policy number
-                    let existingHistoryIndex = history.findIndex(h => {
-                        if (h.urlId === urlId) return true;
+                    // Not in queue and not in history - this is a new form opened directly
+                    // Add directly to history
+                    const policyNumber = extractPolicyNumber();
+                    const primaryInsured = extractPrimaryInsured();
+                    const totalPremium = extractTotalTaxablePremium();
 
-                        // Also check by normalized policy number
-                        if (currentPolicyNumber && h.policyNumber) {
-                            return normalizePolicyNumber(currentPolicyNumber) === normalizePolicyNumber(h.policyNumber);
-                        }
-
-                        return false;
-                    });
-
-                    if (existingHistoryIndex === -1) {
-                        // Not in queue, not in history - add directly to history
-                        const policyNumber = extractPolicyNumber();
-                        const primaryInsured = extractPrimaryInsured();
-                        const totalPremium = extractTotalTaxablePremium();
-
-                        if (policyNumber) {
-                            history.push({
-                                urlId: urlId,
-                                url: window.location.href,
-                                policyNumber: policyNumber,
-                                submissionNumber: submissionNumber || '',
-                                premium: totalPremium || '',
-                                broker: '',
-                                policyType: '',
-                                checkedProgress: { current: 0, total: 0, percentage: 0 },
-                                reviewedProgress: null,
-                                manuallyMarkedComplete: false,
-                                primaryNamedInsured: primaryInsured,
-                                totalTaxablePremium: totalPremium,
-                                addedDate: new Date().toISOString(),
-                                movedToHistoryDate: new Date().toISOString(),
-                                completedDate: null
-                            });
-                            ext.storage.local.set({ tracking_history: history });
-                            console.log(LOG_PREFIX, "New form auto-added to history:", urlId);
-                        }
-                    } else {
-                        // Update submission number and metadata if missing
-                        if (submissionNumber && !history[existingHistoryIndex].submissionNumber) {
-                            history[existingHistoryIndex].submissionNumber = submissionNumber;
-                        }
-
-                        // Update metadata on reconnect
-                        const policyNumber = extractPolicyNumber();
-                        const primaryInsured = extractPrimaryInsured();
-                        const totalPremium = extractTotalTaxablePremium();
-
-                        if (policyNumber) history[existingHistoryIndex].policyNumber = policyNumber;
-                        if (primaryInsured) history[existingHistoryIndex].primaryNamedInsured = primaryInsured;
-                        if (totalPremium) history[existingHistoryIndex].totalTaxablePremium = totalPremium;
-
+                    if (policyNumber) {
+                        history.push({
+                            urlId: urlId,
+                            url: window.location.href,
+                            policyNumber: policyNumber,
+                            submissionNumber: submissionNumber || '',
+                            premium: totalPremium || '',
+                            broker: '',
+                            policyType: '',
+                            checkedProgress: { current: 0, total: 0, percentage: 0 },
+                            reviewedProgress: null,
+                            manuallyMarkedComplete: false,
+                            primaryNamedInsured: primaryInsured,
+                            totalTaxablePremium: totalPremium,
+                            addedDate: new Date().toISOString(),
+                            movedToHistoryDate: new Date().toISOString(),
+                            completedDate: null
+                        });
                         ext.storage.local.set({ tracking_history: history });
-                        console.log(LOG_PREFIX, "Reopening tracked form:", urlId);
+                        console.log(LOG_PREFIX, "New form auto-added to history:", urlId);
                     }
                 }
             });
