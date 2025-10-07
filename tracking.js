@@ -188,10 +188,10 @@
                 return;
             }
 
-            // Sort by most recent first (newest added first)
+            // Sort by most recent first (newest moved to history first)
             filteredHistory.sort((a, b) => {
-                const dateA = new Date(a.addedDate || 0);
-                const dateB = new Date(b.addedDate || 0);
+                const dateA = new Date(a.movedToHistoryDate || a.addedDate || 0);
+                const dateB = new Date(b.movedToHistoryDate || b.addedDate || 0);
                 return dateB - dateA;
             });
 

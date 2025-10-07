@@ -104,8 +104,14 @@
                             primaryNamedInsured: null,
                             totalTaxablePremium: null,
                             addedDate: form.addedDate || new Date().toISOString(),
+                            movedToHistoryDate: new Date().toISOString(),
                             completedDate: null
                         });
+                    } else {
+                        // Update movedToHistoryDate if not already set
+                        if (!history[existingHistoryIndex].movedToHistoryDate) {
+                            history[existingHistoryIndex].movedToHistoryDate = new Date().toISOString();
+                        }
                     }
 
                     // Save changes

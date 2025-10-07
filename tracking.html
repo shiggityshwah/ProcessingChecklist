@@ -455,8 +455,7 @@
                         </tbody>
                     </table>
                 </div>
-                <div class="button-row" style="margin-top: 12px;">
-                    <button class="next-form-btn" id="next-form-btn" disabled style="flex: 1;">Next Form</button>
+                <div class="button-row" style="margin-top: 12px; justify-content: flex-end;">
                     <button class="btn btn-danger" id="clear-queue-btn">Clear Queue</button>
                 </div>
             </div>
@@ -468,14 +467,17 @@
                 <h2 class="section-title">Filter</h2>
                 <div class="filter-buttons">
                     <button class="filter-btn active" data-filter="all">All</button>
-                    <button class="filter-btn" data-filter="completed">Completed Only</button>
-                    <button class="filter-btn" data-filter="reviewed">Reviewed Only</button>
+                    <button class="filter-btn" data-filter="completed">Completed</button>
+                    <button class="filter-btn" data-filter="reviewed">Reviewed</button>
                     <button class="filter-btn" data-filter="in-progress">In Progress</button>
                 </div>
             </div>
 
             <div class="section">
-                <h2 class="section-title">History</h2>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <h2 class="section-title" style="margin: 0;">History</h2>
+                    <button class="next-form-btn" id="next-form-btn" disabled>Next Form</button>
+                </div>
                 <div class="table-container">
                     <table id="history-table">
                         <thead>

@@ -109,6 +109,7 @@
                     <th>Primary Named Insured</th>
                     <th>Total Taxable Premium</th>
                     <th>Added</th>
+                    <th>Moved to History</th>
                     <th>Completed</th>
                 </tr>
             </thead>
@@ -158,6 +159,7 @@
         }
 
         const addedTime = item.addedDate ? new Date(item.addedDate).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '—';
+        const movedToHistoryTime = item.movedToHistoryDate ? new Date(item.movedToHistoryDate).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '—';
         const completedTime = item.completedDate ? new Date(item.completedDate).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '—';
 
         row.innerHTML = `
@@ -173,6 +175,7 @@
             <td>${escapeHtml(item.primaryNamedInsured || '—')}</td>
             <td>${escapeHtml(item.totalTaxablePremium || '—')}</td>
             <td>${addedTime}</td>
+            <td>${movedToHistoryTime}</td>
             <td>${completedTime}</td>
         `;
 
