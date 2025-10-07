@@ -23,12 +23,13 @@
      */
     function extractUrlId() {
         const url = window.location.href;
-        const match = url.match(/\/Edit\/(\d+)\?policyId=(\d+)/);
-        if (match) {
-            const transactionId = match[1];
-            const policyId = match[2];
-            return `${transactionId}_${policyId}`;
+
+        // Pattern 1: /Policy/TransactionDetails/Edit/019579767?doc=open
+        const editMatch = url.match(/\/Edit\/(\d+)/);
+        if (editMatch) {
+            return editMatch[1];
         }
+
         return null;
     }
 
@@ -64,12 +65,23 @@
                 let availableForms = result.tracking_availableForms || [];
                 let history = result.tracking_history || [];
 
-                // Find in available forms
-                const formIndex = availableForms.findIndex(f => f.urlId === urlId);
+                // Find in available forms (check both exact match and temp_ prefix match)
+                let formIndex = availableForms.findIndex(f => f.urlId === urlId);
+                if (formIndex === -1) {
+                    // Check if this is a redirected BeginProcessing URL (temp_XXXXX -> real ID)
+                    formIndex = availableForms.findIndex(f => f.urlId.startsWith('temp_'));
+                }
 
                 if (formIndex !== -1) {
                     // Move from available to history
                     const form = availableForms[formIndex];
+
+                    // Update URL ID if this was a temp ID
+                    if (form.urlId.startsWith('temp_')) {
+                        console.log(LOG_PREFIX, `Updating temp ID ${form.urlId} to real ID ${urlId}`);
+                        form.urlId = urlId;
+                        form.url = window.location.href;
+                    }
 
                     // Update submission number if extracted
                     if (submissionNumber) {

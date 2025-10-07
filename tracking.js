@@ -127,6 +127,7 @@
                 row.innerHTML = `
                     <td style="max-width: 150px;"><a href="#" class="clickable-link" data-index="${index}">${escapeHtml(form.policyNumber || 'N/A')}</a></td>
                     <td style="max-width: 125px;">${escapeHtml(form.submissionNumber || 'N/A')}</td>
+                    <td style="max-width: 100px;">${escapeHtml(form.premium || '')}</td>
                     <td>${escapeHtml(form.policyType || '')}</td>
                     <td style="max-width: 125px;">${escapeHtml(form.broker || '')}</td>
                     <td style="white-space: nowrap;">
@@ -338,7 +339,7 @@
             if (cells.length === 0) {
                 const rowText = row.textContent || row.innerText || '';
                 const parts = rowText.split('\t');
-                if (parts.length >= 4) {
+                if (parts.length >= 5) {
                     cells = parts.map(part => {
                         const div = document.createElement('div');
                         div.textContent = part;
@@ -347,21 +348,36 @@
                 }
             }
 
-            // Skip if not enough columns
-            if (cells.length < 4) {
+            // Skip if not enough columns (need at least 5 for all required data)
+            if (cells.length < 5) {
                 if (rowIndex > 0 || cells.length > 0) { // Skip completely empty rows
-                    errors.push(`Row ${rowIndex + 1}: Expected 4 columns (Policy# with URL, Submission#, Broker, Type), found ${cells.length}`);
+                    errors.push(`Row ${rowIndex + 1}: Expected at least 5 columns, found ${cells.length}`);
                 }
                 return;
             }
 
-            // Extract data from cells
-            const policyCell = cells[0];
-            const submissionCell = cells[1];
-            const brokerCell = cells[2];
-            const typeCell = cells[3];
+            // Column mapping (flexible: supports both 7-column and 9-column formats)
+            // 7 columns: [0]=Submission#(URL), [1]=Policy#(URL), [2]=Premium, [3]=Broker(URL), [4]=Type
+            // 9 columns: [0]=Submission#(URL), [1]=irrelevant, [2]=Policy#(URL), [3]=Premium, [4]=irrelevant, [5]=Broker(URL), [6]=Type, [7]=irrelevant, [8]=irrelevant
+            let submissionCell, policyCell, premiumCell, brokerCell, typeCell;
 
-            // Look for hyperlink in policy number cell
+            if (cells.length >= 7) {
+                // 9-column format (or at least 7)
+                submissionCell = cells[0];
+                policyCell = cells[2];
+                premiumCell = cells[3];
+                brokerCell = cells[5];
+                typeCell = cells[6];
+            } else {
+                // 5 or 7-column format (irrelevant columns removed)
+                submissionCell = cells[0];
+                policyCell = cells[1];
+                premiumCell = cells[2];
+                brokerCell = cells[3];
+                typeCell = cells[4];
+            }
+
+            // Look for hyperlink in policy number cell (column 3 / index 2)
             const link = policyCell.querySelector('a');
             let url = null;
             let policyNumber = policyCell.textContent.trim();
@@ -371,7 +387,7 @@
                 policyNumber = link.textContent.trim();
             } else {
                 // Try to extract URL from text content
-                const urlMatch = policyNumber.match(/https?:\/\/[^\s]+|\/Policy\/TransactionDetails\/Edit\/\d+\?policyId=\d+/);
+                const urlMatch = policyNumber.match(/https?:\/\/[^\s]+/);
                 if (urlMatch) {
                     url = urlMatch[0];
                     policyNumber = policyNumber.replace(urlMatch[0], '').trim();
@@ -380,18 +396,19 @@
 
             // If no URL found, show error
             if (!url) {
-                errors.push(`Row ${rowIndex + 1}: Could not find URL hyperlink in policy number cell. Make sure to copy with hyperlinks from Excel.`);
+                errors.push(`Row ${rowIndex + 1}: Could not find URL hyperlink in policy number cell (column 3). Make sure to copy with hyperlinks from Excel.`);
                 return;
             }
 
             // Extract URL ID from URL
             const urlId = extractUrlId(url);
             if (!urlId) {
-                errors.push(`Row ${rowIndex + 1}: Could not extract transaction and policy IDs from URL: ${url}`);
+                errors.push(`Row ${rowIndex + 1}: Could not extract tracking ID from URL: ${url}`);
                 return;
             }
 
             const submissionNumber = submissionCell.textContent.trim();
+            const premium = premiumCell.textContent.trim();
             const broker = brokerCell.textContent.trim();
             const policyType = typeCell.textContent.trim();
 
@@ -400,6 +417,7 @@
                 url: url,
                 policyNumber: policyNumber || 'N/A',
                 submissionNumber: submissionNumber || '',
+                premium: premium || '',
                 broker: broker || '',
                 policyType: policyType || '',
                 addedDate: new Date().toISOString()
@@ -497,14 +515,18 @@
 
     // Utility functions
     function extractUrlId(url) {
-        // Extract transaction ID and policy ID from URL
-        // Pattern: /Policy/TransactionDetails/Edit/19534121?policyId=12959527
-        const match = url.match(/\/Edit\/(\d+)\?policyId=(\d+)/);
-        if (match) {
-            const transactionId = match[1];
-            const policyId = match[2];
-            return `${transactionId}_${policyId}`;
+        // Pattern 1: /Policy/TransactionDetails/Edit/019579767?doc=open
+        const editMatch = url.match(/\/Edit\/(\d+)/);
+        if (editMatch) {
+            return editMatch[1];
         }
+
+        // Pattern 2: /Operations/WorkItem/BeginProcessing/09435836 (temporary ID)
+        const beginMatch = url.match(/\/BeginProcessing\/(\d+)/);
+        if (beginMatch) {
+            return `temp_${beginMatch[1]}`;
+        }
+
         return null;
     }
 

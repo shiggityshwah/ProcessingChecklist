@@ -196,7 +196,11 @@
             max-width: 125px;
         }
 
-        #available-forms-table td:nth-child(4) {
+        #available-forms-table td:nth-child(3) {
+            max-width: 100px;
+        }
+
+        #available-forms-table td:nth-child(5) {
             max-width: 125px;
         }
 
@@ -419,7 +423,9 @@
                 <div id="paste-container" style="position: relative;">
                     <div id="paste-area-html" contenteditable="true" class="paste-area" style="min-height: 100px; padding: 10px; border: 2px dashed #cbd5e0; border-radius: 6px; font-size: 13px; font-family: 'Courier New', monospace; background: white; overflow: auto;"></div>
                     <div style="font-size: 11px; color: #666; margin-top: 4px;">
-                        💡 Copy from Excel (with hyperlinks) and paste here. Expected columns: Policy# (hyperlink), Submission#, Broker, Type
+                        💡 Copy from Excel (with hyperlinks) and paste here.<br>
+                        Supports 5 columns: Submission#, Policy# (URL), Premium, Broker, Type<br>
+                        Or 9 columns: Submission# (URL), [skip], Policy# (URL), Premium, [skip], Broker (URL), Type, [skip], [skip]
                     </div>
                 </div>
                 <div class="button-row" style="margin-top: 10px;">
@@ -436,6 +442,7 @@
                             <tr>
                                 <th style="max-width: 150px;">Policy #</th>
                                 <th style="max-width: 125px;">Submission #</th>
+                                <th style="max-width: 100px;">Premium</th>
                                 <th>Type</th>
                                 <th style="max-width: 125px;">Broker</th>
                                 <th style="width: 100px;">Actions</th>
@@ -443,7 +450,7 @@
                         </thead>
                         <tbody>
                             <tr class="empty-state">
-                                <td colspan="5">No forms in queue. Paste forms above to get started.</td>
+                                <td colspan="6">No forms in queue. Paste forms above to get started.</td>
                             </tr>
                         </tbody>
                     </table>
