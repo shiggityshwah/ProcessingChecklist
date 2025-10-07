@@ -38,26 +38,54 @@
     function handleDisconnect() {
         isConnected = false;
         port = null;
+        console.log(LOG_PREFIX, "Port disconnected - attempting to reconnect");
 
         // Attempt to reconnect after a delay
         if (reconnectTimer) {
             clearTimeout(reconnectTimer);
         }
 
-        reconnectTimer = setTimeout(() => {
-            console.log(LOG_PREFIX, "Attempting to reconnect...");
-            connect();
+        // Try reconnecting with exponential backoff
+        let reconnectAttempt = 0;
+        const maxAttempts = 10;
 
-            // If reconnected, broadcast current state
-            if (isConnected && myTabId) {
-                const keys = getStorageKeys();
-                ext.storage.local.get(keys.checklistState, (result) => {
-                    if (result[keys.checklistState]) {
-                        broadcastUpdate(result[keys.checklistState]);
+        function attemptReconnect() {
+            reconnectAttempt++;
+            console.log(LOG_PREFIX, `Reconnection attempt ${reconnectAttempt}/${maxAttempts}`);
+
+            try {
+                connect();
+
+                // If reconnected successfully, stop trying
+                if (isConnected) {
+                    console.log(LOG_PREFIX, "Reconnection successful");
+                    // Broadcast current state if we have a tab ID
+                    if (myTabId) {
+                        const keys = getStorageKeys();
+                        ext.storage.local.get(keys.checklistState, (result) => {
+                            if (result[keys.checklistState]) {
+                                broadcastUpdate(result[keys.checklistState]);
+                            }
+                        });
                     }
-                });
+                    return;
+                }
+            } catch (e) {
+                console.warn(LOG_PREFIX, `Reconnection attempt ${reconnectAttempt} failed:`, e);
             }
-        }, RECONNECT_DELAY);
+
+            // If not connected and haven't exceeded max attempts, try again
+            if (!isConnected && reconnectAttempt < maxAttempts) {
+                // Exponential backoff: 500ms, 1s, 2s, 4s, 8s (capped at 8s)
+                const delay = Math.min(500 * Math.pow(2, reconnectAttempt - 1), 8000);
+                reconnectTimer = setTimeout(attemptReconnect, delay);
+            } else if (reconnectAttempt >= maxAttempts) {
+                console.error(LOG_PREFIX, "Max reconnection attempts reached - giving up");
+            }
+        }
+
+        // Start first reconnection attempt immediately
+        reconnectTimer = setTimeout(attemptReconnect, 100);
     }
 
     function getStorageKeys() {
@@ -176,6 +204,62 @@
         }
 
         return false;
+    }
+
+    /**
+     * Initialize after reconnection (when floating UI already exists)
+     * This handles script reloads during downloads
+     */
+    function initializeAfterReconnection() {
+        const keys = getStorageKeys();
+        ext.storage.local.get([keys.checklistState, keys.uiState, keys.viewMode], (result) => {
+            console.log(LOG_PREFIX, "Restoring after reconnection...");
+
+            const storedState = result[keys.checklistState];
+
+            if (storedState) {
+                // Force complete restoration
+                console.log(LOG_PREFIX, "Clearing zone tracking and reinjecting all checkboxes");
+                zoneCheckboxes.clear();
+                highlightZones.clear();
+
+                // Reinject checkboxes
+                injectConfirmationCheckboxes(storedState);
+
+                // Reattach listeners to page elements
+                attachListenersToPageElements();
+
+                // Reinitialize table watchers
+                initializeTableWatchers();
+
+                // Update visuals
+                updateItemVisuals(storedState);
+
+                // Start observers
+                setTimeout(() => {
+                    isInitializing = false;
+                    startPositionObserver();
+                    startPeriodicRecoveryCheck();
+                    console.log(LOG_PREFIX, "Reconnection restoration complete");
+                }, 100);
+            }
+        });
+
+        // Set up storage change listener
+        ext.storage.onChanged.addListener((changes, namespace) => {
+            if (namespace === 'local') {
+                const keys = getStorageKeys();
+                if (changes[keys.checklistState]) {
+                    if (changes[keys.checklistState].newValue) {
+                        if (isResetting) return;
+                        ext.storage.local.get([keys.uiState, keys.viewMode], (result) => {
+                            const state = changes[keys.checklistState].newValue;
+                            updateAndBroadcast(state, result[keys.uiState], result[keys.viewMode]);
+                        });
+                    }
+                }
+            }
+        });
     }
 
     function initializeWithTabId() {
@@ -1606,7 +1690,20 @@
         switch (message.action) {
             case 'init':
                 myTabId = message.tabId;
-                initializeWithTabId();
+                console.log(LOG_PREFIX, `Received tab ID: ${myTabId}`);
+
+                // Check if this is a reconnection (UI elements might already exist in DOM)
+                const floatingUI = document.getElementById('processing-checklist-floating-ui');
+                const isReconnection = floatingUI !== null;
+
+                if (isReconnection) {
+                    console.log(LOG_PREFIX, "Detected reconnection - checking for missing UI elements");
+                    // This is a reconnection after script reload - restore missing elements
+                    initializeAfterReconnection();
+                } else {
+                    // Normal first-time initialization
+                    initializeWithTabId();
+                }
                 break;
             case 'popout-ready':
                 const keys = getStorageKeys();

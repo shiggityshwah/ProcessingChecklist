@@ -12,7 +12,11 @@ const contentPorts = new Map(); // tabId -> port
 // Map of popout ports to their metadata
 const popoutPorts = new Map(); // portId -> {tabId, windowId, port}
 
+// Map of tracking window ports
+const trackingPorts = new Map(); // portId -> {windowId, port}
+
 let portIdCounter = 0;
+let trackingPortIdCounter = 0;
 
 // Keep-alive mechanism to prevent background script termination
 const PING_INTERVAL = 25000; // 25 seconds
@@ -90,6 +94,54 @@ ext.runtime.onConnect.addListener((port) => {
             }
             popoutPorts.delete(portId);
         });
+    } else if (port.name === "tracking") {
+        const trackingPortId = `tracking-${trackingPortIdCounter++}`;
+
+        // Set up keep-alive ping for tracking window
+        const pingInterval = setInterval(() => {
+            try {
+                port.postMessage({ action: 'ping' });
+            } catch (e) {
+                clearInterval(pingInterval);
+                pingTimers.delete(trackingPortId);
+            }
+        }, PING_INTERVAL);
+        pingTimers.set(trackingPortId, pingInterval);
+
+        port.onMessage.addListener((message) => {
+            // Respond to pong messages (keep-alive)
+            if (message.action === 'pong') {
+                return;
+            }
+
+            // Handle tracking-specific messages
+            if (message.action === 'open-form') {
+                ext.tabs.create({ url: message.url });
+            } else if (message.action === 'start-review') {
+                // Open form in new tab and send review mode message
+                ext.tabs.create({ url: message.url }, (tab) => {
+                    setTimeout(() => {
+                        const contentPort = contentPorts.get(tab.id);
+                        if (contentPort) {
+                            contentPort.postMessage({
+                                action: 'start-review',
+                                urlId: message.urlId
+                            });
+                        }
+                    }, 1000);
+                });
+            }
+        });
+
+        port.onDisconnect.addListener(() => {
+            // Clean up keep-alive timer
+            const pingInterval = pingTimers.get(trackingPortId);
+            if (pingInterval) {
+                clearInterval(pingInterval);
+                pingTimers.delete(trackingPortId);
+            }
+            trackingPorts.delete(trackingPortId);
+        });
     } else if (port.name === "menu-port") {
         port.onMessage.addListener((message) => {
             if (message.action === 'openPopout') {
@@ -99,6 +151,14 @@ ext.runtime.onConnect.addListener((port) => {
                     type: 'popup',
                     width: 400,
                     height: 300,
+                });
+            } else if (message.action === 'openTracking') {
+                // Open tracking window
+                ext.windows.create({
+                    url: ext.runtime.getURL('tracking.html'),
+                    type: 'popup',
+                    width: 450,
+                    height: 800,
                 });
             } else if (message.action === 'toggleUI') {
                 const tabId = message.tabId;

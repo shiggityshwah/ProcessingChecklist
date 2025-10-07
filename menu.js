@@ -96,6 +96,19 @@
                 }
             });
 
+            document.getElementById('tracking-button').addEventListener('click', () => {
+                dbg("Tracking button clicked.");
+                if (port) {
+                    port.postMessage({ action: 'openTracking' });
+                }
+            });
+
+            document.getElementById('history-button').addEventListener('click', () => {
+                dbg("History button clicked.");
+                const url = ext.runtime.getURL('extended-history.html');
+                ext.tabs.create({ url });
+            });
+
             document.getElementById('reset-button').addEventListener('click', () => {
                 dbg("Reset button clicked.");
                 if (currentTabId) {

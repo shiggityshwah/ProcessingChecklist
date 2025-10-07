@@ -18,13 +18,15 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["config-loader-simple.js", "kendo-widget-utils.js", "content.js"],
+      "js": ["config-loader-simple.js", "kendo-widget-utils.js", "tracking-helper.js", "content.js"],
       "css": ["style.css"],
       "run_at": "document_end"
     }
   ],
   "web_accessible_resources": [
     "popout.html",
+    "tracking.html",
+    "extended-history.html",
     "style.css",
     "checklist-config.json"
   ]

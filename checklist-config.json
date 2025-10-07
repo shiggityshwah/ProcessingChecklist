@@ -9,6 +9,19 @@
     "selector": "#PolicyNumber",
     "label": "Policy Number"
   },
+  "submission_number": {
+    "selector": "#LaunchSubmissionInfoModal",
+    "label": "Submission Number"
+  },
+  "primary_insured": {
+    "selector": "#PrimaryInsuredName",
+    "label": "Primary Named Insured"
+  },
+  "total_premium": {
+    "selector": "#TotalTaxablePremium",
+    "label": "Total Taxable Premium",
+    "note": "Update this selector to match your form's total taxable premium field"
+  },
   "checklist": [
     {
       "name": "Link/Check Previous Policy",
