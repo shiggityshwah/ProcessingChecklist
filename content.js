@@ -295,6 +295,10 @@
                         startPositionObserver();
                         // Start periodic recovery check for script reloads (e.g., after downloads)
                         startPeriodicRecoveryCheck();
+                        // Detect and register form for tracking
+                        if (window.trackingHelper && window.trackingHelper.detectAndRegisterForm) {
+                            window.trackingHelper.detectAndRegisterForm();
+                        }
                     }, 500);
                 });
             } else {
@@ -308,6 +312,10 @@
                     startPositionObserver();
                     // Start periodic recovery check for script reloads (e.g., after downloads)
                     startPeriodicRecoveryCheck();
+                    // Detect and register form for tracking
+                    if (window.trackingHelper && window.trackingHelper.detectAndRegisterForm) {
+                        window.trackingHelper.detectAndRegisterForm();
+                    }
                 }, 500);
             }
         });
@@ -990,6 +998,13 @@
         renderOnPageUI(fieldData, state, uiState, viewMode);
         broadcastUpdate(state);
         updateItemVisuals(state);
+
+        // Update tracking progress
+        if (window.trackingHelper && window.trackingHelper.updateProgress) {
+            const checkedCount = state.filter(item => item.processed).length;
+            const total = state.length;
+            window.trackingHelper.updateProgress(checkedCount, total);
+        }
     }
 
     function updateOnPageUIValues(fieldData) {
