@@ -204,17 +204,8 @@
 
         dbg("Starting daily review for:", randomItem);
 
-        // Open in review mode
-        ext.tabs.create({ url: randomItem.url }, (tab) => {
-            // Send message to start review mode
-            // The content script will detect this and set up review mode
-            setTimeout(() => {
-                ext.tabs.sendMessage(tab.id, {
-                    action: 'start-review',
-                    urlId: randomItem.urlId
-                });
-            }, 1000);
-        });
+        // Use reopenForm to handle two-tab opening and review mode
+        reopenForm(randomItem);
     }
 
     function reopenForm(item) {
@@ -223,15 +214,66 @@
         // Check if complete - if so, open in review mode
         const isComplete = item.manuallyMarkedComplete || (item.checkedProgress && item.checkedProgress.percentage === 100);
 
-        ext.tabs.create({ url: item.url }, (tab) => {
+        // Remove doc=open flag from URL for main tab
+        const cleanUrl = item.url.replace(/[?&]doc=open/gi, '');
+
+        console.log(LOG_PREFIX, "Reopening form - original URL:", item.url);
+        console.log(LOG_PREFIX, "Reopening form - clean URL:", cleanUrl);
+        console.log(LOG_PREFIX, "URLs are different:", item.url !== cleanUrl);
+
+        // Open the tab without doc=open
+        ext.tabs.create({ url: cleanUrl, active: true }, (mainTab) => {
+            console.log(LOG_PREFIX, "Main tab opened with ID:", mainTab.id);
+
             if (isComplete) {
                 // Send message to start review mode after a delay
                 setTimeout(() => {
-                    ext.tabs.sendMessage(tab.id, {
+                    ext.tabs.sendMessage(mainTab.id, {
                         action: 'start-review',
                         urlId: item.urlId
                     });
                 }, 1000);
+            }
+
+            // If original URL had doc=open, handle download in background (even in review mode)
+            if (item.url !== cleanUrl) {
+                console.log(LOG_PREFIX, "Opening background tab for document download:", item.url);
+
+                // Open background tab with doc=open for download
+                ext.tabs.create({ url: item.url, active: false }, (downloadTab) => {
+                    console.log(LOG_PREFIX, "Background download tab opened with ID:", downloadTab.id);
+
+                    let tabClosed = false;
+
+                    const closeTab = () => {
+                        if (tabClosed) return;
+                        tabClosed = true;
+                        ext.tabs.remove(downloadTab.id).then(() => {
+                            console.log(LOG_PREFIX, "Background download tab closed successfully");
+                        }).catch((err) => {
+                            console.warn(LOG_PREFIX, "Tab already closed or error:", err);
+                        });
+                    };
+
+                    // Monitor tab for download completion before closing
+                    const downloadListener = (downloadItem) => {
+                        console.log(LOG_PREFIX, "Download detected:", downloadItem.url);
+                        if (downloadItem.url === item.url || downloadItem.url.startsWith(item.url.split('?')[0])) {
+                            console.log(LOG_PREFIX, "Download matches form URL, closing tab in 2 seconds");
+                            setTimeout(closeTab, 2000);
+                            ext.downloads.onCreated.removeListener(downloadListener);
+                        }
+                    };
+
+                    ext.downloads.onCreated.addListener(downloadListener);
+
+                    // Fallback: close tab after 10 seconds regardless
+                    setTimeout(() => {
+                        console.log(LOG_PREFIX, "Timeout reached, closing background tab");
+                        closeTab();
+                        ext.downloads.onCreated.removeListener(downloadListener);
+                    }, 10000);
+                });
             }
         });
     }

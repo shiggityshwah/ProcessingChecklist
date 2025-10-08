@@ -307,15 +307,15 @@
             let viewMode = result[keys.viewMode];
 
             if (!uiState) {
-                // Use the defaultUIVisible setting, defaulting to true if not set
-                const defaultVisible = result.defaultUIVisible !== false;
+                // Use the defaultUIVisible setting, defaulting to false if not set
+                const defaultVisible = result.defaultUIVisible === true;
                 uiState = { visible: defaultVisible };
                 ext.storage.local.set({ [keys.uiState]: uiState });
             }
 
             if (!viewMode) {
-                // Use defaultViewMode, or fall back to 'single'
-                viewMode = result.defaultViewMode || 'single';
+                // Use defaultViewMode, or fall back to 'full'
+                viewMode = result.defaultViewMode || 'full';
                 ext.storage.local.set({ [keys.viewMode]: viewMode });
             }
 

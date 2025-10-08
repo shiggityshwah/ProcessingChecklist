@@ -5,7 +5,9 @@
   "description": "Helps users track their progress when filling out long forms.",
   "permissions": [
     "storage",
-    "tabs", "<all_urls>"
+    "tabs",
+    "downloads",
+    "<all_urls>"
   ],
   "browser_action": {
     "default_title": "Processing Checklist",
