@@ -327,8 +327,8 @@
                         ${showCheckmark ? `<span class="manual-complete-badge" title="${checkmarkTitle}">✓</span>` : ''}
                     </td>
                     <td>
-                        <button class="action-btn action-btn-delete" data-action="delete-history" data-url-id="${escapeHtml(item.urlId)}">Delete</button>
                         <button class="action-btn action-btn-complete" data-action="toggle-complete" data-url-id="${escapeHtml(item.urlId)}">${item.manuallyMarkedComplete ? 'Undo' : 'Mark Complete'}</button>
+                        <button class="action-btn action-btn-delete" data-action="delete-history" data-url-id="${escapeHtml(item.urlId)}">Delete</button>
                     </td>
                 `;
                 tbody.appendChild(row);

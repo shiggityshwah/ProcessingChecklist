@@ -2007,7 +2007,21 @@
         const stateKey = isReview ? keys.reviewState : keys.checklistState;
 
         ext.storage.local.get(stateKey, (result) => {
-            const newState = [...result[stateKey]];
+            let currentState = result[stateKey];
+
+            // If review state doesn't exist yet, initialize it
+            if (!currentState && isReview) {
+                console.warn(LOG_PREFIX, "Review state not found, initializing...");
+                currentState = checklist.map(() => ({ processed: false, skipped: false }));
+            }
+
+            // If state still doesn't exist, log error and return
+            if (!currentState) {
+                console.error(LOG_PREFIX, `State ${stateKey} not found and could not be initialized`);
+                return;
+            }
+
+            const newState = [...currentState];
             newState[index] = { processed, skipped };
             ext.storage.local.set({ [stateKey]: newState });
         });
