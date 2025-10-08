@@ -647,6 +647,10 @@
         // Remove doc=open flag from URL for main tab
         const cleanUrl = item.url.replace(/[?&]doc=open/gi, '');
 
+        console.log(LOG_PREFIX, "Reopening form - original URL:", item.url);
+        console.log(LOG_PREFIX, "Reopening form - clean URL:", cleanUrl);
+        console.log(LOG_PREFIX, "URLs are different:", item.url !== cleanUrl);
+
         if (isComplete) {
             // Send message to start review mode
             if (port) {
@@ -660,6 +664,8 @@
 
         // Open the tab without doc=open
         ext.tabs.create({ url: cleanUrl, active: true }, (mainTab) => {
+            console.log(LOG_PREFIX, "Main tab opened with ID:", mainTab.id);
+
             // If original URL had doc=open, handle download in background (even in review mode)
             if (item.url !== cleanUrl) {
                 console.log(LOG_PREFIX, "Opening background tab for document download:", item.url);

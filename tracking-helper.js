@@ -193,7 +193,12 @@
                     if (form.urlId.startsWith('temp_')) {
                         console.log(LOG_PREFIX, `Updating temp ID ${form.urlId} to real ID ${urlId}`);
                         form.urlId = urlId;
-                        form.url = window.location.href;
+                        // Preserve doc=open flag by reconstructing URL with current location base
+                        const currentUrl = new URL(window.location.href);
+                        const originalUrl = new URL(form.url);
+                        // Keep the original query parameters (like doc=open) but use the new path
+                        currentUrl.search = originalUrl.search;
+                        form.url = currentUrl.href;
                     }
 
                     // Update submission number if extracted
@@ -256,9 +261,17 @@
                     const totalPremium = extractTotalTaxablePremium();
 
                     if (policyNumber) {
+                        // Add doc=open to the URL if not already present
+                        let formUrl = window.location.href;
+                        if (!formUrl.includes('doc=open')) {
+                            const url = new URL(formUrl);
+                            url.searchParams.set('doc', 'open');
+                            formUrl = url.href;
+                        }
+
                         history.push({
                             urlId: urlId,
-                            url: window.location.href,
+                            url: formUrl,
                             policyNumber: policyNumber,
                             submissionNumber: submissionNumber || '',
                             premium: totalPremium || '',
