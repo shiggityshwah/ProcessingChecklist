@@ -596,8 +596,27 @@
     // Form opening
     function openForm(form) {
         dbg("Opening form:", form);
-        ext.tabs.create({ url: form.url }, (tab) => {
+
+        // Remove doc=open flag from URL for main tab
+        const cleanUrl = form.url.replace(/[?&]doc=open/gi, '');
+
+        // Open main tab without doc=open
+        ext.tabs.create({ url: cleanUrl, active: true }, (mainTab) => {
             // The form will be detected by content script when page loads
+
+            // If original URL had doc=open, handle download in background
+            if (form.url !== cleanUrl) {
+                console.log(LOG_PREFIX, "Opening background tab for document download:", form.url);
+
+                // Open background tab with doc=open for download
+                ext.tabs.create({ url: form.url, active: false }, (downloadTab) => {
+                    // Wait a bit for download to start, then close the background tab
+                    setTimeout(() => {
+                        ext.tabs.remove(downloadTab.id);
+                        console.log(LOG_PREFIX, "Closed background download tab");
+                    }, 3000); // 3 seconds should be enough for download to initiate
+                });
+            }
         });
     }
 
@@ -607,19 +626,36 @@
         // Check if complete - if so, open in review mode
         const isComplete = item.manuallyMarkedComplete || (item.checkedProgress && item.checkedProgress.percentage === 100);
 
+        // Remove doc=open flag from URL for main tab
+        const cleanUrl = item.url.replace(/[?&]doc=open/gi, '');
+
         if (isComplete) {
             // Send message to start review mode
             if (port) {
                 port.postMessage({
                     action: 'start-review',
                     urlId: item.urlId,
-                    url: item.url
+                    url: cleanUrl
                 });
             }
         }
 
-        // Open the tab
-        ext.tabs.create({ url: item.url });
+        // Open the tab without doc=open
+        ext.tabs.create({ url: cleanUrl, active: true }, (mainTab) => {
+            // If original URL had doc=open, handle download in background
+            if (item.url !== cleanUrl) {
+                console.log(LOG_PREFIX, "Opening background tab for document download:", item.url);
+
+                // Open background tab with doc=open for download
+                ext.tabs.create({ url: item.url, active: false }, (downloadTab) => {
+                    // Wait a bit for download to start, then close the background tab
+                    setTimeout(() => {
+                        ext.tabs.remove(downloadTab.id);
+                        console.log(LOG_PREFIX, "Closed background download tab");
+                    }, 3000); // 3 seconds should be enough for download to initiate
+                });
+            }
+        });
     }
 
     // Utility functions

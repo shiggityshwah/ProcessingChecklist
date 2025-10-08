@@ -367,6 +367,9 @@
                 // Handle both regular state and review state changes
                 if (changes[keys.checklistState] || changes[keys.reviewState]) {
                     const changedKey = changes[keys.checklistState] ? keys.checklistState : keys.reviewState;
+                    const isReviewChange = changedKey === keys.reviewState;
+
+                    console.log(LOG_PREFIX, `Storage changed: ${isReviewChange ? 'reviewState' : 'checklistState'}`, changes[changedKey]?.newValue);
 
                     if (changes[changedKey].newValue) {
                         // Skip if we're in the middle of a reset
@@ -2006,8 +2009,12 @@
         const isReview = window.trackingHelper && window.trackingHelper.isReviewMode;
         const stateKey = isReview ? keys.reviewState : keys.checklistState;
 
+        console.log(LOG_PREFIX, `updateState called: index=${index}, processed=${processed}, skipped=${skipped}, isReview=${isReview}, stateKey=${stateKey}`);
+
         ext.storage.local.get(stateKey, (result) => {
             let currentState = result[stateKey];
+
+            console.log(LOG_PREFIX, `Current state from storage:`, currentState);
 
             // If review state doesn't exist yet, initialize it
             if (!currentState && isReview) {
@@ -2023,6 +2030,7 @@
 
             const newState = [...currentState];
             newState[index] = { processed, skipped };
+            console.log(LOG_PREFIX, `Saving new state to ${stateKey}:`, newState);
             ext.storage.local.set({ [stateKey]: newState });
         });
     }
@@ -2190,6 +2198,8 @@
     function updateItemVisuals(state) {
         isProgrammaticUpdate = true;
         const isReviewMode = window.trackingHelper && window.trackingHelper.isReviewMode;
+
+        console.log(LOG_PREFIX, `updateItemVisuals called, isReviewMode=${isReviewMode}, state=`, state);
 
         state.forEach((itemState, index) => {
             const step = checklist[index];
