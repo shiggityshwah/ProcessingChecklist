@@ -2195,7 +2195,15 @@
         }
     }
 
+    let updateItemVisualsInProgress = false;
+
     function updateItemVisuals(state) {
+        // Prevent recursive/concurrent calls
+        if (updateItemVisualsInProgress) {
+            return;
+        }
+
+        updateItemVisualsInProgress = true;
         isProgrammaticUpdate = true;
         const isReviewMode = window.trackingHelper && window.trackingHelper.isReviewMode;
 
@@ -2240,7 +2248,8 @@
         });
         setTimeout(() => {
             isProgrammaticUpdate = false;
-        }, 0);
+            updateItemVisualsInProgress = false;
+        }, 50);
     }
 
     /**
@@ -2575,9 +2584,12 @@
      */
     function recalculateHighlightZones() {
         const keys = getStorageKeys();
-        ext.storage.local.get(keys.checklistState, (result) => {
-            if (result[keys.checklistState]) {
-                updateItemVisuals(result[keys.checklistState]);
+        const isReview = window.trackingHelper && window.trackingHelper.isReviewMode;
+        const stateKey = isReview ? keys.reviewState : keys.checklistState;
+
+        ext.storage.local.get(stateKey, (result) => {
+            if (result[stateKey]) {
+                updateItemVisuals(result[stateKey]);
             }
         });
         // Also recalculate zone checkbox positions
@@ -2603,11 +2615,19 @@
     function startPositionObserver() {
         if (positionObserver) return; // Already observing
 
+        let recalcInProgress = false;
+
         positionObserver = new MutationObserver(() => {
             // Debounce the recalculation to avoid excessive updates
             clearTimeout(observerTimeout);
             observerTimeout = setTimeout(() => {
+                // Prevent recursive calls
+                if (recalcInProgress) return;
+                recalcInProgress = true;
                 recalculateHighlightZones();
+                setTimeout(() => {
+                    recalcInProgress = false;
+                }, 100);
             }, 100);
         });
 
@@ -2642,8 +2662,11 @@
         if (!configLoaded || !myTabId) return;
 
         const keys = getStorageKeys();
-        ext.storage.local.get([keys.checklistState, keys.uiState, keys.viewMode], (result) => {
-            if (!result[keys.checklistState]) return;
+        const isReview = window.trackingHelper && window.trackingHelper.isReviewMode;
+        const stateKey = isReview ? keys.reviewState : keys.checklistState;
+
+        ext.storage.local.get([stateKey, keys.uiState, keys.viewMode], (result) => {
+            if (!result[stateKey]) return;
 
             // Check if any checkboxes are missing
             let missingCount = 0;
@@ -2664,11 +2687,11 @@
                 highlightZones.clear();
 
                 // Reinject all checkboxes
-                injectConfirmationCheckboxes(result[keys.checklistState]);
+                injectConfirmationCheckboxes(result[stateKey]);
             }
 
             // Always update visual states and recalculate positions
-            updateItemVisuals(result[keys.checklistState]);
+            updateItemVisuals(result[stateKey]);
             recalculateZoneCheckboxes();
 
             // Restart position observer if it was stopped
@@ -2720,6 +2743,12 @@
 
     document.addEventListener('visibilitychange', () => {
         if (!document.hidden && configLoaded && myTabId) {
+            // Don't run recovery during review mode - it interferes with review state
+            if (window.trackingHelper && window.trackingHelper.isReviewMode) {
+                console.log(LOG_PREFIX, "Skipping recovery - in review mode");
+                return;
+            }
+
             console.log(LOG_PREFIX, "Page became visible - starting recovery process");
 
             // Clear any existing recovery interval
