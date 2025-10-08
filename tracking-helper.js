@@ -134,6 +134,12 @@
      * Detect if current page is a tracked form and move from Available to History
      */
     window.trackingHelper.detectAndRegisterForm = function() {
+        // Skip detection if this is a background download tab (has doc=open)
+        if (window.location.href.includes('doc=open')) {
+            console.log(LOG_PREFIX, "Skipping form detection - this is a background download tab");
+            return;
+        }
+
         const urlId = extractUrlId();
         if (!urlId) {
             return; // Not a tracked form
