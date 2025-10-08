@@ -35,6 +35,12 @@
         }
     }
 
+    // Also listen for direct messages (for extended-history and other direct calls)
+    ext.runtime.onMessage.addListener((message, sender, sendResponse) => {
+        handleMessage(message);
+        return false; // Synchronous response
+    });
+
     function handleDisconnect() {
         isConnected = false;
         port = null;
@@ -92,7 +98,8 @@
         return {
             checklistState: `checklistState_${myTabId}`,
             uiState: `uiState_${myTabId}`,
-            viewMode: `viewMode_${myTabId}`
+            viewMode: `viewMode_${myTabId}`,
+            reviewState: `reviewState_${myTabId}`
         };
     }
 
@@ -356,15 +363,18 @@
         ext.storage.onChanged.addListener((changes, namespace) => {
             if (namespace === 'local') {
                 const keys = getStorageKeys();
-                if (changes[keys.checklistState]) {
-                    if (changes[keys.checklistState].newValue) {
+                const isReview = window.trackingHelper && window.trackingHelper.isReviewMode;
+                const stateKey = isReview ? keys.reviewState : keys.checklistState;
+
+                if (changes[stateKey]) {
+                    if (changes[stateKey].newValue) {
                         // Skip if we're in the middle of a reset
                         if (isResetting) {
                             return;
                         }
                         // Normal state update
                         ext.storage.local.get([keys.uiState, keys.viewMode], (result) => {
-                            const state = changes[keys.checklistState].newValue;
+                            const state = changes[stateKey].newValue;
                             updateAndBroadcast(state, result[keys.uiState], result[keys.viewMode]);
                         });
                     } else {
@@ -1521,8 +1531,13 @@
         container.classList.remove('full-view');
         container.style.maxHeight = '';
 
+        const isReview = window.trackingHelper && window.trackingHelper.isReviewMode;
+        const modeText = isReview ? '<div style="color: #3b82f6; font-weight: bold; text-align: center; margin-bottom: 10px;">REVIEW MODE</div>' : '';
+
         if (!fieldData) {
-            container.innerHTML = '<div style="color: #28a745; font-weight: bold; text-align: center;">All fields checked!</div>';
+            const doneText = isReview ? 'All fields reviewed!' : 'All fields checked!';
+            const doneColor = isReview ? '#3b82f6' : '#28a745';
+            container.innerHTML = `${modeText}<div style="color: ${doneColor}; font-weight: bold; text-align: center;">${doneText}</div>`;
             return;
         }
 
@@ -1537,6 +1552,7 @@
 
             const hasBackStep = canGoBack(state);
             container.innerHTML = `
+                ${modeText}
                 <div class="step-title">${fieldData.name}</div>
                 ${tableHtml}
                 <div class="button-row">
@@ -1563,6 +1579,7 @@
             const hasBackStep = canGoBack(state);
 
             container.innerHTML = `
+                ${modeText}
                 <div class="step-title">${fieldData.name}</div>
                 ${feesTableHtml}
                 <div class="button-row">
@@ -1610,6 +1627,7 @@
 
         const hasBackStep = canGoBack(state);
         container.innerHTML = `
+            ${modeText}
             <div class="step-title">${fieldData.name}</div>
             <div class="fields-container">${fieldsHtml}</div>
             <div class="button-row">
@@ -1787,6 +1805,19 @@
                 if (window.trackingHelper && window.trackingHelper.enterReviewMode) {
                     window.trackingHelper.enterReviewMode();
                     window.trackingHelper.applyReviewStyling();
+
+                    // Create separate review state storage (all unchecked)
+                    const reviewState = checklist.map(() => ({ processed: false, skipped: false }));
+                    const keys = getStorageKeys();
+                    ext.storage.local.set({ [keys.reviewState]: reviewState }, () => {
+                        // Re-render UI with review state
+                        ext.storage.local.get([keys.uiState, keys.viewMode], (result) => {
+                            updateAndBroadcast(reviewState, result[keys.uiState], result[keys.viewMode]);
+                            // Update visuals to show unchecked state
+                            updateItemVisuals(reviewState);
+                        });
+                    });
+
                     console.log(LOG_PREFIX, "Review mode activated");
                 }
                 break;
@@ -1971,10 +2002,13 @@
 
     function updateState(index, processed, skipped) {
         const keys = getStorageKeys();
-        ext.storage.local.get(keys.checklistState, (result) => {
-            const newState = [...result[keys.checklistState]];
+        const isReview = window.trackingHelper && window.trackingHelper.isReviewMode;
+        const stateKey = isReview ? keys.reviewState : keys.checklistState;
+
+        ext.storage.local.get(stateKey, (result) => {
+            const newState = [...result[stateKey]];
             newState[index] = { processed, skipped };
-            ext.storage.local.set({ [keys.checklistState]: newState });
+            ext.storage.local.set({ [stateKey]: newState });
         });
     }
 

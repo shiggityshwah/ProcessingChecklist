@@ -416,10 +416,16 @@
         style.id = 'review-mode-styles';
         style.textContent = `
             /* Review mode: confirmed items use blue instead of green */
-            .review-confirmed-item {
+            .confirmed-item {
                 background-color: #dbeafe !important; /* Light blue background */
                 border-left: 4px solid #3b82f6 !important; /* Blue border */
                 padding-left: 30px !important;
+            }
+
+            /* Review mode: highlight zones use blue */
+            .highlight-zone.confirmed {
+                background-color: rgba(59, 130, 246, 0.15) !important; /* Light blue */
+                border: 2px solid rgba(59, 130, 246, 0.4) !important;
             }
 
             .highlight-zone-overlay.review-confirmed-zone {

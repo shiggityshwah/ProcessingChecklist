@@ -162,6 +162,12 @@
         const movedToHistoryTime = item.movedToHistoryDate ? new Date(item.movedToHistoryDate).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '—';
         const completedTime = item.completedDate ? new Date(item.completedDate).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '—';
 
+        // Check if premium changed from imported value
+        const premiumChanged = item.premium && item.totalTaxablePremium &&
+            item.premium !== item.totalTaxablePremium;
+        const premiumDisplay = item.totalTaxablePremium || '—';
+        const premiumFlag = premiumChanged ? ' <span style="color: #dc3545; font-weight: bold;" title="Premium changed from imported value">⚠</span>' : '';
+
         row.innerHTML = `
             <td><a href="#" class="clickable-link" data-url-id="${escapeHtml(item.urlId)}">${escapeHtml(item.policyNumber || 'N/A')}</a></td>
             <td>${escapeHtml(item.submissionNumber || 'N/A')}</td>
@@ -173,7 +179,7 @@
             </td>
             <td>${reviewedDisplay}</td>
             <td>${escapeHtml(item.primaryNamedInsured || '—')}</td>
-            <td>${escapeHtml(item.totalTaxablePremium || '—')}</td>
+            <td>${escapeHtml(premiumDisplay)}${premiumFlag}</td>
             <td>${addedTime}</td>
             <td>${movedToHistoryTime}</td>
             <td>${completedTime}</td>

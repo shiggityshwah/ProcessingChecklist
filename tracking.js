@@ -12,9 +12,20 @@
     let currentView = 'queue'; // 'queue' or 'history'
     let currentFilter = 'all'; // 'all', 'completed', 'reviewed', 'in-progress'
 
+    // Settings
+    let settings = {
+        urlResolution: {
+            enabled: true,
+            limit: 0
+        }
+    };
+
     // Initialize
     function init() {
         console.info(LOG_PREFIX, "Tracking window initialized");
+
+        // Load settings
+        loadSettings();
 
         // Connect to background
         try {
@@ -44,6 +55,30 @@
         // View toggle
         document.getElementById('view-toggle-btn').addEventListener('click', toggleView);
 
+        // Settings
+        document.getElementById('settings-btn').addEventListener('click', openSettingsModal);
+        document.getElementById('settings-close-btn').addEventListener('click', closeSettingsModal);
+        document.getElementById('settings-cancel-btn').addEventListener('click', closeSettingsModal);
+        document.getElementById('settings-save-btn').addEventListener('click', saveSettings);
+        document.getElementById('enable-resolution').addEventListener('change', updateUrlResolutionUI);
+
+        // Close modal on overlay click
+        document.getElementById('settings-modal').addEventListener('click', (e) => {
+            if (e.target.id === 'settings-modal') {
+                closeSettingsModal();
+            }
+        });
+
+        // Close modal on ESC key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                const modal = document.getElementById('settings-modal');
+                if (modal.style.display !== 'none') {
+                    closeSettingsModal();
+                }
+            }
+        });
+
         // Queue view buttons
         document.getElementById('add-forms-btn').addEventListener('click', handleAddForms);
         document.getElementById('clear-paste-btn').addEventListener('click', handleClearPaste);
@@ -55,6 +90,66 @@
             btn.addEventListener('click', (e) => handleFilterChange(e.target.dataset.filter));
         });
         document.getElementById('extended-history-btn').addEventListener('click', handleExtendedHistory);
+    }
+
+    /**
+     * Load settings from storage
+     */
+    function loadSettings() {
+        ext.storage.local.get('tracking_settings', (result) => {
+            if (result.tracking_settings) {
+                settings = result.tracking_settings;
+            }
+            dbg("Settings loaded:", settings);
+        });
+    }
+
+    /**
+     * Save settings to storage
+     */
+    function saveSettings() {
+        // Validate inputs
+        const enabled = document.getElementById('url-resolution-enabled').checked;
+        const limit = parseInt(document.getElementById('url-resolution-limit').value, 10);
+
+        if (limit < 0 || isNaN(limit)) {
+            alert('Limit must be a number greater than or equal to 0');
+            return;
+        }
+
+        settings.urlResolution.enabled = enabled;
+        settings.urlResolution.limit = limit;
+
+        ext.storage.local.set({ tracking_settings: settings }, () => {
+            console.log(LOG_PREFIX, "Settings saved:", settings);
+            closeSettingsModal();
+        });
+    }
+
+    /**
+     * Open settings modal and populate with current values
+     */
+    function openSettingsModal() {
+        document.getElementById('url-resolution-enabled').checked = settings.urlResolution.enabled;
+        document.getElementById('url-resolution-limit').value = settings.urlResolution.limit;
+        updateUrlResolutionUI();
+        document.getElementById('settings-modal').style.display = 'flex';
+    }
+
+    /**
+     * Close settings modal
+     */
+    function closeSettingsModal() {
+        document.getElementById('settings-modal').style.display = 'none';
+    }
+
+    /**
+     * Enable/disable limit input based on enabled checkbox
+     */
+    function updateUrlResolutionUI() {
+        const enabled = document.getElementById('url-resolution-enabled').checked;
+        const limitInput = document.getElementById('url-resolution-limit');
+        limitInput.disabled = !enabled;
     }
 
     function handleMessage(message) {
@@ -448,10 +543,13 @@
                 return;
             }
 
-            ext.storage.local.set({ tracking_availableForms: forms }, () => {
-                pasteAreaHtml.innerHTML = '';
-                hideError();
-                renderQueue();
+            // Resolve BeginProcessing URLs before saving
+            resolveBeginProcessingUrls(forms).then(resolvedForms => {
+                ext.storage.local.set({ tracking_availableForms: resolvedForms }, () => {
+                    pasteAreaHtml.innerHTML = '';
+                    hideError();
+                    renderQueue();
+                });
             });
         });
     }
@@ -528,6 +626,96 @@
         }
 
         return null;
+    }
+
+    function extractTrackingIdFromUrl(url) {
+        // Extract tracking ID from resolved URL pattern: /Policy/TransactionDetails/Edit/{trackingId}
+        const match = url.match(/\/Edit\/(\d+)/);
+        return match ? match[1] : null;
+    }
+
+    async function resolveRedirectUrl(url) {
+        try {
+            const response = await fetch(url, {
+                method: 'HEAD',
+                redirect: 'follow'
+            });
+            return response.url;
+        } catch (error) {
+            console.warn(LOG_PREFIX, `Failed to resolve URL: ${url}`, error);
+            return url; // Return original URL on error
+        }
+    }
+
+    async function resolveBeginProcessingUrls(forms) {
+        // Check if URL resolution is enabled
+        if (!settings.urlResolution.enabled) {
+            console.log(LOG_PREFIX, "URL resolution is disabled in settings");
+            return forms;
+        }
+
+        // Filter forms that need resolution
+        const formsToResolve = forms
+            .map((form, index) => ({ form, index }))
+            .filter(({ form }) => {
+                // Only process BeginProcessing URLs
+                if (!form.url.includes('/BeginProcessing/')) return false;
+
+                // Skip if already has valid identifier
+                const hasValidId = /\/Edit\/\d+/.test(form.url);
+                return !hasValidId;
+            });
+
+        if (formsToResolve.length === 0) {
+            return forms; // Nothing to resolve
+        }
+
+        // Apply limit if set (0 means no limit)
+        const limit = settings.urlResolution.limit;
+        const itemsToProcess = (limit > 0 && limit < formsToResolve.length)
+            ? formsToResolve.slice(0, limit)
+            : formsToResolve;
+
+        // Show progress indicator
+        const progressElement = document.getElementById('resolution-progress');
+        if (progressElement) {
+            progressElement.style.display = 'block';
+        }
+
+        // Process sequentially
+        for (let i = 0; i < itemsToProcess.length; i++) {
+            const { form, index } = itemsToProcess[i];
+
+            // Update progress
+            if (progressElement) {
+                progressElement.textContent = `Resolving URLs... (${i + 1}/${itemsToProcess.length})`;
+            }
+
+            try {
+                // Resolve URL
+                const resolvedUrl = await resolveRedirectUrl(form.url);
+
+                // Extract tracking ID from resolved URL
+                const trackingId = extractTrackingIdFromUrl(resolvedUrl);
+
+                if (trackingId) {
+                    // Update form with resolved data
+                    forms[index].url = resolvedUrl;
+                    forms[index].urlId = trackingId;
+                    console.log(LOG_PREFIX, `Resolved: temp_${form.urlId.replace('temp_', '')} -> ${trackingId}`);
+                }
+            } catch (error) {
+                console.warn(LOG_PREFIX, `Failed to process form at index ${index}:`, error);
+                // Continue with next form
+            }
+        }
+
+        // Hide progress indicator
+        if (progressElement) {
+            progressElement.style.display = 'none';
+        }
+
+        return forms;
     }
 
     function escapeHtml(text) {
