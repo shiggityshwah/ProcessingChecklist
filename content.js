@@ -363,18 +363,19 @@
         ext.storage.onChanged.addListener((changes, namespace) => {
             if (namespace === 'local') {
                 const keys = getStorageKeys();
-                const isReview = window.trackingHelper && window.trackingHelper.isReviewMode;
-                const stateKey = isReview ? keys.reviewState : keys.checklistState;
 
-                if (changes[stateKey]) {
-                    if (changes[stateKey].newValue) {
+                // Handle both regular state and review state changes
+                if (changes[keys.checklistState] || changes[keys.reviewState]) {
+                    const changedKey = changes[keys.checklistState] ? keys.checklistState : keys.reviewState;
+
+                    if (changes[changedKey].newValue) {
                         // Skip if we're in the middle of a reset
                         if (isResetting) {
                             return;
                         }
                         // Normal state update
                         ext.storage.local.get([keys.uiState, keys.viewMode], (result) => {
-                            const state = changes[stateKey].newValue;
+                            const state = changes[changedKey].newValue;
                             updateAndBroadcast(state, result[keys.uiState], result[keys.viewMode]);
                         });
                     } else {
@@ -2174,13 +2175,15 @@
 
     function updateItemVisuals(state) {
         isProgrammaticUpdate = true;
+        const isReviewMode = window.trackingHelper && window.trackingHelper.isReviewMode;
+
         state.forEach((itemState, index) => {
             const step = checklist[index];
 
             // Try highlight zones if defined
             let zonesSucceeded = false;
             if (step && step.highlight_zones && step.highlight_zones.length > 0) {
-                zonesSucceeded = updateHighlightZones(index, itemState);
+                zonesSucceeded = updateHighlightZones(index, itemState, isReviewMode);
             }
 
             // Fallback to container highlighting if zones not defined or all failed
@@ -2348,17 +2351,17 @@
      * @param {Object} itemState - The state object {processed, skipped}
      * @returns {boolean} True if at least one zone was successfully created, false otherwise
      */
-    function updateHighlightZones(index, itemState) {
+    function updateHighlightZones(index, itemState, isReviewMode = false) {
         // Remove existing zones for this index (but NOT checkboxes - they stay visible)
         removeHighlightZones(index);
 
         const step = checklist[index];
         if (!step.highlight_zones || step.highlight_zones.length === 0) return false;
 
-        // Determine state class
+        // Determine state class (blue for review mode, green/yellow for normal)
         let stateClass = '';
         if (itemState.processed) {
-            stateClass = 'confirmed-zone';
+            stateClass = isReviewMode ? 'review-confirmed-zone' : 'confirmed-zone';
         } else if (itemState.skipped) {
             stateClass = 'skipped-zone';
         }

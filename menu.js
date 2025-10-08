@@ -56,7 +56,7 @@
             ext.storage.local.get('defaultUIVisible', (result) => {
                 const checkbox = document.getElementById('default-ui-visible');
                 if (checkbox) {
-                    checkbox.checked = result.defaultUIVisible !== false; // Default to true if not set
+                    checkbox.checked = result.defaultUIVisible === true; // Default to false if not set
                 }
             });
 
@@ -139,8 +139,8 @@
         if (!currentTabId) return;
 
         ext.storage.local.get([`viewMode_${currentTabId}`, 'defaultViewMode'], (result) => {
-            const currentViewMode = result[`viewMode_${currentTabId}`] || result.defaultViewMode || 'single';
-            const defaultViewMode = result.defaultViewMode || 'single';
+            const currentViewMode = result[`viewMode_${currentTabId}`] || result.defaultViewMode || 'full';
+            const defaultViewMode = result.defaultViewMode || 'full';
 
             // Update radio buttons
             const singleRadio = document.getElementById('view-mode-single');

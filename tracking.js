@@ -16,7 +16,7 @@
     let settings = {
         urlResolution: {
             enabled: true,
-            limit: 0
+            limit: 1
         }
     };
 
@@ -60,7 +60,7 @@
         document.getElementById('settings-close-btn').addEventListener('click', closeSettingsModal);
         document.getElementById('settings-cancel-btn').addEventListener('click', closeSettingsModal);
         document.getElementById('settings-save-btn').addEventListener('click', saveSettings);
-        document.getElementById('enable-resolution').addEventListener('change', updateUrlResolutionUI);
+        document.getElementById('url-resolution-enabled').addEventListener('change', updateUrlResolutionUI);
 
         // Close modal on overlay click
         document.getElementById('settings-modal').addEventListener('click', (e) => {
@@ -167,6 +167,13 @@
         // Check if tracking data changed
         if (changes.tracking_availableForms || changes.tracking_history) {
             dbg("Tracking data changed, refreshing");
+
+            // Auto-resolve top X items when queue changes
+            if (changes.tracking_availableForms && changes.tracking_availableForms.newValue) {
+                const updatedForms = changes.tracking_availableForms.newValue;
+                ensureTopItemsResolved(updatedForms);
+            }
+
             loadAndRender();
         }
     }
@@ -308,12 +315,16 @@
                     checkedClass = 'progress-empty';
                 }
 
+                // Show checkmark for both manually marked complete AND 100% progress
+                const showCheckmark = item.manuallyMarkedComplete || checkedProgress.percentage === 100;
+                const checkmarkTitle = item.manuallyMarkedComplete ? 'Manually marked complete' : 'Automatically completed';
+
                 row.innerHTML = `
                     <td><a href="#" class="clickable-link" data-url-id="${escapeHtml(item.urlId)}">${escapeHtml(item.policyNumber || 'N/A')}</a></td>
                     <td>${escapeHtml(item.policyType || '')}</td>
                     <td>
                         <span class="progress-badge ${checkedClass}">${checkedDisplay}</span>
-                        ${item.manuallyMarkedComplete ? '<span class="manual-complete-badge" title="Manually marked complete">✓</span>' : ''}
+                        ${showCheckmark ? `<span class="manual-complete-badge" title="${checkmarkTitle}">✓</span>` : ''}
                     </td>
                     <td>
                         <button class="action-btn action-btn-delete" data-action="delete-history" data-url-id="${escapeHtml(item.urlId)}">Delete</button>
@@ -716,6 +727,56 @@
         }
 
         return forms;
+    }
+
+    /**
+     * Ensure top X items in queue are resolved
+     * Called when queue changes (items removed/reordered)
+     */
+    async function ensureTopItemsResolved(forms) {
+        // Check if URL resolution is enabled
+        if (!settings.urlResolution.enabled) {
+            return;
+        }
+
+        // Check if limit is set
+        const limit = settings.urlResolution.limit;
+        if (limit === 0) {
+            return; // No limit means resolve all on paste only
+        }
+
+        // Find unresolved items in top X
+        const unresolvedInTopX = forms
+            .slice(0, limit)
+            .map((form, index) => ({ form, index }))
+            .filter(({ form }) => {
+                return form.url.includes('/BeginProcessing/') && !/\/Edit\/\d+/.test(form.url);
+            });
+
+        if (unresolvedInTopX.length === 0) {
+            return; // All top X items are already resolved
+        }
+
+        console.log(LOG_PREFIX, `Auto-resolving ${unresolvedInTopX.length} items in top ${limit} of queue`);
+
+        // Resolve them
+        for (const { form, index } of unresolvedInTopX) {
+            try {
+                const resolvedUrl = await resolveRedirectUrl(form.url);
+                const trackingId = extractTrackingIdFromUrl(resolvedUrl);
+
+                if (trackingId) {
+                    forms[index].url = resolvedUrl;
+                    forms[index].urlId = trackingId;
+                    console.log(LOG_PREFIX, `Auto-resolved: temp_${form.urlId.replace('temp_', '')} -> ${trackingId}`);
+                }
+            } catch (error) {
+                console.warn(LOG_PREFIX, `Failed to auto-resolve form at index ${index}:`, error);
+            }
+        }
+
+        // Save updated forms
+        ext.storage.local.set({ tracking_availableForms: forms });
     }
 
     function escapeHtml(text) {
