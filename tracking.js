@@ -610,11 +610,29 @@
 
                 // Open background tab with doc=open for download
                 ext.tabs.create({ url: form.url, active: false }, (downloadTab) => {
-                    // Wait a bit for download to start, then close the background tab
+                    // Monitor tab for download completion before closing
+                    // Listen for download start
+                    const downloadListener = (downloadItem) => {
+                        if (downloadItem.url === form.url || downloadItem.url.startsWith(form.url.split('?')[0])) {
+                            console.log(LOG_PREFIX, "Download detected, will close tab after download starts");
+                            // Wait a moment to ensure download is initiated, then close tab
+                            setTimeout(() => {
+                                ext.tabs.remove(downloadTab.id);
+                                console.log(LOG_PREFIX, "Closed background download tab");
+                            }, 2000);
+                            // Remove listener after first download
+                            ext.downloads.onCreated.removeListener(downloadListener);
+                        }
+                    };
+
+                    ext.downloads.onCreated.addListener(downloadListener);
+
+                    // Fallback: close tab after 10 seconds regardless
                     setTimeout(() => {
-                        ext.tabs.remove(downloadTab.id);
-                        console.log(LOG_PREFIX, "Closed background download tab");
-                    }, 3000); // 3 seconds should be enough for download to initiate
+                        ext.tabs.remove(downloadTab.id).catch(() => {});
+                        ext.downloads.onCreated.removeListener(downloadListener);
+                        console.log(LOG_PREFIX, "Closed background download tab (timeout)");
+                    }, 10000);
                 });
             }
         });
@@ -642,17 +660,35 @@
 
         // Open the tab without doc=open
         ext.tabs.create({ url: cleanUrl, active: true }, (mainTab) => {
-            // If original URL had doc=open, handle download in background
+            // If original URL had doc=open, handle download in background (even in review mode)
             if (item.url !== cleanUrl) {
                 console.log(LOG_PREFIX, "Opening background tab for document download:", item.url);
 
                 // Open background tab with doc=open for download
                 ext.tabs.create({ url: item.url, active: false }, (downloadTab) => {
-                    // Wait a bit for download to start, then close the background tab
+                    // Monitor tab for download completion before closing
+                    // Listen for download start
+                    const downloadListener = (downloadItem) => {
+                        if (downloadItem.url === item.url || downloadItem.url.startsWith(item.url.split('?')[0])) {
+                            console.log(LOG_PREFIX, "Download detected, will close tab after download starts");
+                            // Wait a moment to ensure download is initiated, then close tab
+                            setTimeout(() => {
+                                ext.tabs.remove(downloadTab.id);
+                                console.log(LOG_PREFIX, "Closed background download tab");
+                            }, 2000);
+                            // Remove listener after first download
+                            ext.downloads.onCreated.removeListener(downloadListener);
+                        }
+                    };
+
+                    ext.downloads.onCreated.addListener(downloadListener);
+
+                    // Fallback: close tab after 10 seconds regardless
                     setTimeout(() => {
-                        ext.tabs.remove(downloadTab.id);
-                        console.log(LOG_PREFIX, "Closed background download tab");
-                    }, 3000); // 3 seconds should be enough for download to initiate
+                        ext.tabs.remove(downloadTab.id).catch(() => {});
+                        ext.downloads.onCreated.removeListener(downloadListener);
+                        console.log(LOG_PREFIX, "Closed background download tab (timeout)");
+                    }, 10000);
                 });
             }
         });
