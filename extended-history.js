@@ -178,10 +178,25 @@
             checkedClass = 'progress-empty';
         }
 
+        // Calculate reviewed progress display with styling
         let reviewedDisplay = '—';
+        let reviewedClass = 'progress-empty';
+        let reviewedCheckmark = '';
+
         if (reviewedProgress && reviewedProgress.current > 0) {
             reviewedDisplay = `${reviewedProgress.current}/${reviewedProgress.total} (${reviewedProgress.percentage}%)`;
+
+            if (reviewedProgress.percentage === 100) {
+                reviewedClass = 'progress-review-complete';
+                reviewedCheckmark = '<span class="review-complete-badge" title="Review completed">✓</span>';
+            } else {
+                reviewedClass = 'progress-incomplete';
+            }
         }
+
+        const reviewedDisplayHtml = reviewedProgress && reviewedProgress.current > 0
+            ? `<span class="progress-badge ${reviewedClass}">${reviewedDisplay}</span>${reviewedCheckmark}`
+            : reviewedDisplay;
 
         const addedTime = item.addedDate ? new Date(item.addedDate).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '—';
         const movedToHistoryTime = item.movedToHistoryDate ? new Date(item.movedToHistoryDate).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '—';
@@ -191,25 +206,27 @@
         const premiumChanged = item.premium && item.totalTaxablePremium &&
             item.premium !== item.totalTaxablePremium;
         const premiumDisplay = item.totalTaxablePremium || '—';
-        const premiumFlag = premiumChanged ? ' <span style="color: #dc3545; font-weight: bold;" title="Premium changed from imported value">⚠</span>' : '';
+        const premiumStyle = premiumChanged ? ' style="color: #28a745; font-weight: 600;"' : '';
+        const premiumTitle = premiumChanged ? ` title="Initial value: ${escapeHtml(item.premium)}"` : '';
 
         // Get full type description and check for changes
         const fullTypeDescription = mapTypeCodeToDescription(item.policyType || '');
         const typeChanged = item.originalPolicyType && item.originalPolicyType !== item.policyType;
-        const typeChangeIndicator = typeChanged ? ` <span style="color: #dc3545; font-weight: bold;" title="Type changed from ${mapTypeCodeToDescription(item.originalPolicyType)}">⚠</span>` : '';
+        const typeStyle = typeChanged ? ' style="color: #28a745; font-weight: 600;"' : '';
+        const typeTitle = typeChanged ? ` title="Initial value: ${mapTypeCodeToDescription(item.originalPolicyType)}"` : '';
 
         row.innerHTML = `
             <td><a href="#" class="clickable-link" data-url-id="${escapeHtml(item.urlId)}" title="${escapeHtml(item.url || '')}">${escapeHtml(item.policyNumber || 'N/A')}</a></td>
             <td>${escapeHtml(item.submissionNumber || 'N/A')}</td>
             <td>${escapeHtml(item.broker || '')}</td>
-            <td>${escapeHtml(fullTypeDescription)}${typeChangeIndicator}</td>
+            <td><span${typeStyle}${typeTitle}>${escapeHtml(fullTypeDescription)}</span></td>
             <td>
                 <span class="progress-badge ${checkedClass}">${checkedDisplay}</span>
                 ${item.manuallyMarkedComplete ? '<span class="manual-complete-badge" title="Manually marked complete">✓</span>' : ''}
             </td>
-            <td>${reviewedDisplay}</td>
+            <td>${reviewedDisplayHtml}</td>
             <td>${escapeHtml(item.primaryNamedInsured || '—')}</td>
-            <td>${escapeHtml(premiumDisplay)}${premiumFlag}</td>
+            <td><span${premiumStyle}${premiumTitle}>${escapeHtml(premiumDisplay)}</span></td>
             <td>${addedTime}</td>
             <td>${movedToHistoryTime}</td>
             <td>${completedTime}</td>
@@ -228,9 +245,21 @@
     function handleDailyReview(completedItems) {
         if (completedItems.length === 0) return;
 
-        // Pick a random completed item
-        const randomIndex = Math.floor(Math.random() * completedItems.length);
-        const randomItem = completedItems[randomIndex];
+        // Filter out items that are already reviewed (100% reviewed progress)
+        const unreviewed = completedItems.filter(item => {
+            if (!item.reviewedProgress) return true; // Not reviewed at all
+            return item.reviewedProgress.percentage < 100; // Not fully reviewed
+        });
+
+        // If all items are fully reviewed, inform the user
+        if (unreviewed.length === 0) {
+            alert('All completed forms have been fully reviewed!');
+            return;
+        }
+
+        // Pick a random unreviewed completed item
+        const randomIndex = Math.floor(Math.random() * unreviewed.length);
+        const randomItem = unreviewed[randomIndex];
 
         dbg("Starting daily review for:", randomItem);
 

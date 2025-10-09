@@ -239,8 +239,10 @@
 
             forms.forEach((form, index) => {
                 const row = document.createElement('tr');
+                const urlTooltip = form.url || '';
+                dbg(`Rendering queue item ${index}: URL = "${urlTooltip}"`);
                 row.innerHTML = `
-                    <td style="max-width: 150px;"><a href="#" class="clickable-link" data-index="${index}" title="${escapeHtml(form.url || '')}">${escapeHtml(form.policyNumber || 'N/A')}</a></td>
+                    <td style="max-width: 150px;"><a href="#" class="clickable-link" data-index="${index}" title="${escapeHtml(urlTooltip)}">${escapeHtml(form.policyNumber || 'N/A')}</a></td>
                     <td style="max-width: 125px;">${escapeHtml(form.submissionNumber || 'N/A')}</td>
                     <td style="max-width: 100px;">${escapeHtml(form.premium || '')}</td>
                     <td>${escapeHtml(form.policyType || '')}</td>
