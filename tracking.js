@@ -415,6 +415,15 @@
                 const item = history.find(h => h.urlId === urlId);
                 if (item) {
                     item.manuallyMarkedComplete = !item.manuallyMarkedComplete;
+
+                    // Set or clear manual completion timestamp
+                    if (item.manuallyMarkedComplete) {
+                        item.manualCompletionDate = new Date().toISOString();
+                    } else {
+                        // Clear manual completion date when unmarking
+                        delete item.manualCompletionDate;
+                    }
+
                     ext.storage.local.set({ tracking_history: history }, () => {
                         renderHistory();
                     });

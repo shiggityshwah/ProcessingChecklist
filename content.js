@@ -338,6 +338,13 @@
                             // Detect and register form for tracking
                             if (window.trackingHelper && window.trackingHelper.detectAndRegisterForm) {
                                 window.trackingHelper.detectAndRegisterForm();
+                                // Initialize progress with correct total immediately after registration
+                                if (window.trackingHelper.updateProgress && storedState) {
+                                    const checkedCount = storedState.filter(item => item.processed).length;
+                                    const total = storedState.length;
+                                    const isReview = window.trackingHelper.isReviewMode || false;
+                                    window.trackingHelper.updateProgress(checkedCount, total, isReview);
+                                }
                             }
                         }, 500);
                     });
@@ -356,6 +363,13 @@
                     // Detect and register form for tracking
                     if (window.trackingHelper && window.trackingHelper.detectAndRegisterForm) {
                         window.trackingHelper.detectAndRegisterForm();
+                        // Initialize progress with correct total immediately after registration
+                        if (window.trackingHelper.updateProgress && storedState) {
+                            const checkedCount = storedState.filter(item => item.processed).length;
+                            const total = storedState.length;
+                            const isReview = window.trackingHelper.isReviewMode || false;
+                            window.trackingHelper.updateProgress(checkedCount, total, isReview);
+                        }
                     }
                 }, 500);
             }

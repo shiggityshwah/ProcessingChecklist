@@ -80,7 +80,8 @@
         const grouped = {};
 
         history.forEach(item => {
-            const date = new Date(item.addedDate || Date.now());
+            // Use movedToHistoryDate (when started) instead of addedDate
+            const date = new Date(item.movedToHistoryDate || item.addedDate || Date.now());
             const dayKey = date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
             if (!grouped[dayKey]) {
@@ -133,7 +134,6 @@
                     <th>Reviewed Progress</th>
                     <th>Primary Named Insured</th>
                     <th>Total Taxable Premium</th>
-                    <th>Added</th>
                     <th>Started</th>
                     <th>Completed</th>
                 </tr>
@@ -143,9 +143,11 @@
 
         const tbody = table.querySelector('tbody');
 
-        // Sort items by added time (newest first within the day)
+        // Sort items by started time (newest first within the day)
         items.sort((a, b) => {
-            return new Date(b.addedDate) - new Date(a.addedDate);
+            const dateA = new Date(a.movedToHistoryDate || a.addedDate || 0);
+            const dateB = new Date(b.movedToHistoryDate || b.addedDate || 0);
+            return dateB - dateA;
         });
 
         items.forEach(item => {
@@ -198,9 +200,15 @@
             ? `<span class="progress-badge ${reviewedClass}">${reviewedDisplay}</span>${reviewedCheckmark}`
             : reviewedDisplay;
 
-        const addedTime = item.addedDate ? new Date(item.addedDate).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '—';
         const movedToHistoryTime = item.movedToHistoryDate ? new Date(item.movedToHistoryDate).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '—';
-        const completedTime = item.completedDate ? new Date(item.completedDate).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '—';
+
+        // Show completed time - use manualCompletionDate if manually marked, otherwise use completedDate
+        let completedTime = '—';
+        if (item.manualCompletionDate) {
+            completedTime = new Date(item.manualCompletionDate).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+        } else if (item.completedDate) {
+            completedTime = new Date(item.completedDate).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+        }
 
         // Check if premium changed from imported value
         const premiumChanged = item.premium && item.totalTaxablePremium &&
@@ -227,7 +235,6 @@
             <td>${reviewedDisplayHtml}</td>
             <td>${escapeHtml(item.primaryNamedInsured || '—')}</td>
             <td><span${premiumStyle}${premiumTitle}>${escapeHtml(premiumDisplay)}</span></td>
-            <td>${addedTime}</td>
             <td>${movedToHistoryTime}</td>
             <td>${completedTime}</td>
         `;
