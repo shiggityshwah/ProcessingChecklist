@@ -12,6 +12,19 @@
     let currentView = 'queue'; // 'queue' or 'history'
     let currentFilter = 'all'; // 'all', 'completed', 'reviewed', 'in-progress'
 
+    /**
+     * Get simplified letter code for tracking history display
+     * B = all backouts, otherwise single letter
+     */
+    function getSimplifiedTypeCode(code) {
+        if (!code) return '';
+        const upperCode = code.toUpperCase();
+        if (upperCode.startsWith('B') && upperCode.length > 1) {
+            return 'B';
+        }
+        return code;
+    }
+
     // Settings
     let settings = {
         urlResolution: {
@@ -227,7 +240,7 @@
             forms.forEach((form, index) => {
                 const row = document.createElement('tr');
                 row.innerHTML = `
-                    <td style="max-width: 150px;"><a href="#" class="clickable-link" data-index="${index}">${escapeHtml(form.policyNumber || 'N/A')}</a></td>
+                    <td style="max-width: 150px;"><a href="#" class="clickable-link" data-index="${index}" title="${escapeHtml(form.url || '')}">${escapeHtml(form.policyNumber || 'N/A')}</a></td>
                     <td style="max-width: 125px;">${escapeHtml(form.submissionNumber || 'N/A')}</td>
                     <td style="max-width: 100px;">${escapeHtml(form.premium || '')}</td>
                     <td>${escapeHtml(form.policyType || '')}</td>
@@ -319,9 +332,16 @@
                 const showCheckmark = item.manuallyMarkedComplete || checkedProgress.percentage === 100;
                 const checkmarkTitle = item.manuallyMarkedComplete ? 'Manually marked complete' : 'Automatically completed';
 
+                // Simplify policy type code for display
+                const displayTypeCode = getSimplifiedTypeCode(item.policyType || '');
+
+                // Check if type was changed
+                const typeChanged = item.originalPolicyType && item.originalPolicyType !== item.policyType;
+                const typeChangeIndicator = typeChanged ? ` <span style="color: #dc3545; font-weight: bold;" title="Type changed from ${getSimplifiedTypeCode(item.originalPolicyType)}">⚠</span>` : '';
+
                 row.innerHTML = `
-                    <td><a href="#" class="clickable-link" data-url-id="${escapeHtml(item.urlId)}">${escapeHtml(item.policyNumber || 'N/A')}</a></td>
-                    <td>${escapeHtml(item.policyType || '')}</td>
+                    <td><a href="#" class="clickable-link" data-url-id="${escapeHtml(item.urlId)}" title="${escapeHtml(item.url || '')}">${escapeHtml(item.policyNumber || 'N/A')}</a></td>
+                    <td>${escapeHtml(displayTypeCode)}${typeChangeIndicator}</td>
                     <td>
                         <span class="progress-badge ${checkedClass}">${checkedDisplay}</span>
                         ${showCheckmark ? `<span class="manual-complete-badge" title="${checkmarkTitle}">✓</span>` : ''}

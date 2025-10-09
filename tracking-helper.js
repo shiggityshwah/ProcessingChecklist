@@ -29,6 +29,66 @@
     }
 
     /**
+     * Map transaction type letter code to full description
+     */
+    function mapTypeCodeToDescription(code) {
+        if (!code) return '';
+
+        const upperCode = code.toUpperCase();
+        const typeMap = {
+            'N': 'New Business',
+            'R': 'Renewal',
+            'X': 'Extension',
+            'E': 'Endorsement',
+            'A': 'Audit',
+            'C': 'Cancellation',
+            'BN': 'Backout of New Business',
+            'BR': 'Backout of Renewal',
+            'BX': 'Backout of Extension',
+            'BE': 'Backout of Endorsement',
+            'BA': 'Backout of Audit',
+            'BC': 'Backout of Cancellation'
+        };
+
+        return typeMap[upperCode] || code;
+    }
+
+    /**
+     * Map transaction type dropdown value to letter code
+     */
+    function mapTransactionTypeToCode(transactionType) {
+        if (!transactionType) return '';
+
+        const typeMap = {
+            'New Business': 'N',
+            'Renewal': 'R',
+            'Extension': 'X',
+            'Endorsement': 'E',
+            'Audit': 'A',
+            'Cancellation': 'C',
+            'Backout of New Business': 'BN',
+            'Backout of Renewal': 'BR',
+            'Backout of Extension': 'BX',
+            'Backout of Endorsement': 'BE',
+            'Backout of Audit': 'BA',
+            'Backout of Cancellation': 'BC'
+        };
+
+        return typeMap[transactionType] || transactionType;
+    }
+
+    /**
+     * Get simplified backout code (B for all backouts)
+     */
+    function getSimplifiedBackoutCode(code) {
+        if (!code) return code;
+        if (code.toUpperCase().startsWith('B') && code.length > 1) {
+            return 'B';
+        }
+        return code;
+    }
+
+    /**
      * Extract URL ID from current page URL
      */
     function extractUrlId() {
@@ -88,6 +148,19 @@
     }
 
     /**
+     * Extract transaction type from page
+     */
+    function extractTransactionType() {
+        const elem = document.querySelector('#TransactionTypeId');
+        if (elem) {
+            // Get the selected option text
+            const selectedOption = elem.options[elem.selectedIndex];
+            return selectedOption ? selectedOption.text.trim() : null;
+        }
+        return null;
+    }
+
+    /**
      * Update all tracking metadata for current form
      */
     function updateTrackingMetadata() {
@@ -120,6 +193,28 @@
                 if (premium && premium !== history[index].totalTaxablePremium) {
                     history[index].totalTaxablePremium = premium;
                     updated = true;
+                }
+
+                // Update transaction type and track changes (excluding backouts)
+                const transactionType = extractTransactionType();
+                if (transactionType) {
+                    const currentTypeCode = mapTransactionTypeToCode(transactionType);
+                    const originalTypeCode = history[index].originalPolicyType || history[index].policyType;
+
+                    // Don't track backout changes
+                    const isBackout = currentTypeCode.toUpperCase().startsWith('B') && currentTypeCode.length > 1;
+
+                    if (!isBackout && currentTypeCode !== history[index].policyType) {
+                        // First time setting the type
+                        if (!history[index].originalPolicyType && history[index].policyType) {
+                            history[index].originalPolicyType = history[index].policyType;
+                        }
+
+                        history[index].policyType = currentTypeCode;
+                        updated = true;
+
+                        console.log(LOG_PREFIX, `Transaction type changed from ${originalTypeCode} to ${currentTypeCode}`);
+                    }
                 }
 
                 if (updated) {

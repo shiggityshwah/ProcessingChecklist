@@ -7,6 +7,31 @@
 
     const ext = (typeof browser !== 'undefined') ? browser : chrome;
 
+    /**
+     * Map transaction type letter code to full description
+     */
+    function mapTypeCodeToDescription(code) {
+        if (!code) return '';
+
+        const upperCode = code.toUpperCase();
+        const typeMap = {
+            'N': 'New Business',
+            'R': 'Renewal',
+            'X': 'Extension',
+            'E': 'Endorsement',
+            'A': 'Audit',
+            'C': 'Cancellation',
+            'BN': 'Backout',
+            'BR': 'Backout',
+            'BX': 'Backout',
+            'BE': 'Backout',
+            'BA': 'Backout',
+            'BC': 'Backout'
+        };
+
+        return typeMap[upperCode] || code;
+    }
+
     function init() {
         console.info(LOG_PREFIX, "Extended history page initialized");
         loadAndRender();
@@ -168,11 +193,16 @@
         const premiumDisplay = item.totalTaxablePremium || '—';
         const premiumFlag = premiumChanged ? ' <span style="color: #dc3545; font-weight: bold;" title="Premium changed from imported value">⚠</span>' : '';
 
+        // Get full type description and check for changes
+        const fullTypeDescription = mapTypeCodeToDescription(item.policyType || '');
+        const typeChanged = item.originalPolicyType && item.originalPolicyType !== item.policyType;
+        const typeChangeIndicator = typeChanged ? ` <span style="color: #dc3545; font-weight: bold;" title="Type changed from ${mapTypeCodeToDescription(item.originalPolicyType)}">⚠</span>` : '';
+
         row.innerHTML = `
-            <td><a href="#" class="clickable-link" data-url-id="${escapeHtml(item.urlId)}">${escapeHtml(item.policyNumber || 'N/A')}</a></td>
+            <td><a href="#" class="clickable-link" data-url-id="${escapeHtml(item.urlId)}" title="${escapeHtml(item.url || '')}">${escapeHtml(item.policyNumber || 'N/A')}</a></td>
             <td>${escapeHtml(item.submissionNumber || 'N/A')}</td>
             <td>${escapeHtml(item.broker || '')}</td>
-            <td>${escapeHtml(item.policyType || '')}</td>
+            <td>${escapeHtml(fullTypeDescription)}${typeChangeIndicator}</td>
             <td>
                 <span class="progress-badge ${checkedClass}">${checkedDisplay}</span>
                 ${item.manuallyMarkedComplete ? '<span class="manual-complete-badge" title="Manually marked complete">✓</span>' : ''}
