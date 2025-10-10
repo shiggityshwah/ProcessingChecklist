@@ -257,11 +257,14 @@
                 const currentSubmissionNumber = submissionNumber;
 
                 // Find matching form in available forms
+                // PRIORITY 1: Match by resolved URL ID (most reliable)
+                // PRIORITY 2: For temp_ IDs, match by submission and policy number with type verification
                 let formIndex = availableForms.findIndex(f => {
-                    // Exact URL ID match
+                    // Exact URL ID match (highest priority)
                     if (f.urlId === urlId) return true;
 
                     // For temp_ IDs (BeginProcessing URLs), match by submission and policy number
+                    // This is only used as fallback when URL hasn't been resolved yet
                     if (f.urlId.startsWith('temp_')) {
                         const submissionMatch = currentSubmissionNumber && f.submissionNumber &&
                             currentSubmissionNumber === f.submissionNumber;
@@ -275,12 +278,20 @@
                 });
 
                 // Check if already in history first (to avoid removing from queue on refresh)
+                // IMPORTANT: Prioritize URL ID matching over policy number to handle multiple
+                // transactions (New Business, Endorsement, etc.) on the same policy
                 const existingHistoryIndex = history.findIndex(h => {
+                    // Exact URL ID match (highest priority - this uniquely identifies the form)
                     if (h.urlId === urlId) return true;
 
-                    // Also check by normalized policy number to prevent duplicates
-                    if (currentPolicyNumber && h.policyNumber) {
-                        return normalizePolicyNumber(currentPolicyNumber) === normalizePolicyNumber(h.policyNumber);
+                    // DO NOT match by policy number alone - this causes issues when the same
+                    // policy has multiple transactions (New Business, Endorsement, etc.)
+                    // Only match by policy number if this is a temp ID and we have both
+                    // submission number AND policy number matching
+                    if (urlId.startsWith('temp_') && currentSubmissionNumber && currentPolicyNumber && h.policyNumber) {
+                        const submissionMatch = h.submissionNumber && currentSubmissionNumber === h.submissionNumber;
+                        const policyMatch = normalizePolicyNumber(currentPolicyNumber) === normalizePolicyNumber(h.policyNumber);
+                        return submissionMatch && policyMatch;
                     }
 
                     return false;

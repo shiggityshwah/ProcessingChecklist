@@ -111,8 +111,18 @@
       "fields": [
         {
           "name": "NAICS Code",
-          "selector": "#NaicsCode_input",
+          "selector": "#AssociatedInsuredNaicsDisplayValue",
           "type": "text"
+        },
+{
+          "name": "Personal Line",
+          "selector": "#IsPersonalLine",
+          "type": "checkbox"
+        },
+        {
+          "name": "Needs Research",
+          "selector": "#NaicsResearchInd",
+          "type": "checkbox"
         }
       ]
     },
@@ -148,8 +158,8 @@
         },
         {
           "name": "State",
-          "selector": "#State",
-          "type": "select"
+          "selector": "div.form-horizontal:nth-child(14) > div:nth-child(2) > div:nth-child(1) > div:nth-child(4) > div:nth-child(3)",
+          "type": "kendo_widget"
         },
         {
           "name": "ZIP",
@@ -235,6 +245,11 @@
       "container_selector": "#NeedsSpecialHandling",
       "container_levels_up": 4,
       "fields": [
+        {
+          "name": "Policy Needs Special Handling",
+          "selector": "#NeedsSpecialHandling",
+          "type": "checkbox"
+        },
         {
           "name": "Exempt Commercial Purchaser",
           "selector": "#IsExemptCommercialPurchaser",
