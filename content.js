@@ -117,6 +117,11 @@
             configLoaded = true;
             console.log(LOG_PREFIX, "Configuration loaded successfully:", config.metadata);
 
+            // Set up tracking helper function to get checklist total
+            if (window.trackingHelper) {
+                window.trackingHelper.getChecklistTotal = () => checklist.length;
+            }
+
             // Log table items for debugging
             const tableItems = checklist.filter(item => item.type === 'table');
             if (tableItems.length > 0) {
@@ -1824,19 +1829,28 @@
                     window.trackingHelper.enterReviewMode();
                     window.trackingHelper.applyReviewStyling();
 
-                    // Create separate review state storage (all unchecked)
-                    const reviewState = checklist.map(() => ({ processed: false, skipped: false }));
                     const keys = getStorageKeys();
-                    ext.storage.local.set({ [keys.reviewState]: reviewState }, () => {
-                        // Re-render UI with review state
-                        ext.storage.local.get([keys.uiState, keys.viewMode], (result) => {
-                            updateAndBroadcast(reviewState, result[keys.uiState], result[keys.viewMode]);
-                            // Update visuals to show unchecked state
-                            updateItemVisuals(reviewState);
-                        });
-                    });
 
-                    console.log(LOG_PREFIX, "Review mode activated");
+                    // Copy existing checklistState to reviewState to preserve visual checked state
+                    ext.storage.local.get([keys.checklistState], (result) => {
+                        const existingState = result[keys.checklistState];
+
+                        // If checklistState exists, copy it; otherwise start with all unchecked
+                        const reviewState = existingState
+                            ? [...existingState]
+                            : checklist.map(() => ({ processed: false, skipped: false }));
+
+                        ext.storage.local.set({ [keys.reviewState]: reviewState }, () => {
+                            // Re-render UI with review state
+                            ext.storage.local.get([keys.uiState, keys.viewMode], (result) => {
+                                updateAndBroadcast(reviewState, result[keys.uiState], result[keys.viewMode]);
+                                // Update visuals to show existing checked state
+                                updateItemVisuals(reviewState);
+                            });
+                        });
+
+                        console.log(LOG_PREFIX, "Review mode activated - copied existing checked state");
+                    });
                 }
                 break;
         }
@@ -2134,6 +2148,8 @@
                     if (isInitializing || isProgrammaticUpdate) return;
                     if (checkbox.checked) handleConfirmField(index); else unconfirmField(index);
                 });
+                // Ensure container can position the absolute checkbox
+                container.classList.add('checklist-item-container');
                 if (window.getComputedStyle(container).position === 'static') container.style.position = 'relative';
                 container.insertBefore(checkbox, container.firstChild);
             }

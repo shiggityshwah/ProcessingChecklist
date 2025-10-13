@@ -17,7 +17,8 @@
         isReviewMode: false,
         submissionNumber: null,
         updateMetadata: updateTrackingMetadata,
-        getSavedProgress: null  // Will be set by content.js to retrieve saved progress
+        getSavedProgress: null,  // Will be set by content.js to retrieve saved progress
+        getChecklistTotal: null  // Will be set by content.js to get checklist length
     };
 
     /**
@@ -326,12 +327,18 @@
                     const primaryInsured = extractPrimaryInsured();
                     const pagePremium = extractTotalTaxablePremium();
                     const totalPremium = pagePremium || form.premium;
+                    const transactionType = extractTransactionType();
+                    const typeCode = transactionType ? mapTransactionTypeToCode(transactionType) : form.policyType;
+
+                    // Get checklist total from content.js
+                    const checklistTotal = (window.trackingHelper.getChecklistTotal && window.trackingHelper.getChecklistTotal()) || 0;
 
                     // Add to history with initial progress
                     history.push({
                         ...form,
                         policyNumber: policyNumber,
-                        checkedProgress: { current: 0, total: 0, percentage: 0 },
+                        policyType: typeCode,
+                        checkedProgress: { current: 0, total: checklistTotal, percentage: 0 },
                         reviewedProgress: null,
                         manuallyMarkedComplete: false,
                         primaryNamedInsured: primaryInsured,
@@ -371,6 +378,7 @@
                     const policyNumber = extractPolicyNumber();
                     const primaryInsured = extractPrimaryInsured();
                     const totalPremium = extractTotalTaxablePremium();
+                    const transactionType = extractTransactionType();
 
                     if (policyNumber) {
                         // Add doc=open to the URL if not already present
@@ -381,6 +389,12 @@
                             formUrl = url.href;
                         }
 
+                        // Convert transaction type to letter code
+                        const typeCode = transactionType ? mapTransactionTypeToCode(transactionType) : '';
+
+                        // Get checklist total from content.js
+                        const checklistTotal = (window.trackingHelper.getChecklistTotal && window.trackingHelper.getChecklistTotal()) || 0;
+
                         history.push({
                             urlId: urlId,
                             url: formUrl,
@@ -388,8 +402,8 @@
                             submissionNumber: submissionNumber || '',
                             premium: totalPremium || '',
                             broker: '',
-                            policyType: '',
-                            checkedProgress: { current: 0, total: 0, percentage: 0 },
+                            policyType: typeCode,
+                            checkedProgress: { current: 0, total: checklistTotal, percentage: 0 },
                             reviewedProgress: null,
                             manuallyMarkedComplete: false,
                             primaryNamedInsured: primaryInsured,
@@ -399,7 +413,7 @@
                             completedDate: null
                         });
                         ext.storage.local.set({ tracking_history: history });
-                        console.log(LOG_PREFIX, "New form auto-added to history:", urlId);
+                        console.log(LOG_PREFIX, "New form auto-added to history:", urlId, "Type:", typeCode);
                     }
                 }
             });

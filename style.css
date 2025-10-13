@@ -328,8 +328,14 @@ button#skip-button:active {
     color: #ffc107 !important;
 }
 
+/* Checklist Item Container - for positioning checkboxes */
+.checklist-item-container {
+    position: relative;
+}
+
 /* Skipped Item Visual Cue */
 .skipped-item {
+    position: relative;
     background-color: #fffbe6 !important; /* A light yellow background */
     border-left: 4px solid #facc15 !important; /* A more prominent yellow-orange border */
     padding-left: 30px !important;
@@ -338,6 +344,7 @@ button#skip-button:active {
 
 /* Confirmed Item Visual Cue */
 .confirmed-item {
+    position: relative;
     background-color: #f0fff4 !important; /* A light green background */
     border-left: 4px solid #48bb78 !important; /* A more prominent green border */
     padding-left: 30px !important;
@@ -360,29 +367,16 @@ button#skip-button:active {
     padding-left: 30px;
 }
 
-
-
 #NaicsCode_input {
     width: 100% !important;
 }
 
-.form-group, .details-row, .row {
-    position: relative;
-    padding-left: 30px !important;
-}
+/* Note: Removed broad .form-group, .details-row, .row rule that was affecting all page elements.
+   The .confirmed-item and .skipped-item classes (defined above) already include position: relative
+   and padding-left: 30px for checklist containers that need it. */
 
 #IncludesBinder {
     margin-left: 30px;
-}
-
-.col-md-5 {
-    position: relative;
-    padding-left: 30px !important;
-}
-
-#coveragesTable, #reasonCodeContainer, #feesTable {
-    position: relative;
-    padding-left: 30px !important;
 }
 
 
@@ -837,4 +831,40 @@ input[type="checkbox"] {
 .fee-input-amount-popout::placeholder {
     color: #cbd5e0;
     font-style: italic;
+}
+
+#EditForm{
+    position: relative;
+    padding-left: 35px !important;
+}
+
+.tab-content{
+    position: relative;
+    padding-left: 35px !important;
+}
+
+div.col-md-7:nth-child(2){
+    position: relative;
+    padding-left: 20px !important;
+}
+
+div.row-buffer:nth-child(7) > div:nth-child(3){
+    position: relative;
+    padding-left: 40px !important;
+}
+div.form-horizontal:nth-child(4) > div:nth-child(10) > div:nth-child(3){
+    position: relative;
+    padding-left: 40px !important;
+}
+#policyDetail > div:nth-child(1){
+    position: relative;
+    padding-left: 35px !important;
+}
+div.checklist-item-container:nth-child(2){
+    position: relative;
+    padding-left: 35px !important;
+}
+div.form-horizontal:nth-child(11) > div:nth-child(2) > div:nth-child(2){
+    position: relative;
+    padding-left: 35px !important;
 }
