@@ -833,7 +833,7 @@ input[type="checkbox"] {
     font-style: italic;
 }
 
-#EditForm{
+div.form-horizontal:nth-child(4) > div:nth-child(9) > div:nth-child(1){
     position: relative;
     padding-left: 35px !important;
 }
@@ -868,3 +868,24 @@ div.form-horizontal:nth-child(11) > div:nth-child(2) > div:nth-child(2){
     position: relative;
     padding-left: 35px !important;
 }
+div.form-horizontal:nth-child(14) > div:nth-child(1) > div:nth-child(2) {
+    position: relative;
+    padding-left: 35px !important;
+
+}
+div.form-horizontal:nth-child(14) > div:nth-child(2) > div:nth-child(2){
+    position: relative;
+    padding-left: 35px !important;
+
+}
+div.form-horizontal:nth-child(4) > div:nth-child(10) > div:nth-child(2){
+    position: relative;
+    padding-left: 35px !important;
+
+}
+div.form-horizontal:nth-child(4) > div:nth-child(9) > div:nth-child(1){
+    position: relative;
+    padding-left: 35px !important;
+}
+
+

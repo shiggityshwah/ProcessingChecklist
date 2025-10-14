@@ -755,13 +755,15 @@
         // Pattern 1: /Policy/TransactionDetails/Edit/019579767?doc=open
         const editMatch = url.match(/\/Edit\/(\d+)/);
         if (editMatch) {
-            return editMatch[1];
+            // Remove leading zeros to normalize (e.g., "019617801" becomes "19617801")
+            return String(parseInt(editMatch[1], 10));
         }
 
         // Pattern 2: /Operations/WorkItem/BeginProcessing/09435836 (temporary ID)
         const beginMatch = url.match(/\/BeginProcessing\/(\d+)/);
         if (beginMatch) {
-            return `temp_${beginMatch[1]}`;
+            // Keep temp_ prefix but normalize the number part
+            return `temp_${String(parseInt(beginMatch[1], 10))}`;
         }
 
         return null;
@@ -769,8 +771,9 @@
 
     function extractTrackingIdFromUrl(url) {
         // Extract tracking ID from resolved URL pattern: /Policy/TransactionDetails/Edit/{trackingId}
+        // Normalizes by removing leading zeros for consistent comparison
         const match = url.match(/\/Edit\/(\d+)/);
-        return match ? match[1] : null;
+        return match ? String(parseInt(match[1], 10)) : null;
     }
 
     async function resolveRedirectUrl(url) {

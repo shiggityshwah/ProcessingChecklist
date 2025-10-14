@@ -91,6 +91,7 @@
 
     /**
      * Extract URL ID from current page URL
+     * Normalizes by removing leading zeros for consistent comparison
      */
     function extractUrlId() {
         const url = window.location.href;
@@ -98,7 +99,8 @@
         // Pattern 1: /Policy/TransactionDetails/Edit/019579767?doc=open
         const editMatch = url.match(/\/Edit\/(\d+)/);
         if (editMatch) {
-            return editMatch[1];
+            // Remove leading zeros to normalize (e.g., "019617801" becomes "19617801")
+            return String(parseInt(editMatch[1], 10));
         }
 
         return null;
