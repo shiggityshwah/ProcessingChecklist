@@ -44,7 +44,8 @@ body {
     margin-bottom: 16px !important;
 }
 
-.field-label {
+#processing-checklist-container .field-label,
+#next-field-display .field-label {
     display: block !important;
     font-size: 13px !important;
     font-weight: 600 !important;

@@ -343,13 +343,8 @@
                             // Detect and register form for tracking
                             if (window.trackingHelper && window.trackingHelper.detectAndRegisterForm) {
                                 window.trackingHelper.detectAndRegisterForm();
-                                // Initialize progress with correct total immediately after registration
-                                if (window.trackingHelper.updateProgress && storedState) {
-                                    const checkedCount = storedState.filter(item => item.processed).length;
-                                    const total = storedState.length;
-                                    const isReview = window.trackingHelper.isReviewMode || false;
-                                    window.trackingHelper.updateProgress(checkedCount, total, isReview);
-                                }
+                                // Note: updateProgress will be called from updateAndBroadcast when checkboxes change
+                                // Don't call it here as detectAndRegisterForm is async and formIsComplete flag may not be set yet
                             }
                         }, 500);
                     });
@@ -368,13 +363,8 @@
                     // Detect and register form for tracking
                     if (window.trackingHelper && window.trackingHelper.detectAndRegisterForm) {
                         window.trackingHelper.detectAndRegisterForm();
-                        // Initialize progress with correct total immediately after registration
-                        if (window.trackingHelper.updateProgress && storedState) {
-                            const checkedCount = storedState.filter(item => item.processed).length;
-                            const total = storedState.length;
-                            const isReview = window.trackingHelper.isReviewMode || false;
-                            window.trackingHelper.updateProgress(checkedCount, total, isReview);
-                        }
+                        // Note: updateProgress will be called from updateAndBroadcast when checkboxes change
+                        // Don't call it here as detectAndRegisterForm is async and formIsComplete flag may not be set yet
                     }
                 }, 500);
             }
@@ -1830,26 +1820,37 @@
                     window.trackingHelper.applyReviewStyling();
 
                     const keys = getStorageKeys();
+                    const urlId = window.trackingHelper.currentUrlId;
 
-                    // Copy existing checklistState to reviewState to preserve visual checked state
-                    ext.storage.local.get([keys.checklistState], (result) => {
-                        const existingState = result[keys.checklistState];
+                    // Load reviewedProgress from tracking history to initialize checkboxes
+                    ext.storage.local.get('tracking_history', (storageResult) => {
+                        const history = storageResult.tracking_history || [];
+                        const formInHistory = history.find(h => h.urlId === urlId);
 
-                        // If checklistState exists, copy it; otherwise start with all unchecked
-                        const reviewState = existingState
-                            ? [...existingState]
-                            : checklist.map(() => ({ processed: false, skipped: false }));
+                        let reviewState;
+
+                        if (formInHistory && formInHistory.reviewedProgress && formInHistory.reviewedProgress.current > 0) {
+                            // Load saved reviewed state from history
+                            // Convert progress object to checkbox state array
+                            // Since we don't store which specific items were reviewed, start fresh
+                            // The reviewedProgress tracks overall count, not individual items
+                            reviewState = checklist.map(() => ({ processed: false, skipped: false }));
+                            console.log(LOG_PREFIX, "Review mode activated - starting fresh (reviewedProgress: " +
+                                       formInHistory.reviewedProgress.current + "/" + formInHistory.reviewedProgress.total + ")");
+                        } else {
+                            // No previous review progress - start with all unchecked
+                            reviewState = checklist.map(() => ({ processed: false, skipped: false }));
+                            console.log(LOG_PREFIX, "Review mode activated - no previous review progress, starting fresh");
+                        }
 
                         ext.storage.local.set({ [keys.reviewState]: reviewState }, () => {
                             // Re-render UI with review state
                             ext.storage.local.get([keys.uiState, keys.viewMode], (result) => {
                                 updateAndBroadcast(reviewState, result[keys.uiState], result[keys.viewMode]);
-                                // Update visuals to show existing checked state
+                                // Update visuals to show review state (all unchecked initially)
                                 updateItemVisuals(reviewState);
                             });
                         });
-
-                        console.log(LOG_PREFIX, "Review mode activated - copied existing checked state");
                     });
                 }
                 break;

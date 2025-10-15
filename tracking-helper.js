@@ -15,6 +15,7 @@
     window.trackingHelper = {
         currentUrlId: null,
         isReviewMode: false,
+        formIsComplete: false,  // True if form is 100% complete or manually marked - prevents checkedProgress updates
         submissionNumber: null,
         updateMetadata: updateTrackingMetadata,
         getSavedProgress: null,  // Will be set by content.js to retrieve saved progress
@@ -356,11 +357,18 @@
                         tracking_history: history
                     });
 
+                    // New form is not complete
+                    window.trackingHelper.formIsComplete = false;
+
                     console.log(LOG_PREFIX, "Form detected and moved to history:", urlId);
                 } else if (existingHistoryIndex !== -1) {
-                    // Already in history - just update metadata if needed
-                    if (!history[existingHistoryIndex].movedToHistoryDate) {
-                        history[existingHistoryIndex].movedToHistoryDate = new Date().toISOString();
+                    // Already in history - check if completed to determine if we should update progress
+                    const existingForm = history[existingHistoryIndex];
+                    const isComplete = existingForm.manuallyMarkedComplete ||
+                                      (existingForm.checkedProgress && existingForm.checkedProgress.percentage === 100);
+
+                    if (!existingForm.movedToHistoryDate) {
+                        existingForm.movedToHistoryDate = new Date().toISOString();
                     }
 
                     // Update metadata on reconnect
@@ -368,12 +376,20 @@
                     const primaryInsured = extractPrimaryInsured();
                     const totalPremium = extractTotalTaxablePremium();
 
-                    if (policyNumber) history[existingHistoryIndex].policyNumber = policyNumber;
-                    if (primaryInsured) history[existingHistoryIndex].primaryNamedInsured = primaryInsured;
-                    if (totalPremium) history[existingHistoryIndex].totalTaxablePremium = totalPremium;
+                    if (policyNumber) existingForm.policyNumber = policyNumber;
+                    if (primaryInsured) existingForm.primaryNamedInsured = primaryInsured;
+                    if (totalPremium) existingForm.totalTaxablePremium = totalPremium;
 
                     ext.storage.local.set({ tracking_history: history });
-                    console.log(LOG_PREFIX, "Reconnected to existing history form:", urlId);
+
+                    if (isComplete) {
+                        console.log(LOG_PREFIX, "Reconnected to completed form - checkedProgress will remain frozen:", urlId);
+                        // Set flag to prevent updateProgress from modifying checkedProgress
+                        window.trackingHelper.formIsComplete = true;
+                    } else {
+                        console.log(LOG_PREFIX, "Reconnected to incomplete form - checkedProgress can be updated:", urlId);
+                        window.trackingHelper.formIsComplete = false;
+                    }
                 } else {
                     // Not in queue and not in history - this is a new form opened directly
                     // Add directly to history
@@ -415,6 +431,10 @@
                             completedDate: null
                         });
                         ext.storage.local.set({ tracking_history: history });
+
+                        // New form is not complete
+                        window.trackingHelper.formIsComplete = false;
+
                         console.log(LOG_PREFIX, "New form auto-added to history:", urlId, "Type:", typeCode);
                     }
                 }
@@ -437,26 +457,36 @@
 
             if (index !== -1) {
                 if (isReview) {
+                    // Always allow reviewedProgress updates
                     history[index].reviewedProgress = {
                         current: checkedCurrent,
                         total: checkedTotal,
                         percentage: percentage
                     };
                 } else {
-                    history[index].checkedProgress = {
-                        current: checkedCurrent,
-                        total: checkedTotal,
-                        percentage: percentage
-                    };
+                    // Only update checkedProgress if form is not already complete
+                    if (!window.trackingHelper.formIsComplete) {
+                        history[index].checkedProgress = {
+                            current: checkedCurrent,
+                            total: checkedTotal,
+                            percentage: percentage
+                        };
 
-                    // Update completed date if reaching 100%
-                    if (percentage === 100 && !history[index].completedDate) {
-                        history[index].completedDate = new Date().toISOString();
+                        // Update completed date if reaching 100%
+                        if (percentage === 100 && !history[index].completedDate) {
+                            history[index].completedDate = new Date().toISOString();
+                        }
+
+                        ext.storage.local.set({ tracking_history: history });
+                        console.log(LOG_PREFIX, `Progress updated: ${checkedCurrent}/${checkedTotal} (${percentage}%)`);
+                    } else {
+                        console.log(LOG_PREFIX, `Skipping checkedProgress update - form is complete (frozen at ${history[index].checkedProgress.percentage}%)`);
                     }
+                    return; // Exit early for non-review mode
                 }
 
                 ext.storage.local.set({ tracking_history: history });
-                console.log(LOG_PREFIX, `Progress updated: ${checkedCurrent}/${checkedTotal} (${percentage}%) - Review: ${isReview}`);
+                console.log(LOG_PREFIX, `Review progress updated: ${checkedCurrent}/${checkedTotal} (${percentage}%)`);
             }
         });
     };
