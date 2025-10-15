@@ -109,6 +109,17 @@
                 ext.tabs.create({ url });
             });
 
+            document.getElementById('calculator-button').addEventListener('click', () => {
+                dbg("Processing Calculator button clicked.");
+                const url = ext.runtime.getURL('calculator.html');
+                ext.windows.create({
+                    url: url,
+                    type: 'popup',
+                    width: 400,
+                    height: 700
+                });
+            });
+
             document.getElementById('reset-button').addEventListener('click', () => {
                 dbg("Reset button clicked.");
                 if (currentTabId) {
