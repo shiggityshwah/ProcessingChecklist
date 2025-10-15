@@ -231,6 +231,12 @@
             const tbody = document.querySelector('#available-forms-table tbody');
             tbody.innerHTML = '';
 
+            // Update title with count
+            const titleElement = document.getElementById('available-forms-title');
+            if (titleElement) {
+                titleElement.textContent = `Available Forms (${forms.length})`;
+            }
+
             if (forms.length === 0) {
                 tbody.innerHTML = '<tr class="empty-state"><td colspan="5">No forms in queue. Paste forms above to get started.</td></tr>';
                 document.getElementById('next-form-btn').disabled = true;
@@ -280,10 +286,21 @@
 
     // History view rendering
     function renderHistory() {
-        ext.storage.local.get('tracking_history', (result) => {
+        ext.storage.local.get(['tracking_history', 'tracking_availableForms'], (result) => {
             const history = result.tracking_history || [];
+            const availableForms = result.tracking_availableForms || [];
             const tbody = document.querySelector('#history-table tbody');
             tbody.innerHTML = '';
+
+            // Update Next Form button based on queue status
+            const nextFormBtn = document.getElementById('next-form-btn');
+            if (availableForms.length === 0) {
+                nextFormBtn.disabled = true;
+                nextFormBtn.title = 'No forms in queue';
+            } else {
+                nextFormBtn.disabled = false;
+                nextFormBtn.title = `Forms left: ${availableForms.length}`;
+            }
 
             // Apply filter
             const filteredHistory = history.filter(item => {

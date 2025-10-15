@@ -375,7 +375,7 @@
             transition: all 0.2s;
         }
 
-        .next-form-btn:hover {
+        .next-form-btn:hover:not(:disabled) {
             transform: translateY(-1px);
             box-shadow: 0 4px 8px rgba(40, 167, 69, 0.3);
         }
@@ -385,6 +385,7 @@
             color: #a0aec0;
             cursor: not-allowed;
             transform: none;
+            box-shadow: none;
         }
 
         /* Extended history button */
@@ -546,7 +547,7 @@
 
             <div class="section">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                    <h2 class="section-title" style="margin: 0;">Available Forms</h2>
+                    <h2 class="section-title" style="margin: 0;"><span id="available-forms-title">Available Forms</span></h2>
                     <button id="settings-btn" class="settings-button" title="Settings">⚙️</button>
                 </div>
                 <div id="resolution-progress" style="display: none; padding: 8px; background: #e3f2fd; border-left: 4px solid #2196f3; margin-bottom: 12px; font-size: 13px; color: #1565c0; font-weight: 500;">
