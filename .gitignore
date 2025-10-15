@@ -10,6 +10,7 @@ build/
 # Editor directories and system files
 .vscode/
 .idea/
+.claude/
 .DS_Store
 Thumbs.db
 
