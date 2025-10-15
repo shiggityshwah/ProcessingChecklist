@@ -317,6 +317,12 @@
                 return true;
             });
 
+            // Update title with count
+            const historyTitle = document.getElementById('history-title');
+            if (historyTitle) {
+                historyTitle.textContent = `History (${filteredHistory.length})`;
+            }
+
             if (filteredHistory.length === 0) {
                 tbody.innerHTML = '<tr class="empty-state"><td colspan="4">No forms match this filter.</td></tr>';
                 return;
