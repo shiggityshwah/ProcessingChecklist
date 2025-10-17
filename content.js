@@ -15,6 +15,7 @@
     let isResetting = false; // Flag to track reset in progress
     let highlightZones = new Map(); // Track created zone divs by index
     let zoneCheckboxes = new Map(); // Track zone checkboxes by index: Map<itemIndex, Array<{checkbox, zoneIndex}>>
+    let loggedWarnings = new Set(); // Track logged warnings to avoid spam
 
     const RECONNECT_DELAY = 2000; // 2 seconds
 
@@ -2095,6 +2096,178 @@
                 });
             }
         });
+
+        // Inject validation UI for alphabetizing rules
+        injectValidationUI();
+    }
+
+    /**
+     * Inject validation UI (warning icons and auto-fix buttons) for fields that need alphabetizing validation
+     */
+    function injectValidationUI() {
+        console.log(LOG_PREFIX, '[AlphabetizeUI] Starting validation UI injection');
+        console.log(LOG_PREFIX, '[AlphabetizeUI] AlphabetizeHelper available:', !!window.AlphabetizeHelper);
+        console.log(LOG_PREFIX, '[AlphabetizeUI] Config available:', !!config);
+
+        if (!window.AlphabetizeHelper || !config) {
+            console.warn(LOG_PREFIX, '[AlphabetizeUI] Cannot inject - missing helper or config');
+            return;
+        }
+
+        const validatableFields = window.AlphabetizeHelper.getValidatableFields(config);
+        console.log(LOG_PREFIX, '[AlphabetizeUI] Found validatable fields:', validatableFields);
+
+        validatableFields.forEach(fieldInfo => {
+            console.log(LOG_PREFIX, '[AlphabetizeUI] Processing field:', fieldInfo);
+            const inputElement = document.querySelector(fieldInfo.selector);
+            console.log(LOG_PREFIX, '[AlphabetizeUI] Input element found:', !!inputElement, fieldInfo.selector);
+
+            if (!inputElement) {
+                console.warn(LOG_PREFIX, '[AlphabetizeUI] Input element not found for selector:', fieldInfo.selector);
+                return;
+            }
+
+            // Check if validation UI already exists
+            const existingContainer = inputElement.parentElement.querySelector('.alphabetize-validation-container');
+            if (existingContainer) {
+                console.log(LOG_PREFIX, '[AlphabetizeUI] Validation UI already exists for:', fieldInfo.selector);
+                return;
+            }
+
+            // Create validation container
+            const validationContainer = document.createElement('div');
+            validationContainer.className = 'alphabetize-validation-container';
+            validationContainer.style.cssText = `
+                position: absolute;
+                right: 0px;
+                top: 50%;
+                transform: translateY(-50%);
+                display: none;
+                align-items: center;
+                gap: 5px;
+                z-index: 1000;
+            `;
+
+            // Create warning icon
+            const warningIcon = document.createElement('span');
+            warningIcon.className = 'alphabetize-warning-icon';
+            warningIcon.textContent = '⚠';
+            warningIcon.style.cssText = `
+                color: #ffc107;
+                font-size: 18px;
+                cursor: help;
+            `;
+            warningIcon.title = 'This field can be improved';
+
+            // Create auto-fix button
+            const fixButton = document.createElement('button');
+            fixButton.className = 'alphabetize-fix-button';
+            fixButton.textContent = '🛠';
+            fixButton.style.cssText = `
+                background: #667eea;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                padding: 4px 8px;
+                cursor: pointer;
+                font-size: 14px;
+                line-height: 1;
+                transition: all 0.2s;
+            `;
+            fixButton.title = 'Click to auto-fix';
+
+            // Hover effects
+            fixButton.addEventListener('mouseenter', () => {
+                fixButton.style.background = '#5568d3';
+                fixButton.style.transform = 'scale(1.05)';
+            });
+            fixButton.addEventListener('mouseleave', () => {
+                fixButton.style.background = '#667eea';
+                fixButton.style.transform = 'scale(1)';
+            });
+
+            validationContainer.appendChild(warningIcon);
+            validationContainer.appendChild(fixButton);
+
+            // Make input's parent relative for absolute positioning
+            const inputParent = inputElement.parentElement;
+            if (window.getComputedStyle(inputParent).position === 'static') {
+                inputParent.style.position = 'relative';
+            }
+            inputParent.appendChild(validationContainer);
+
+            // Validation function
+            const validateField = () => {
+                const value = inputElement.value;
+                console.log(LOG_PREFIX, '[AlphabetizeUI] Validating field:', fieldInfo.selector, 'value:', value);
+                let result;
+
+                if (fieldInfo.type === 'policyNumber') {
+                    result = window.AlphabetizeHelper.validatePolicyNumber(value);
+                } else if (fieldInfo.type === 'namedInsured') {
+                    result = window.AlphabetizeHelper.validateNamedInsured(value);
+                }
+
+                console.log(LOG_PREFIX, '[AlphabetizeUI] Validation result:', result);
+
+                if (!result.isValid && value.trim() !== '') {
+                    console.log(LOG_PREFIX, '[AlphabetizeUI] Showing validation UI for:', fieldInfo.selector);
+                    validationContainer.style.display = 'flex';
+                    warningIcon.title = result.message || 'This field can be improved';
+                    fixButton.title = `Click to auto-fix: "${result.fixedValue}"`;
+                } else {
+                    console.log(LOG_PREFIX, '[AlphabetizeUI] Hiding validation UI for:', fieldInfo.selector);
+                    validationContainer.style.display = 'none';
+                }
+            };
+
+            console.log(LOG_PREFIX, '[AlphabetizeUI] Validation UI created for:', fieldInfo.selector);
+
+            // Auto-fix handler
+            fixButton.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+
+                const value = inputElement.value;
+                let result;
+
+                if (fieldInfo.type === 'policyNumber') {
+                    result = window.AlphabetizeHelper.validatePolicyNumber(value);
+                } else if (fieldInfo.type === 'namedInsured') {
+                    result = window.AlphabetizeHelper.validateNamedInsured(value);
+                }
+
+                if (!result.isValid && result.fixedValue) {
+                    // Apply the fix
+                    const oldValue = inputElement.value;
+                    inputElement.value = result.fixedValue;
+
+                    // Trigger change event to update state
+                    inputElement.dispatchEvent(new Event('input', { bubbles: true }));
+                    inputElement.dispatchEvent(new Event('change', { bubbles: true }));
+
+                    // Briefly highlight the field
+                    inputElement.style.transition = 'background-color 0.3s ease';
+                    inputElement.style.backgroundColor = '#d4edda';
+                    setTimeout(() => {
+                        inputElement.style.backgroundColor = '';
+                    }, 1000);
+
+                    // Log the correction
+                    console.log(LOG_PREFIX, `Alphabetizing rule applied: "${oldValue}" → "${result.fixedValue}"`);
+
+                    // Re-validate to hide the UI
+                    validateField();
+                }
+            });
+
+            // Attach validation on input/change
+            inputElement.addEventListener('input', validateField);
+            inputElement.addEventListener('change', validateField);
+
+            // Initial validation
+            validateField();
+        });
     }
 
     function getElementForStep(index) {
@@ -2238,7 +2411,8 @@
         isProgrammaticUpdate = true;
         const isReviewMode = window.trackingHelper && window.trackingHelper.isReviewMode;
 
-        console.log(LOG_PREFIX, `updateItemVisuals called, isReviewMode=${isReviewMode}, state=`, state);
+        // Commented out to reduce console spam
+        // console.log(LOG_PREFIX, `updateItemVisuals called, isReviewMode=${isReviewMode}, state=`, state);
 
         state.forEach((itemState, index) => {
             const step = checklist[index];
@@ -2491,10 +2665,15 @@
             const element = document.querySelector(edgeConfig.selector);
 
             if (!element) {
-                console.warn(LOG_PREFIX,
-                    `Item "${checklist[itemIndex].name}" (index ${itemIndex}), zone ${zoneIndex}: ` +
-                    `Element not found for ${edgeName} edge (selector: "${edgeConfig.selector}")`
-                );
+                // Only log each unique warning once to avoid spam
+                const warningKey = `zone-element-not-found:${itemIndex}:${zoneIndex}:${edgeName}:${edgeConfig.selector}`;
+                if (!loggedWarnings.has(warningKey)) {
+                    loggedWarnings.add(warningKey);
+                    console.warn(LOG_PREFIX,
+                        `Item "${checklist[itemIndex].name}" (index ${itemIndex}), zone ${zoneIndex}: ` +
+                        `Element not found for ${edgeName} edge (selector: "${edgeConfig.selector}")`
+                    );
+                }
                 return null;
             }
 

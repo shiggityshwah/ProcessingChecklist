@@ -20,7 +20,7 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["config-loader-simple.js", "kendo-widget-utils.js", "tracking-helper.js", "content.js"],
+      "js": ["config-loader-simple.js", "kendo-widget-utils.js", "alphabetize-helper.js", "tracking-helper.js", "content.js"],
       "css": ["style.css"],
       "run_at": "document_end"
     }

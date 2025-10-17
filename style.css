@@ -889,4 +889,56 @@ div.form-horizontal:nth-child(4) > div:nth-child(9) > div:nth-child(1){
     padding-left: 35px !important;
 }
 
+/* Alphabetize Validation UI Styles */
+.alphabetize-validation-container {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: none;
+    align-items: center;
+    gap: 5px;
+    z-index: 1000;
+    animation: fadeIn 0.2s ease-in;
+}
+
+.alphabetize-warning-icon {
+    color: #ffc107;
+    font-size: 18px;
+    cursor: help;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.7;
+    }
+}
+
+.alphabetize-fix-button {
+    background: #667eea;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 4px 8px;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    transition: all 0.2s;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.alphabetize-fix-button:hover {
+    background: #5568d3;
+    transform: scale(1.05);
+    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.15);
+}
+
+.alphabetize-fix-button:active {
+    transform: scale(0.98);
+}
+
 
