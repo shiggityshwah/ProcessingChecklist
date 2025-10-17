@@ -2102,6 +2102,16 @@
     }
 
     /**
+     * Convert a CSS selector to a valid ID suffix
+     * Example: "#PrimaryInsuredName" -> "PrimaryInsuredName"
+     * Example: "#Policy-Number_input" -> "Policy-Number_input"
+     */
+    function selectorToId(selector) {
+        // Remove leading # and . and replace special chars with hyphens
+        return selector.replace(/^[#.]/, '').replace(/[^\w-]/g, '-');
+    }
+
+    /**
      * Inject validation UI (warning icons and auto-fix buttons) for fields that need alphabetizing validation
      */
     function injectValidationUI() {
@@ -2127,16 +2137,23 @@
                 return;
             }
 
+            // Generate unique ID from selector
+            const fieldId = selectorToId(fieldInfo.selector);
+            const containerId = `alphabetize-validation-${fieldId}`;
+
             // Check if validation UI already exists
-            const existingContainer = inputElement.parentElement.querySelector('.alphabetize-validation-container');
+            const existingContainer = document.getElementById(containerId);
             if (existingContainer) {
                 console.log(LOG_PREFIX, '[AlphabetizeUI] Validation UI already exists for:', fieldInfo.selector);
                 return;
             }
 
-            // Create validation container
+            // Create validation container with unique ID
             const validationContainer = document.createElement('div');
+            validationContainer.id = containerId;
             validationContainer.className = 'alphabetize-validation-container';
+            validationContainer.setAttribute('data-field-selector', fieldInfo.selector);
+            validationContainer.setAttribute('data-field-type', fieldInfo.type);
             validationContainer.style.cssText = `
                 position: absolute;
                 right: 0px;
@@ -2315,6 +2332,19 @@
                 checkbox.type = 'checkbox';
                 checkbox.id = `checklist-confirm-cb-${index}`;
                 checkbox.classList.add('processing-checklist-checkbox');
+
+                // Add unique ID based on field selector for CSS targeting
+                const selector = step.selector || (step.fields && step.fields.length > 0 ? step.fields[0].selector : null);
+                if (selector) {
+                    const fieldId = selectorToId(selector);
+                    checkbox.setAttribute('data-field-id', fieldId);
+                    checkbox.setAttribute('data-field-selector', selector);
+                    // Add a second ID for direct CSS targeting: checkbox-FieldName
+                    checkbox.classList.add(`checkbox-${fieldId}`);
+                }
+                checkbox.setAttribute('data-item-index', index);
+                checkbox.setAttribute('data-item-name', step.name);
+
                 if (step.name === "NAICS Code") {
                     checkbox.classList.add("naics-checkbox");
                 }
@@ -2510,12 +2540,25 @@
      */
     function createZoneCheckbox(itemIndex, zoneIndex, zoneRect, itemState) {
         try {
+            const step = checklist[itemIndex];
             const checkbox = document.createElement('input');
             checkbox.type = 'checkbox';
             checkbox.className = 'zone-checkbox';
             checkbox.setAttribute('data-zone-checkbox', 'true');
             checkbox.setAttribute('data-item-index', itemIndex);
             checkbox.setAttribute('data-zone-index', zoneIndex);
+            checkbox.setAttribute('data-item-name', step.name);
+
+            // Add unique ID based on field selector for CSS targeting
+            const selector = step.selector || (step.fields && step.fields.length > 0 ? step.fields[0].selector : null);
+            if (selector) {
+                const fieldId = selectorToId(selector);
+                checkbox.setAttribute('data-field-id', fieldId);
+                checkbox.setAttribute('data-field-selector', selector);
+                // Add a class for direct CSS targeting: zone-checkbox-FieldName
+                checkbox.classList.add(`zone-checkbox-${fieldId}`);
+            }
+
             checkbox.checked = itemState.processed;
 
             // Get checkbox dimensions (using known size from CSS)

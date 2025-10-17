@@ -941,4 +941,57 @@ div.form-horizontal:nth-child(4) > div:nth-child(9) > div:nth-child(1){
     transform: scale(0.98);
 }
 
+/* ============================================================================
+   Field-Specific Customization Examples
+
+   The validation containers and checkboxes have unique IDs and classes based
+   on their field selectors. Use these to customize specific fields.
+   See CSS_SELECTORS.md for complete documentation.
+   ============================================================================ */
+
+/* Example: Customize Secondary Insured validation container position */
+/*
+#alphabetize-validation-SecondaryInsuredName {
+    right: 50px;
+    top: 60%;
+}
+*/
+
+/* Example: Customize Primary Insured checkbox */
+/*
+.checkbox-PrimaryInsuredName {
+    left: 10px;
+    width: 20px;
+    height: 20px;
+    border: 2px solid #667eea;
+}
+*/
+
+/* Example: Target all zone checkboxes for a specific field */
+/*
+.zone-checkbox-PrimaryInsuredName {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+}
+*/
+
+/* Example: Style validation UI differently for policy number vs named insured */
+/*
+.alphabetize-validation-container[data-field-type="policyNumber"] .alphabetize-fix-button {
+    background: #28a745;
+}
+
+.alphabetize-validation-container[data-field-type="namedInsured"] .alphabetize-fix-button {
+    background: #667eea;
+}
+*/
+
+/* Example: Highlight checkboxes for specific items by name */
+/*
+.processing-checklist-checkbox[data-item-name="Policy Number"] {
+    border: 2px solid red;
+}
+*/
+
 
