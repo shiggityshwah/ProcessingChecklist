@@ -28,11 +28,52 @@
         }
 
         h1 {
-            margin: 0 0 20px 0;
+            margin: 0 0 16px 0;
             font-size: 20px;
             font-weight: 600;
             color: #333;
             text-align: center;
+        }
+
+        .mode-tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #e9ecef;
+            padding-bottom: 8px;
+        }
+
+        .mode-tab {
+            flex: 1;
+            padding: 10px 16px;
+            background: transparent;
+            border: none;
+            border-bottom: 3px solid transparent;
+            color: #718096;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: inherit;
+        }
+
+        .mode-tab:hover {
+            color: #667eea;
+            background: #f7fafc;
+            border-radius: 6px 6px 0 0;
+        }
+
+        .mode-tab.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+        }
+
+        .mode-content {
+            display: none;
+        }
+
+        .mode-content.active {
+            display: block;
         }
 
         .section {
@@ -198,26 +239,143 @@
             font-size: 14px;
             padding: 20px 0;
         }
+
+        .hereon-status {
+            margin-top: 12px;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .hereon-status.valid {
+            background: #d4edda;
+            color: #155724;
+            border: 2px solid #c3e6cb;
+        }
+
+        .hereon-status.invalid {
+            background: #fff3cd;
+            color: #856404;
+            border: 2px solid #ffeaa7;
+        }
+
+        .hereon-status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 2px solid #bee5eb;
+        }
+
+        .hereon-status .checkmark {
+            color: #28a745;
+            font-size: 16px;
+            margin-right: 4px;
+        }
+
+        .hereon-status .multiplier {
+            display: block;
+            margin-top: 4px;
+            font-size: 13px;
+            opacity: 0.9;
+        }
+
+        .results-list.grayed-out {
+            opacity: 0.5;
+            pointer-events: none;
+        }
+
+        input[type="date"] {
+            width: 100%;
+            padding: 10px 12px;
+            border: 2px solid #cbd5e0;
+            border-radius: 8px;
+            font-size: 14px;
+            font-family: inherit;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        input[type="date"]:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Processing Calculator</h1>
+        <h1 id="main-title">Processing Calculator</h1>
 
-        <div class="section">
-            <div class="section-title">Input Values</div>
-            <div id="input-rows"></div>
-            <button class="add-btn" id="add-row-btn">+ Add Row</button>
+        <!-- Mode Tabs -->
+        <div class="mode-tabs">
+            <button class="mode-tab active" data-mode="coverage">Coverage</button>
+            <button class="mode-tab" data-mode="hereon">Hereon</button>
+            <button class="mode-tab" data-mode="date">Date</button>
         </div>
 
-        <div class="section">
-            <div class="section-title">Calculate Distribution</div>
-            <div class="value-input-container">
-                <label for="value-input">Value:</label>
-                <input type="text" id="value-input" placeholder="Enter amount (e.g., $200.00)">
+        <!-- Coverage Mode -->
+        <div id="coverage-mode" class="mode-content active">
+            <div class="section">
+                <div class="section-title">Input Values</div>
+                <div id="input-rows"></div>
+                <button class="add-btn" id="add-row-btn">+ Add Row</button>
             </div>
-            <div class="results-list" id="results-list">
-                <div class="empty-results">Enter a value above to see results</div>
+
+            <div class="section">
+                <div class="section-title">Calculate Distribution</div>
+                <div class="value-input-container">
+                    <label for="value-input">Value:</label>
+                    <input type="text" id="value-input" placeholder="Enter amount (e.g., $200.00)">
+                </div>
+                <div class="results-list" id="results-list">
+                    <div class="empty-results">Enter a value above to see results</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Hereon Mode -->
+        <div id="hereon-mode" class="mode-content">
+            <div class="section">
+                <div class="section-title">Input Percentages</div>
+                <div id="hereon-input-rows"></div>
+                <button class="add-btn" id="hereon-add-row-btn">+ Add Row</button>
+            </div>
+
+            <div class="section">
+                <div class="section-title">Target Settings</div>
+                <div class="value-input-container">
+                    <label for="hereon-percentage-input">Hereon Percentage (optional):</label>
+                    <input type="text" id="hereon-percentage-input" placeholder="e.g., 20">
+                </div>
+                <div id="hereon-status" class="hereon-status"></div>
+            </div>
+
+            <div class="section">
+                <div class="section-title">Results</div>
+                <div class="results-list" id="hereon-results-list">
+                    <div class="empty-results">Enter percentages above to see results</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Date Mode -->
+        <div id="date-mode" class="mode-content">
+            <div class="section">
+                <div class="section-title">Date Range</div>
+                <div class="value-input-container">
+                    <label for="date-start-input">Start Date:</label>
+                    <input type="date" id="date-start-input">
+                </div>
+                <div class="value-input-container">
+                    <label for="date-end-input">End Date:</label>
+                    <input type="date" id="date-end-input">
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="section-title">Results</div>
+                <div class="results-list" id="date-results-list">
+                    <div class="empty-results">Select two dates to see results</div>
+                </div>
             </div>
         </div>
     </div>

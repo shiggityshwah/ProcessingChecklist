@@ -116,7 +116,7 @@
                     url: url,
                     type: 'popup',
                     width: 400,
-                    height: 700
+                    height: 705
                 });
             });
 

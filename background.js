@@ -270,3 +270,126 @@ ext.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
         });
     });
 });
+
+// Handle runtime messages (for attendance page parsing)
+ext.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.action === 'parseAttendancePage') {
+        parseAttendancePage(request.url).then((result) => {
+            sendResponse(result);
+        }).catch((error) => {
+            sendResponse({ success: false, error: error.message });
+        });
+        return true; // Keep channel open for async response
+    }
+});
+
+/**
+ * Parse attendance page to extract time entries
+ */
+async function parseAttendancePage(url) {
+    try {
+        // Open the attendance page in a hidden tab
+        const tab = await ext.tabs.create({ url: url, active: false });
+
+        // Wait for the page to load
+        await new Promise((resolve) => {
+            const listener = (tabId, changeInfo) => {
+                if (tabId === tab.id && changeInfo.status === 'complete') {
+                    ext.tabs.onUpdated.removeListener(listener);
+                    resolve();
+                }
+            };
+            ext.tabs.onUpdated.addListener(listener);
+
+            // Timeout after 10 seconds
+            setTimeout(() => {
+                ext.tabs.onUpdated.removeListener(listener);
+                resolve();
+            }, 10000);
+        });
+
+        // Execute script to parse the table
+        const results = await ext.tabs.executeScript(tab.id, {
+            code: `
+                (function() {
+                    try {
+                        const table = document.getElementById('summary-table');
+                        if (!table) {
+                            return { error: 'Attendance table not found on page' };
+                        }
+
+                        const tbody = table.querySelector('tbody');
+                        if (!tbody) {
+                            return { error: 'Table body not found' };
+                        }
+
+                        const rows = Array.from(tbody.querySelectorAll('tr'));
+                        const timeEntries = {};
+
+                        rows.forEach(row => {
+                            const cells = row.querySelectorAll('td');
+                            if (cells.length < 8) return; // Skip invalid rows
+
+                            // Extract data from cells
+                            // Based on attendance.html structure:
+                            // 0: (empty/checkbox), 1: Date, 2: Start Time, 3: End Time,
+                            // 4: Lunch, 5: Total Time, 6: Non-Prod, 7: Prod Time
+
+                            const dateCell = cells[1]?.textContent?.trim();
+                            const totalTimeCell = cells[5]?.textContent?.trim();
+                            const lunchCell = cells[4]?.textContent?.trim();
+                            const nonProdCell = cells[6]?.textContent?.trim();
+                            const prodTimeCell = cells[7]?.textContent?.trim();
+
+                            if (!dateCell) return;
+
+                            // Parse date (format: M/D/YYYY or MM/DD/YYYY)
+                            const dateParts = dateCell.split('/');
+                            if (dateParts.length !== 3) return;
+
+                            const month = dateParts[0].padStart(2, '0');
+                            const day = dateParts[1].padStart(2, '0');
+                            const year = dateParts[2];
+                            const dateStr = year + '-' + month + '-' + day;
+
+                            // Parse hours (should be in format like "7.50" or "7.5")
+                            const totalHours = parseFloat(totalTimeCell) || 0;
+                            const lunch = parseFloat(lunchCell) || 0;
+                            const nonProd = parseFloat(nonProdCell) || 0;
+                            const prodHours = parseFloat(prodTimeCell) || 0;
+
+                            timeEntries[dateStr] = {
+                                totalHours: totalHours,
+                                lunch: lunch,
+                                nonProd: nonProd,
+                                prodHours: prodHours
+                            };
+                        });
+
+                        return { success: true, timeEntries: timeEntries };
+                    } catch (error) {
+                        return { error: 'Failed to parse table: ' + error.message };
+                    }
+                })();
+            `
+        });
+
+        // Close the tab
+        await ext.tabs.remove(tab.id);
+
+        // Return the parsed data
+        const result = results && results[0];
+        if (result?.error) {
+            return { success: false, error: result.error };
+        }
+
+        if (result?.success && result?.timeEntries) {
+            return { success: true, timeEntries: result.timeEntries };
+        }
+
+        return { success: false, error: 'Unknown parsing error' };
+
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+}

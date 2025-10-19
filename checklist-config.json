@@ -32,7 +32,7 @@
           "top": {"selector": "div.row:nth-child(12)", "edge": "top", "offset": -4},
           "bottom": {"selector": "div.row:nth-child(13)", "edge": "bottom", "offset": 3},
           "left": {"selector": "#policyDetail", "edge": "left", "offset": 0},
-          "right": {"selector": "#policyDetail", "edge": "right", "offset": -2},
+          "right": {"selector": "#policyDetail", "edge": "right", "offset": -7},
           "show_checkbox": true
         }
       ]
@@ -45,7 +45,7 @@
           "top": {"selector": "div.details-row:nth-child(11) > div:nth-child(2)", "edge": "top", "offset": -5},
           "bottom": {"selector": "div.row:nth-child(12)", "edge": "top", "offset": -5},
           "left": {"selector": "#policyDetail", "edge": "left", "offset": 0},
-          "right": {"selector": "#policyDetail", "edge": "right", "offset": -2},
+          "right": {"selector": "#policyDetail", "edge": "right", "offset": -7},
           "show_checkbox": true
         }
       ],
@@ -70,7 +70,7 @@
           "top": {"selector": "#PrimaryInsuredName", "edge": "top", "offset": -5},
           "bottom": {"selector": "#InsuredDbaName", "edge": "bottom", "offset": 5},
           "left": {"selector": "#policyDetail", "edge": "left", "offset": 0},
-          "right": {"selector": "#PrimaryInsuredName", "edge": "right", "offset": 15},
+          "right": {"selector": "#InsuredDbaName", "edge": "right", "offset": 9},
           "show_checkbox": true
         }
       ],
@@ -102,7 +102,7 @@
           "top": {"selector": "div.form-horizontal:nth-child(14) > div:nth-child(1) > div:nth-child(2)", "edge": "top", "offset": -5},
           "bottom": {"selector": ".row:has(#Address1)", "edge": "top", "offset": -5},
           "left": {"selector": "div.form-horizontal:nth-child(14) > div:nth-child(1) > div:nth-child(2)", "edge": "left", "offset": 1},
-          "right": {"selector": "#policyDetail", "edge": "right", "offset": -2},
+          "right": {"selector": "#policyDetail", "edge": "right", "offset": -7},
           "show_checkbox": true
         }
       ],
@@ -134,7 +134,7 @@
           "top": {"selector": ".col-md-6:has(#Address1", "edge": "top", "offset": -4},
           "bottom": {"selector": ".col-md-6:has(#Address1", "edge": "bottom", "offset": 0},
           "left": {"selector": "#policyDetail", "edge": "left", "offset": 0},
-          "right": {"selector": ".col-md-6:has(#Address1", "edge": "right", "offset": 0},
+          "right": {"selector": ".col-md-6:has(#Address1", "edge": "right", "offset": -6},
           "show_checkbox": true
         }
       ],
@@ -181,7 +181,7 @@
           "top": {"selector": ".col-md-6:has(#RiskAddress1", "edge": "top", "offset": -4},
           "bottom": {"selector": ".col-md-6:has(#RiskAddress1", "edge": "bottom", "offset": -4},
           "left": {"selector": ".col-md-6:has(#RiskAddress1", "edge": "left", "offset": 1},
-          "right": {"selector": "#policyDetail", "edge": "right", "offset": -2},
+          "right": {"selector": "#policyDetail", "edge": "right", "offset": -7},
           "show_checkbox": true
         }
       ],
@@ -235,10 +235,10 @@
       "type": "group",
       "highlight_zones": [
         {
-          "top": {"selector": ".row:has(#needsSpecialHandlingWrap", "edge": "top", "offset": -3},
+          "top": {"selector": ".row:has(#needsSpecialHandlingWrap", "edge": "top", "offset": -3.5},
           "bottom": {"selector": ".row:has(#needsSpecialHandlingWrap", "edge": "bottom", "offset": -4},
           "left": {"selector": "#policyDetail", "edge": "left", "offset": 0},
-          "right": {"selector": "#policyDetail", "edge": "right", "offset": -2},
+          "right": {"selector": "#policyDetail", "edge": "right", "offset": -7},
           "show_checkbox": true
         }
       ],
@@ -265,7 +265,7 @@
           "top": {"selector": ".col-md-4:has(#TransactionTypeId", "edge": "top", "offset": -9},
           "bottom": {"selector": ".col-md-4:has(#TransactionTypeId", "edge": "bottom", "offset": -2},
           "left": {"selector": "#transaction-edit-panel", "edge": "left", "offset": 1},
-          "right": {"selector": "div.form-horizontal:nth-child(4) > div:nth-child(9) > div:nth-child(1)", "edge": "right", "offset": -10},
+          "right": {"selector": "div.form-horizontal:nth-child(4) > div:nth-child(9) > div:nth-child(1)", "edge": "right", "offset": -15},
           "show_checkbox": true
         }
       ],
@@ -285,7 +285,7 @@
           "top": {"selector": ".col-md-3:has(#ExplanationProvided", "edge": "top", "offset": -1},
           "bottom": {"selector": ".col-md-3:has(#ExplanationProvided", "edge": "bottom", "offset": 2},
           "left": {"selector": ".col-md-3:has(#ExplanationProvided", "edge": "left", "offset": -9},
-          "right": {"selector": ".col-md-3:has(#ExplanationProvided", "edge": "right", "offset": -1},
+          "right": {"selector": ".col-md-3:has(#ExplanationProvided", "edge": "right", "offset": -6},
           "show_checkbox": true
         }
       ],
@@ -313,7 +313,7 @@
           "top": {"selector": ".col-md-5:has(#SL1Included", "edge": "top", "offset": -1},
           "bottom": {"selector": ".col-md-5:has(#SL1Included", "edge": "bottom", "offset": 0},
           "left": {"selector": ".col-md-5:has(#SL1Included", "edge": "left", "offset": 0},
-          "right": {"selector": "#transaction-edit-panel", "edge": "right", "offset": -3},
+          "right": {"selector": "#transaction-edit-panel", "edge": "right", "offset": -7},
           "show_checkbox": true
         }
       ],
@@ -357,10 +357,10 @@
       "type": "group",
       "highlight_zones": [
         {
-          "top": {"selector": ".transaction-edit:has(#transactionEffectiveDate", "edge": "top", "offset": 0},
+          "top": {"selector": ".transaction-edit:has(#transactionEffectiveDate", "edge": "top", "offset": 0.5},
           "bottom": {"selector": ".col-md-5:has(#transactionExpirationDate", "edge": "bottom", "offset": 0},
           "left": {"selector": ".transaction-edit:has(#transactionEffectiveDate", "edge": "left", "offset": 1},
-          "right": {"selector": ".col-md-5:has(#transactionExpirationDate", "edge": "right", "offset": -1},
+          "right": {"selector": ".col-md-5:has(#transactionExpirationDate", "edge": "right", "offset": -6},
           "show_checkbox": true
         }
       ],
@@ -389,10 +389,10 @@
       "type": "group",
       "highlight_zones": [
         {
-          "top": {"selector": ".transaction-edit:has(#transactionEffectiveDate", "edge": "top", "offset": 0},
+          "top": {"selector": ".transaction-edit:has(#transactionEffectiveDate", "edge": "top", "offset": 0.5},
           "bottom": {"selector": ".col-md-4:has(#transactionInsurerInvoiceDate", "edge": "bottom", "offset": 0},
           "left": {"selector": ".col-md-4:has(#transactionInsurerInvoiceDate", "edge": "left", "offset": 0},
-          "right": {"selector": ".transaction-edit:has(#transactionEffectiveDate", "edge": "right", "offset": -3},
+          "right": {"selector": ".transaction-edit:has(#transactionEffectiveDate", "edge": "right", "offset": -7},
           "show_checkbox": true
         }
       ],
@@ -412,7 +412,7 @@
           "top": {"selector": ".tab-content-row", "edge": "top", "offset": 0},
           "bottom": {"selector": "#coveragesTable", "edge": "top", "offset": -12},
           "left": {"selector": ".transaction-edit:has(#transactionEffectiveDate", "edge": "left", "offset": 1},
-          "right": {"selector": ".transaction-edit:has(#transactionEffectiveDate", "edge": "right", "offset": -3},
+          "right": {"selector": ".transaction-edit:has(#transactionEffectiveDate", "edge": "right", "offset": -7},
           "show_checkbox": true
         }
       ],
@@ -474,7 +474,7 @@
           "top": {"selector": "#coveragesTable", "edge": "top", "offset": -11},
           "bottom": {"selector": "#coverages > div:nth-child(2)", "edge": "bottom", "offset": 0},
           "left": {"selector": ".transaction-edit:has(#transactionEffectiveDate", "edge": "left", "offset": 1},
-          "right": {"selector": ".transaction-edit:has(#transactionEffectiveDate", "edge": "right", "offset": -3},
+          "right": {"selector": ".transaction-edit:has(#transactionEffectiveDate", "edge": "right", "offset": -7},
           "show_checkbox": true
         }
       ],
@@ -490,7 +490,7 @@
           "top": {"selector": "#reasoncontainer > div:nth-child(1)", "edge": "top", "offset": -9},
           "bottom": {"selector": "#reasoncontainer > div:nth-child(1) > div:nth-child(1)", "edge": "bottom", "offset": 0},
           "left": {"selector": ".transaction-edit:has(#transactionEffectiveDate", "edge": "left", "offset": 1},
-          "right": {"selector": "#reasoncontainer > div:nth-child(1) > div:nth-child(1)", "edge": "right", "offset": 0},
+          "right": {"selector": "#reasoncontainer > div:nth-child(1) > div:nth-child(1)", "edge": "right", "offset": -4},
           "show_checkbox": true
         }
       ],
@@ -511,8 +511,8 @@
         {
           "top": {"selector": "div.col-md-7:nth-child(2)", "edge": "top", "offset": -9},
           "bottom": {"selector": ".tab-content-row > div:nth-child(1) > div:nth-child(9)", "edge": "bottom", "offset": 0},
-          "left": {"selector": "div.col-md-7:nth-child(2)", "edge": "left", "offset": -14},
-          "right": {"selector": ".transaction-edit:has(#transactionEffectiveDate", "edge": "right", "offset": -3},
+          "left": {"selector": "div.col-md-7:nth-child(2)", "edge": "left", "offset": -13},
+          "right": {"selector": ".transaction-edit:has(#transactionEffectiveDate", "edge": "right", "offset": -7},
           "show_checkbox": true
         }
       ],

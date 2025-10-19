@@ -332,6 +332,7 @@
                     storedState = restoredState || checklist.map(() => ({ processed: false, skipped: false }));
                     ext.storage.local.set({ [keys.checklistState]: storedState }, () => {
                         injectConfirmationCheckboxes(storedState);
+                        injectMarkCheckedButton();
                         attachListenersToPageElements();
                         initializeTableWatchers();
                         updateAndBroadcast(storedState, uiState, viewMode);
@@ -352,6 +353,7 @@
                 });
             } else {
                 injectConfirmationCheckboxes(storedState);
+                injectMarkCheckedButton();
                 attachListenersToPageElements();
                 initializeTableWatchers();
                 updateAndBroadcast(storedState, uiState, viewMode);
@@ -3037,6 +3039,112 @@
             }
         }
     });
+
+    /**
+     * Inject "Mark Checked" button next to Mark for Review or Register button
+     */
+    function injectMarkCheckedButton() {
+        // Check if button already exists
+        if (document.getElementById('btnMarkChecked')) {
+            return;
+        }
+
+        // Try to find either Mark for Review or Register button
+        // List of possible button IDs to search for
+        const possibleButtonIds = ['btnMarkForReview', 'btnRegister'];
+        let targetButton = null;
+        let buttonName = '';
+
+        for (const buttonId of possibleButtonIds) {
+            targetButton = document.getElementById(buttonId);
+            if (targetButton) {
+                buttonName = buttonId === 'btnMarkForReview' ? 'Mark for Review' : 'Register';
+                console.log(LOG_PREFIX, `Found ${buttonName} button (${buttonId})`);
+                break;
+            }
+        }
+
+        // If no button found by ID, try finding by form and button attributes
+        if (!targetButton) {
+            const form = document.getElementById('ProcessActionForm');
+            if (form) {
+                // Look for primary button in the form's right-aligned column
+                const rightColumn = form.querySelector('.col-md-4.text-right');
+                if (rightColumn) {
+                    targetButton = rightColumn.querySelector('button.btn.btn-primary[type="submit"]');
+                    if (targetButton) {
+                        buttonName = targetButton.textContent.trim();
+                        console.log(LOG_PREFIX, `Found form action button: "${buttonName}"`);
+                    }
+                }
+            }
+        }
+
+        if (!targetButton) {
+            console.log(LOG_PREFIX, "No suitable target button found (tried: btnMarkForReview, btnRegister, and form primary button) - cannot inject Mark Checked button");
+            return;
+        }
+
+        // Get the parent container (the <span> that wraps the button, or the button itself)
+        let insertionPoint = targetButton.closest('span') || targetButton;
+
+        // Create the Mark Checked button
+        const markCheckedBtn = document.createElement('button');
+        markCheckedBtn.type = 'button';
+        markCheckedBtn.id = 'btnMarkChecked';
+        markCheckedBtn.className = 'btn btn-success';
+        markCheckedBtn.style.marginRight = '8px';
+        markCheckedBtn.textContent = 'Mark Checked';
+        markCheckedBtn.title = 'Check all unchecked items';
+
+        // Add click handler
+        markCheckedBtn.addEventListener('click', () => {
+            markAllUncheckedItems();
+        });
+
+        // Insert before the target button (or its wrapper span)
+        insertionPoint.insertAdjacentElement('beforebegin', markCheckedBtn);
+
+        console.log(LOG_PREFIX, `Mark Checked button injected next to "${buttonName}" button`);
+    }
+
+    /**
+     * Mark all unchecked items as processed
+     */
+    function markAllUncheckedItems() {
+        const keys = getStorageKeys();
+        ext.storage.local.get(keys.checklistState, (result) => {
+            const state = result[keys.checklistState] || checklist.map(() => ({ processed: false, skipped: false }));
+
+            let markedCount = 0;
+            state.forEach((item, index) => {
+                if (!item.processed && !item.skipped) {
+                    item.processed = true;
+                    markedCount++;
+                }
+            });
+
+            if (markedCount > 0) {
+                ext.storage.local.set({ [keys.checklistState]: state }, () => {
+                    console.log(LOG_PREFIX, `Marked ${markedCount} items as checked`);
+
+                    // Show brief confirmation
+                    const btn = document.getElementById('btnMarkChecked');
+                    if (btn) {
+                        const originalText = btn.textContent;
+                        btn.textContent = `✓ Marked ${markedCount}`;
+                        btn.disabled = true;
+                        setTimeout(() => {
+                            btn.textContent = originalText;
+                            btn.disabled = false;
+                        }, 2000);
+                    }
+                });
+            } else {
+                console.log(LOG_PREFIX, "All items already checked");
+            }
+        });
+    }
 
     // Cleanup on page unload
     window.addEventListener('beforeunload', () => {

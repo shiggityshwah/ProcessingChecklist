@@ -346,8 +346,8 @@ button#skip-button:active {
 /* Confirmed Item Visual Cue */
 .confirmed-item {
     position: relative;
-    background-color: #f0fff4 !important; /* A light green background */
-    border-left: 4px solid #48bb78 !important; /* A more prominent green border */
+    background-color: #1ec84626 !important; /* A light green background */
+    border-left: 4px solid #1ec84667 !important; /* A more prominent green border */
     padding-left: 30px !important;
     transition: background-color 0.3s ease;
 }
@@ -449,8 +449,9 @@ input[type="checkbox"] {
 }
 
 .highlight-zone-overlay.confirmed-zone {
-    background-color: rgba(72, 187, 120, 0.15); /* Semi-transparent green */
+    background-color: rgba(30, 200, 70, 0.149); /* Semi-transparent green */
     border: 1px solid rgba(72, 187, 120, 0.3);
+    border-left: 6px solid rgba(72, 187, 120, 0.7);
 }
 
 .highlight-zone-overlay.skipped-zone {
@@ -877,7 +878,6 @@ div.form-horizontal:nth-child(14) > div:nth-child(1) > div:nth-child(2) {
 div.form-horizontal:nth-child(14) > div:nth-child(2) > div:nth-child(2){
     position: relative;
     padding-left: 35px !important;
-
 }
 div.form-horizontal:nth-child(4) > div:nth-child(10) > div:nth-child(2){
     position: relative;
@@ -941,57 +941,26 @@ div.form-horizontal:nth-child(4) > div:nth-child(9) > div:nth-child(1){
     transform: scale(0.98);
 }
 
-/* ============================================================================
-   Field-Specific Customization Examples
-
-   The validation containers and checkboxes have unique IDs and classes based
-   on their field selectors. Use these to customize specific fields.
-   See CSS_SELECTORS.md for complete documentation.
-   ============================================================================ */
-
-/* Example: Customize Secondary Insured validation container position */
-/*
-#alphabetize-validation-SecondaryInsuredName {
-    right: 50px;
-    top: 60%;
-}
-*/
-
-/* Example: Customize Primary Insured checkbox */
-/*
-.checkbox-PrimaryInsuredName {
-    left: 10px;
-    width: 20px;
-    height: 20px;
-    border: 2px solid #667eea;
-}
-*/
-
-/* Example: Target all zone checkboxes for a specific field */
-/*
-.zone-checkbox-PrimaryInsuredName {
-    width: 22px;
-    height: 22px;
-    border-radius: 50%;
-}
-*/
-
-/* Example: Style validation UI differently for policy number vs named insured */
-/*
-.alphabetize-validation-container[data-field-type="policyNumber"] .alphabetize-fix-button {
-    background: #28a745;
+div.alphabetize-validation-container:nth-child(6) {
+    right: 88px !important;
 }
 
-.alphabetize-validation-container[data-field-type="namedInsured"] .alphabetize-fix-button {
-    background: #667eea;
+div.checkbox:nth-child(5) {
+    margin-left: 5px !important;
 }
-*/
 
-/* Example: Highlight checkboxes for specific items by name */
-/*
-.processing-checklist-checkbox[data-item-name="Policy Number"] {
-    border: 2px solid red;
+div.form-horizontal:nth-child(14) > div:nth-child(1) > div:nth-child(1) > div:nth-child(1) > div:nth-child(2) {
+    width: 70% !important;
 }
-*/
 
+div.form-horizontal:nth-child(14) > div:nth-child(1) > div:nth-child(1) > div:nth-child(2) > div:nth-child(2) {
+    width: 70% !important;
+}
 
+div.form-horizontal:nth-child(14) > div:nth-child(1) > div:nth-child(1) > div:nth-child(1) > div:nth-child(2) > div:nth-child(2) {
+    right: -17px !important;
+}
+
+div.form-horizontal:nth-child(14) > div:nth-child(1) > div:nth-child(1) > div:nth-child(2) > div:nth-child(2) > div:nth-child(2) {
+    right: -17px !important;
+}

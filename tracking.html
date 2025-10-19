@@ -517,6 +517,94 @@
             color: #dc3545;
             margin-top: 4px;
         }
+
+        /* Time entry row styles */
+        .time-entry-row {
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 12px;
+            background: #f7fafc;
+        }
+
+        .time-entry-row-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .time-entry-row-header strong {
+            font-size: 14px;
+            color: #333;
+        }
+
+        .time-entry-remove-btn {
+            background: #fee;
+            color: #dc3545;
+            border: none;
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .time-entry-remove-btn:hover {
+            background: #dc3545;
+            color: white;
+        }
+
+        .time-entry-fields {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .time-entry-field {
+            display: flex;
+            flex-direction: column;
+            min-width: 110px
+        }
+
+        .time-entry-field label {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 4px;
+        }
+
+        .time-entry-field input {
+            padding: 6px 8px;
+            border: 1px solid #cbd5e0;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+
+        .time-entry-field input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .attendance-status-success {
+            color: #28a745;
+            background: #d4edda;
+            padding: 8px;
+            border-radius: 4px;
+        }
+
+        .attendance-status-error {
+            color: #dc3545;
+            background: #fee;
+            padding: 8px;
+            border-radius: 4px;
+        }
+
+        .attendance-status-info {
+            color: #0c5460;
+            background: #d1ecf1;
+            padding: 8px;
+            border-radius: 4px;
+        }
     </style>
 </head>
 <body>
@@ -591,9 +679,15 @@
             </div>
 
             <div class="section">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                    <h2 class="section-title" style="margin: 0;"><span id="history-title">History</span></h2>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <h2 class="section-title" style="margin: 0;"><span id="history-title">History</span></h2>
+                        <button id="rate-settings-btn" class="settings-button" title="Production Rate Settings">⚙️</button>
+                    </div>
                     <button class="next-form-btn" id="next-form-btn" disabled>Next Form</button>
+                </div>
+                <div id="rate-display" style="font-size: 13px; color: #666; margin-bottom: 12px; display: none;">
+                    <div><strong>Current Rate:</strong> <span id="current-rate">-- forms/hr</span> | <strong>Daily Rate:</strong> <span id="daily-rate">-- forms/hr</span></div>
                 </div>
                 <div class="table-container">
                     <table id="history-table">
@@ -654,6 +748,49 @@
             <div class="modal-footer">
                 <button class="btn btn-secondary" id="settings-cancel-btn">Cancel</button>
                 <button class="btn btn-primary" id="settings-save-btn">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Production Rate Settings Modal -->
+    <div id="rate-settings-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-dialog" style="width: 600px; max-width: 90%; max-height: 90vh; overflow-y: auto;">
+            <div class="modal-header">
+                <h3 style="margin: 0;">Production Rate Settings</h3>
+                <button class="modal-close-btn" id="rate-settings-close-btn">×</button>
+            </div>
+            <div class="modal-body">
+                <!-- Attendance URL Section -->
+                <div class="setting-group">
+                    <h4 style="margin: 0 0 12px 0; font-size: 15px; color: #333;">Attendance Page</h4>
+                    <label class="setting-label" style="display: block; margin-bottom: 6px;">
+                        <span>Attendance Page URL</span>
+                    </label>
+                    <input type="text" id="attendance-url" placeholder="https://..."
+                           style="width: 100%; padding: 8px; border: 1px solid #cbd5e0; border-radius: 6px; font-size: 13px; margin-bottom: 8px;">
+                    <div class="setting-description" style="margin-left: 0;">
+                        Paste your attendance sheet URL to automatically import time data
+                    </div>
+                    <button class="btn btn-primary" id="fetch-attendance-btn" style="margin-top: 12px;">
+                        Import from Attendance Page
+                    </button>
+                    <div id="attendance-status" style="margin-top: 8px; font-size: 13px; display: none;"></div>
+                </div>
+
+                <!-- Manual Time Entry Section -->
+                <div class="setting-group">
+                    <h4 style="margin: 0 0 12px 0; font-size: 15px; color: #333;">Manual Time Entry</h4>
+                    <div id="time-entries-container">
+                        <!-- Time entries will be added here dynamically -->
+                    </div>
+                    <button class="btn btn-secondary" id="add-time-entry-btn" style="margin-top: 8px;">
+                        + Add Date Entry
+                    </button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="rate-settings-cancel-btn">Cancel</button>
+                <button class="btn btn-primary" id="rate-settings-save-btn">Save</button>
             </div>
         </div>
     </div>

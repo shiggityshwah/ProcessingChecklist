@@ -75,6 +75,14 @@
         document.getElementById('settings-save-btn').addEventListener('click', saveSettings);
         document.getElementById('url-resolution-enabled').addEventListener('change', updateUrlResolutionUI);
 
+        // Production Rate Settings
+        document.getElementById('rate-settings-btn').addEventListener('click', openRateSettingsModal);
+        document.getElementById('rate-settings-close-btn').addEventListener('click', closeRateSettingsModal);
+        document.getElementById('rate-settings-cancel-btn').addEventListener('click', closeRateSettingsModal);
+        document.getElementById('rate-settings-save-btn').addEventListener('click', saveRateSettings);
+        document.getElementById('add-time-entry-btn').addEventListener('click', addTimeEntryRow);
+        document.getElementById('fetch-attendance-btn').addEventListener('click', fetchAttendanceData);
+
         // Close modal on overlay click
         document.getElementById('settings-modal').addEventListener('click', (e) => {
             if (e.target.id === 'settings-modal') {
@@ -82,12 +90,21 @@
             }
         });
 
+        document.getElementById('rate-settings-modal').addEventListener('click', (e) => {
+            if (e.target.id === 'rate-settings-modal') {
+                closeRateSettingsModal();
+            }
+        });
+
         // Close modal on ESC key
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
                 const modal = document.getElementById('settings-modal');
+                const rateModal = document.getElementById('rate-settings-modal');
                 if (modal.style.display !== 'none') {
                     closeSettingsModal();
+                } else if (rateModal.style.display !== 'none') {
+                    closeRateSettingsModal();
                 }
             }
         });
@@ -213,6 +230,7 @@
             btn.classList.toggle('active', btn.dataset.filter === filter);
         });
         renderHistory();
+        updateRateDisplay();
     }
 
     // Load and render all data
@@ -221,6 +239,7 @@
             renderQueue();
         } else {
             renderHistory();
+            updateRateDisplay();
         }
     }
 
@@ -950,6 +969,382 @@
         errorMsg.classList.remove('show');
     }
 
+    // ============= PRODUCTION RATE TRACKING =============
+
+    let productionRateData = {
+        attendanceUrl: '',
+        timeEntries: {} // dateString: { totalHours, lunch, nonProd, prodHours }
+    };
+
+    /**
+     * Load production rate data from storage
+     */
+    function loadProductionRateData() {
+        return new Promise((resolve) => {
+            ext.storage.local.get('tracking_productionRate', (result) => {
+                if (result.tracking_productionRate) {
+                    productionRateData = result.tracking_productionRate;
+                }
+                dbg("Production rate data loaded:", productionRateData);
+                resolve();
+            });
+        });
+    }
+
+    /**
+     * Save production rate data to storage
+     */
+    function saveProductionRateData() {
+        ext.storage.local.set({ tracking_productionRate: productionRateData }, () => {
+            dbg("Production rate data saved:", productionRateData);
+            updateRateDisplay();
+        });
+    }
+
+    /**
+     * Open production rate settings modal
+     */
+    function openRateSettingsModal() {
+        loadProductionRateData().then(() => {
+            // Populate attendance URL
+            document.getElementById('attendance-url').value = productionRateData.attendanceUrl || '';
+
+            // Always show empty list (entries are in storage but not displayed)
+            const container = document.getElementById('time-entries-container');
+            container.innerHTML = '<div style="color: #999; font-size: 13px; padding: 12px; text-align: center;">No time entries yet. Click "+ Add Date Entry" to add one.</div>';
+
+            // Show modal
+            document.getElementById('rate-settings-modal').style.display = 'flex';
+        });
+    }
+
+    /**
+     * Close production rate settings modal
+     */
+    function closeRateSettingsModal() {
+        document.getElementById('rate-settings-modal').style.display = 'none';
+        document.getElementById('attendance-status').style.display = 'none';
+    }
+
+    /**
+     * Render time entry rows in the modal
+     */
+    function renderTimeEntries() {
+        const container = document.getElementById('time-entries-container');
+        container.innerHTML = '';
+
+        const entries = Object.entries(productionRateData.timeEntries);
+
+        if (entries.length === 0) {
+            container.innerHTML = '<div style="color: #999; font-size: 13px; padding: 12px; text-align: center;">No time entries yet. Click "+ Add Date Entry" to add one.</div>';
+            return;
+        }
+
+        // Sort by date descending
+        entries.sort((a, b) => new Date(b[0]) - new Date(a[0]));
+
+        entries.forEach(([dateStr, data]) => {
+            container.appendChild(createTimeEntryRow(dateStr, data));
+        });
+    }
+
+    /**
+     * Create a time entry row element
+     */
+    function createTimeEntryRow(dateStr, data) {
+        const row = document.createElement('div');
+        row.className = 'time-entry-row';
+        row.dataset.date = dateStr;
+
+        const prodHours = data.prodHours || (data.totalHours - data.lunch - data.nonProd);
+
+        row.innerHTML = `
+            <div class="time-entry-row-header">
+                <strong>${dateStr || 'New Entry'}</strong>
+                <button class="time-entry-remove-btn" data-date="${dateStr}">Remove</button>
+            </div>
+            <div class="time-entry-fields">
+                <div class="time-entry-field">
+                    <label>Date</label>
+                    <input type="date" class="time-entry-date" value="${dateStr || ''}" ${dateStr ? 'readonly' : ''}>
+                </div>
+                <div class="time-entry-field">
+                    <label>Total Hours</label>
+                    <input type="number" class="time-entry-total" step="0.25" min="0" value="${data.totalHours || 7.5}" placeholder="7.5">
+                </div>
+                <div class="time-entry-field">
+                    <label>Lunch (hours)</label>
+                    <input type="number" class="time-entry-lunch" step="0.25" min="0" value="${data.lunch || 0}" placeholder="0">
+                </div>
+                <div class="time-entry-field">
+                    <label>Non-Prod (hours)</label>
+                    <input type="number" class="time-entry-nonprod" step="0.25" min="0" value="${data.nonProd || 0}" placeholder="0">
+                </div>
+            </div>
+            <div style="margin-top: 8px; padding: 8px; background: #e8f5e9; border-radius: 4px; font-size: 13px;">
+                <strong>Production Time:</strong> ${prodHours.toFixed(2)} hours
+            </div>
+        `;
+
+        // Add remove button listener
+        row.querySelector('.time-entry-remove-btn').addEventListener('click', (e) => {
+            const date = e.target.dataset.date;
+            if (confirm(`Remove time entry for ${date}?`)) {
+                delete productionRateData.timeEntries[date];
+                renderTimeEntries();
+            }
+        });
+
+        // Add input change listeners to update prod time display
+        const updateProdDisplay = () => {
+            const total = parseFloat(row.querySelector('.time-entry-total').value) || 0;
+            const lunch = parseFloat(row.querySelector('.time-entry-lunch').value) || 0;
+            const nonprod = parseFloat(row.querySelector('.time-entry-nonprod').value) || 0;
+            const prod = Math.max(0, total - lunch - nonprod);
+            row.querySelector('div[style*="e8f5e9"]').innerHTML = `<strong>Production Time:</strong> ${prod.toFixed(2)} hours`;
+        };
+
+        row.querySelectorAll('input[type="number"]').forEach(input => {
+            input.addEventListener('input', updateProdDisplay);
+        });
+
+        return row;
+    }
+
+    /**
+     * Add a new time entry row
+     */
+    function addTimeEntryRow() {
+        const container = document.getElementById('time-entries-container');
+
+        // Remove placeholder text if present
+        if (container.querySelector('div[style*="color: #999"]')) {
+            container.innerHTML = '';
+        }
+
+        // Create new row with empty date
+        const newRow = createTimeEntryRow('', { totalHours: 7.5, lunch: 0, nonProd: 0 });
+        container.appendChild(newRow);
+    }
+
+    /**
+     * Save production rate settings
+     */
+    function saveRateSettings() {
+        // Save attendance URL
+        productionRateData.attendanceUrl = document.getElementById('attendance-url').value.trim();
+
+        // Collect all time entries from the modal
+        const container = document.getElementById('time-entries-container');
+        const rows = container.querySelectorAll('.time-entry-row');
+
+        let newCount = 0;
+        let updatedCount = 0;
+
+        rows.forEach(row => {
+            const dateInput = row.querySelector('.time-entry-date');
+            const totalInput = row.querySelector('.time-entry-total');
+            const lunchInput = row.querySelector('.time-entry-lunch');
+            const nonprodInput = row.querySelector('.time-entry-nonprod');
+
+            const date = dateInput.value;
+            const total = parseFloat(totalInput.value) || 0;
+            const lunch = parseFloat(lunchInput.value) || 0;
+            const nonprod = parseFloat(nonprodInput.value) || 0;
+
+            // Skip incomplete entries (no date entered)
+            if (!date) {
+                return;
+            }
+
+            const prodHours = Math.max(0, total - lunch - nonprod);
+
+            // Check if this is a new entry or an update
+            const isNew = !productionRateData.timeEntries.hasOwnProperty(date);
+
+            // Merge with existing entries (updates if date exists, adds if new)
+            productionRateData.timeEntries[date] = {
+                totalHours: total,
+                lunch: lunch,
+                nonProd: nonprod,
+                prodHours: prodHours
+            };
+
+            if (isNew) {
+                newCount++;
+            } else {
+                updatedCount++;
+            }
+        });
+
+        // Save to storage
+        ext.storage.local.set({ tracking_productionRate: productionRateData }, () => {
+            dbg("Production rate data saved:", productionRateData);
+
+            // Show success message
+            const statusDiv = document.getElementById('attendance-status');
+            statusDiv.className = 'attendance-status-success';
+
+            let message = 'Saved';
+            if (newCount > 0) message += ` ${newCount} new entry${newCount !== 1 ? 's' : ''}`;
+            if (newCount > 0 && updatedCount > 0) message += ',';
+            if (updatedCount > 0) message += ` updated ${updatedCount} entry${updatedCount !== 1 ? 's' : ''}`;
+
+            statusDiv.textContent = message;
+            statusDiv.style.display = 'block';
+
+            // Clear the modal display
+            container.innerHTML = '<div style="color: #999; font-size: 13px; padding: 12px; text-align: center;">No time entries yet. Click "+ Add Date Entry" to add one.</div>';
+
+            // Update rate display
+            updateRateDisplay();
+
+            // Auto-hide success message and close modal after 2 seconds
+            setTimeout(() => {
+                statusDiv.style.display = 'none';
+                closeRateSettingsModal();
+            }, 2000);
+        });
+    }
+
+    /**
+     * Fetch attendance data from URL
+     */
+    function fetchAttendanceData() {
+        const url = document.getElementById('attendance-url').value.trim();
+        const statusDiv = document.getElementById('attendance-status');
+
+        if (!url) {
+            statusDiv.className = 'attendance-status-error';
+            statusDiv.textContent = 'Please enter an attendance page URL';
+            statusDiv.style.display = 'block';
+            return;
+        }
+
+        statusDiv.className = 'attendance-status-info';
+        statusDiv.textContent = 'Opening attendance page...';
+        statusDiv.style.display = 'block';
+
+        // Open attendance page in background and parse it
+        ext.runtime.sendMessage({
+            action: 'parseAttendancePage',
+            url: url
+        }, (response) => {
+            if (response && response.success) {
+                // Merge the imported data with existing entries
+                Object.assign(productionRateData.timeEntries, response.timeEntries);
+
+                statusDiv.className = 'attendance-status-success';
+                statusDiv.textContent = `Successfully imported ${Object.keys(response.timeEntries).length} date(s)`;
+
+                // Re-render entries
+                renderTimeEntries();
+
+                // Auto-hide success message after 3 seconds
+                setTimeout(() => {
+                    statusDiv.style.display = 'none';
+                }, 3000);
+            } else {
+                statusDiv.className = 'attendance-status-error';
+                statusDiv.textContent = response?.error || 'Failed to parse attendance page';
+            }
+        });
+    }
+
+    /**
+     * Calculate production rates for today
+     */
+    function calculateProductionRates() {
+        return new Promise((resolve) => {
+            ext.storage.local.get('tracking_history', (result) => {
+                const history = result.tracking_history || [];
+                const today = new Date().toISOString().split('T')[0];
+
+                // Get completed forms for today (100% complete only)
+                const todayForms = history.filter(item => {
+                    if (!item.movedToHistoryDate && !item.addedDate) return false;
+
+                    const itemDate = new Date(item.movedToHistoryDate || item.addedDate).toISOString().split('T')[0];
+                    if (itemDate !== today) return false;
+
+                    // Only count completed forms
+                    const isComplete = item.checkedProgress?.percentage === 100 || item.manuallyMarkedComplete;
+                    return isComplete;
+                });
+
+                const completedCount = todayForms.length;
+
+                // Get time entry for today, or use defaults
+                const timeEntry = productionRateData.timeEntries[today] || {
+                    totalHours: 7.5,
+                    lunch: 0,
+                    nonProd: 0,
+                    prodHours: 7.5
+                };
+
+                // Get first form timestamp for today
+                let firstFormTime = null;
+                if (todayForms.length > 0) {
+                    const timestamps = todayForms
+                        .map(f => new Date(f.movedToHistoryDate || f.addedDate))
+                        .sort((a, b) => a - b);
+                    firstFormTime = timestamps[0];
+                }
+
+                // Calculate rates
+                let currentRate = 0;
+                let dailyRate = 0;
+
+                if (completedCount > 0) {
+                    // Current rate: from first form until now
+                    if (firstFormTime) {
+                        const now = new Date();
+                        const elapsedHours = (now - firstFormTime) / (1000 * 60 * 60);
+                        currentRate = elapsedHours > 0 ? completedCount / elapsedHours : 0;
+                    }
+
+                    // Daily rate: total forms / prod hours for the day
+                    dailyRate = timeEntry.prodHours > 0 ? completedCount / timeEntry.prodHours : 0;
+                }
+
+                resolve({
+                    completedCount,
+                    currentRate,
+                    dailyRate,
+                    prodHours: timeEntry.prodHours,
+                    firstFormTime
+                });
+            });
+        });
+    }
+
+    /**
+     * Update rate display in History view
+     */
+    function updateRateDisplay() {
+        if (currentView !== 'history') return;
+
+        calculateProductionRates().then(rates => {
+            const rateDisplay = document.getElementById('rate-display');
+            const currentRateSpan = document.getElementById('current-rate');
+            const dailyRateSpan = document.getElementById('daily-rate');
+
+            if (rates.completedCount === 0) {
+                rateDisplay.style.display = 'none';
+                return;
+            }
+
+            currentRateSpan.textContent = `${rates.currentRate.toFixed(2)} forms/hr`;
+            dailyRateSpan.textContent = `${rates.dailyRate.toFixed(2)} forms/hr`;
+            rateDisplay.style.display = 'block';
+        });
+    }
+
     // Start the app
     init();
+
+    // Load production rate data on init
+    loadProductionRateData().then(() => {
+        updateRateDisplay();
+    });
 })();
