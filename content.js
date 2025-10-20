@@ -24,6 +24,232 @@
     let config = null;
     let configLoaded = false;
 
+    // Change tracking - store original field values for detecting broker errors
+    let originalFieldValues = {}; // { stepName: { fieldName: originalValue } }
+    let originalValuesCaptured = false;
+
+    /**
+     * Capture original field values from all checklist items when form is first loaded
+     * This allows us to detect which fields were changed from broker-entered values
+     */
+    function captureOriginalFieldValues() {
+        if (originalValuesCaptured) {
+            console.log(LOG_PREFIX, "[ChangeTracking] Original values already captured, skipping");
+            return;
+        }
+
+        console.log(LOG_PREFIX, "[ChangeTracking] Capturing original field values");
+        originalFieldValues = {};
+
+        checklist.forEach((step, index) => {
+            const stepName = step.name;
+            originalFieldValues[stepName] = {};
+
+            if (step.type === 'group') {
+                step.fields.forEach(field => {
+                    const element = document.querySelector(field.selector);
+                    if (element) {
+                        let value = '';
+                        if (field.type === 'checkbox') {
+                            value = element.checked;
+                        } else if (field.type === 'select' || field.type === 'radio') {
+                            value = element.value;
+                        } else if (field.type === 'virtual') {
+                            value = element.innerText;
+                        } else if (field.type === 'kendo_widget') {
+                            if (typeof KendoWidgetUtils !== 'undefined' && KendoWidgetUtils.isKendoAvailable()) {
+                                value = KendoWidgetUtils.getWidgetValue(element) || '';
+                            } else {
+                                value = element.value || '';
+                            }
+                        } else {
+                            value = element.value;
+                        }
+                        originalFieldValues[stepName][field.name] = value;
+                    }
+                });
+            } else if (step.type === 'custom') {
+                // Handle custom types like fees table
+                if (step.table_id === 'feesTable') {
+                    const tableSelector = 'div.col-md-7:nth-child(2) > div:nth-child(1) > table:nth-child(1)';
+                    const table = document.querySelector(tableSelector);
+                    if (table) {
+                        const rows = table.querySelectorAll('tbody tr');
+                        rows.forEach((row, rowIndex) => {
+                            const cells = row.querySelectorAll('td');
+                            if (cells.length >= 3) {
+                                // Capture taxable checkbox
+                                const taxableCheckbox = cells[1].querySelector('input[type="checkbox"]');
+                                const taxableFieldName = `Fee ${rowIndex} Taxable`;
+                                originalFieldValues[stepName][taxableFieldName] = taxableCheckbox ? taxableCheckbox.checked : false;
+
+                                // Capture amount
+                                const hiddenInput = cells[2].querySelector('input[id*="FeeAmount"]');
+                                const amountFieldName = `Fee ${rowIndex} Amount`;
+                                originalFieldValues[stepName][amountFieldName] = hiddenInput ? hiddenInput.value : '';
+                            }
+                        });
+                    }
+                }
+            } else if (step.type === 'table') {
+                // Handle table types
+                const tableData = getTableData(step);
+                if (tableData && tableData.rows) {
+                    tableData.rows.forEach((row, rowIndex) => {
+                        Object.keys(row).forEach(columnName => {
+                            const fieldName = `Row ${rowIndex} - ${columnName}`;
+                            originalFieldValues[stepName][fieldName] = row[columnName];
+                        });
+                    });
+                }
+            }
+        });
+
+        originalValuesCaptured = true;
+        console.log(LOG_PREFIX, "[ChangeTracking] Original values captured:", originalFieldValues);
+
+        // Store original values in tracking helper for persistence
+        if (window.trackingHelper && window.trackingHelper.storeOriginalValues) {
+            window.trackingHelper.storeOriginalValues(originalFieldValues);
+        }
+    }
+
+    /**
+     * Detect changes in a specific checklist step by comparing current values to original values
+     * @param {number} stepIndex - Index of the step to check
+     * @returns {Object} { stepName, changedFields: [fieldNames], fieldCount }
+     */
+    function detectStepChanges(stepIndex) {
+        const step = checklist[stepIndex];
+        const stepName = step.name;
+        const changedFields = [];
+
+        if (!originalFieldValues[stepName]) {
+            return { stepName, changedFields, fieldCount: 0 };
+        }
+
+        if (step.type === 'group') {
+            step.fields.forEach(field => {
+                const element = document.querySelector(field.selector);
+                if (element) {
+                    let currentValue = '';
+                    if (field.type === 'checkbox') {
+                        currentValue = element.checked;
+                    } else if (field.type === 'select' || field.type === 'radio') {
+                        currentValue = element.value;
+                    } else if (field.type === 'virtual') {
+                        currentValue = element.innerText;
+                    } else if (field.type === 'kendo_widget') {
+                        if (typeof KendoWidgetUtils !== 'undefined' && KendoWidgetUtils.isKendoAvailable()) {
+                            currentValue = KendoWidgetUtils.getWidgetValue(element) || '';
+                        } else {
+                            currentValue = element.value || '';
+                        }
+                    } else {
+                        currentValue = element.value;
+                    }
+
+                    const originalValue = originalFieldValues[stepName][field.name];
+                    // Use loose equality to handle string/boolean comparisons
+                    if (currentValue != originalValue) {
+                        changedFields.push(field.name);
+                    }
+                }
+            });
+        } else if (step.type === 'custom' && step.table_id === 'feesTable') {
+            const tableSelector = 'div.col-md-7:nth-child(2) > div:nth-child(1) > table:nth-child(1)';
+            const table = document.querySelector(tableSelector);
+            if (table) {
+                const rows = table.querySelectorAll('tbody tr');
+                rows.forEach((row, rowIndex) => {
+                    const cells = row.querySelectorAll('td');
+                    if (cells.length >= 3) {
+                        // Check taxable checkbox
+                        const taxableCheckbox = cells[1].querySelector('input[type="checkbox"]');
+                        const taxableFieldName = `Fee ${rowIndex} Taxable`;
+                        const currentTaxable = taxableCheckbox ? taxableCheckbox.checked : false;
+                        const originalTaxable = originalFieldValues[stepName][taxableFieldName];
+                        if (currentTaxable != originalTaxable) {
+                            changedFields.push(taxableFieldName);
+                        }
+
+                        // Check amount
+                        const hiddenInput = cells[2].querySelector('input[id*="FeeAmount"]');
+                        const amountFieldName = `Fee ${rowIndex} Amount`;
+                        const currentAmount = hiddenInput ? hiddenInput.value : '';
+                        const originalAmount = originalFieldValues[stepName][amountFieldName];
+                        if (currentAmount != originalAmount) {
+                            changedFields.push(amountFieldName);
+                        }
+                    }
+                });
+            }
+        } else if (step.type === 'table') {
+            const tableData = getTableData(step);
+            if (tableData && tableData.rows) {
+                tableData.rows.forEach((row, rowIndex) => {
+                    Object.keys(row).forEach(columnName => {
+                        const fieldName = `Row ${rowIndex} - ${columnName}`;
+                        const currentValue = row[columnName];
+                        const originalValue = originalFieldValues[stepName][fieldName];
+                        if (currentValue != originalValue) {
+                            changedFields.push(fieldName);
+                        }
+                    });
+                });
+            }
+        }
+
+        return {
+            stepName,
+            changedFields,
+            fieldCount: changedFields.length
+        };
+    }
+
+    /**
+     * Detect all changes across the entire checklist
+     * Called when tracking progress to update change metadata
+     * @param {boolean} isReviewMode - Whether changes are being made in review mode
+     */
+    function detectAllChanges(isReviewMode = false) {
+        if (!originalValuesCaptured) {
+            console.log(LOG_PREFIX, "[ChangeTracking] Original values not captured yet, skipping change detection");
+            return null;
+        }
+
+        const stepsWithChanges = [];
+        let totalFieldsChanged = 0;
+
+        checklist.forEach((step, index) => {
+            const changeData = detectStepChanges(index);
+            if (changeData.fieldCount > 0) {
+                stepsWithChanges.push({
+                    stepName: changeData.stepName,
+                    changedFields: changeData.changedFields,
+                    fieldCount: changeData.fieldCount
+                });
+                totalFieldsChanged += changeData.fieldCount;
+            }
+        });
+
+        const result = {
+            stepsWithChanges,
+            totalStepsWithChanges: stepsWithChanges.length,
+            totalFieldsChanged,
+            isReviewMode
+        };
+
+        console.log(LOG_PREFIX, `[ChangeTracking] Detected changes (reviewMode=${isReviewMode}):`, result);
+
+        // Store changes in tracking helper
+        if (window.trackingHelper && window.trackingHelper.storeChanges) {
+            window.trackingHelper.storeChanges(result);
+        }
+
+        return result;
+    }
+
     function connect() {
         try {
             port = ext.runtime.connect({ name: "content-script" });
@@ -348,6 +574,10 @@
                                 // Note: updateProgress will be called from updateAndBroadcast when checkboxes change
                                 // Don't call it here as detectAndRegisterForm is async and formIsComplete flag may not be set yet
                             }
+                            // Capture original field values for change tracking
+                            setTimeout(() => {
+                                captureOriginalFieldValues();
+                            }, 1000); // Delay to ensure all fields are loaded
                         }, 500);
                     });
                 });
@@ -369,6 +599,10 @@
                         // Note: updateProgress will be called from updateAndBroadcast when checkboxes change
                         // Don't call it here as detectAndRegisterForm is async and formIsComplete flag may not be set yet
                     }
+                    // Capture original field values for change tracking
+                    setTimeout(() => {
+                        captureOriginalFieldValues();
+                    }, 1000); // Delay to ensure all fields are loaded
                 }, 500);
             }
         });
@@ -1072,6 +1306,10 @@
             if (window.trackingHelper.updateMetadata) {
                 window.trackingHelper.updateMetadata();
             }
+
+            // Detect and store field changes
+            const isReview = window.trackingHelper.isReviewMode || false;
+            detectAllChanges(isReview);
         }
     }
 

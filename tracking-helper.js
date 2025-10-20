@@ -11,6 +11,11 @@
     const ext = (typeof browser !== 'undefined') ? browser : chrome;
     const LOG_PREFIX = "[ProcessingChecklist-Tracking]";
 
+    // Storage limits
+    const MAX_HISTORY_ITEMS = 500; // Maximum items to keep in history
+    const MAX_HISTORY_AGE_DAYS = 90; // Maximum age for history items (90 days)
+    const PRUNE_CHECK_INTERVAL = 24 * 60 * 60 * 1000; // Check daily (24 hours)
+
     // Tracking state
     window.trackingHelper = {
         currentUrlId: null,
@@ -19,7 +24,9 @@
         submissionNumber: null,
         updateMetadata: updateTrackingMetadata,
         getSavedProgress: null,  // Will be set by content.js to retrieve saved progress
-        getChecklistTotal: null  // Will be set by content.js to get checklist length
+        getChecklistTotal: null,  // Will be set by content.js to get checklist length
+        pruneHistory: pruneHistory,  // Exposed for manual pruning
+        exportHistory: exportHistory  // Exposed for exporting before pruning
     };
 
     /**
@@ -108,10 +115,15 @@
     }
 
     /**
-     * Extract submission number from page
+     * Extract submission number from page (with caching)
      */
     function extractSubmissionNumber() {
-        const elem = document.querySelector('#LaunchSubmissionInfoModal');
+        if (!window.ProcessingChecklistUtils) {
+            // Fallback if utils not loaded
+            const elem = document.querySelector('#LaunchSubmissionInfoModal');
+            return elem ? elem.textContent.trim() : null;
+        }
+        const elem = window.ProcessingChecklistUtils.SelectorCache.get('#LaunchSubmissionInfoModal');
         if (elem) {
             return elem.textContent.trim();
         }
@@ -119,10 +131,14 @@
     }
 
     /**
-     * Extract policy number from page
+     * Extract policy number from page (with caching)
      */
     function extractPolicyNumber() {
-        const elem = document.querySelector('#PolicyNumber');
+        if (!window.ProcessingChecklistUtils) {
+            const elem = document.querySelector('#PolicyNumber');
+            return elem ? (elem.value ? elem.value.trim() : elem.textContent.trim()) : null;
+        }
+        const elem = window.ProcessingChecklistUtils.SelectorCache.get('#PolicyNumber');
         if (elem) {
             return elem.value ? elem.value.trim() : elem.textContent.trim();
         }
@@ -130,10 +146,14 @@
     }
 
     /**
-     * Extract primary insured from page
+     * Extract primary insured from page (with caching)
      */
     function extractPrimaryInsured() {
-        const elem = document.querySelector('#PrimaryInsuredName');
+        if (!window.ProcessingChecklistUtils) {
+            const elem = document.querySelector('#PrimaryInsuredName');
+            return elem ? (elem.value ? elem.value.trim() : elem.textContent.trim()) : null;
+        }
+        const elem = window.ProcessingChecklistUtils.SelectorCache.get('#PrimaryInsuredName');
         if (elem) {
             return elem.value ? elem.value.trim() : elem.textContent.trim();
         }
@@ -141,10 +161,14 @@
     }
 
     /**
-     * Extract total taxable premium from page
+     * Extract total taxable premium from page (with caching)
      */
     function extractTotalTaxablePremium() {
-        const elem = document.querySelector('#taxablePremium');
+        if (!window.ProcessingChecklistUtils) {
+            const elem = document.querySelector('#taxablePremium');
+            return elem ? elem.textContent.trim() : null;
+        }
+        const elem = window.ProcessingChecklistUtils.SelectorCache.get('#taxablePremium');
         if (elem) {
             return elem.textContent.trim();
         }
@@ -152,10 +176,18 @@
     }
 
     /**
-     * Extract transaction type from page
+     * Extract transaction type from page (with caching)
      */
     function extractTransactionType() {
-        const elem = document.querySelector('#TransactionTypeId');
+        if (!window.ProcessingChecklistUtils) {
+            const elem = document.querySelector('#TransactionTypeId');
+            if (elem) {
+                const selectedOption = elem.options[elem.selectedIndex];
+                return selectedOption ? selectedOption.text.trim() : null;
+            }
+            return null;
+        }
+        const elem = window.ProcessingChecklistUtils.SelectorCache.get('#TransactionTypeId');
         if (elem) {
             // Get the selected option text
             const selectedOption = elem.options[elem.selectedIndex];
@@ -646,6 +678,251 @@
                               (item.checkedProgress && item.checkedProgress.percentage === 100);
 
             callback(isComplete);
+        });
+    };
+
+    /**
+     * Prune old history items to prevent unlimited storage growth
+     * Keeps most recent items and completed items within age limit
+     */
+    function pruneHistory(options = {}) {
+        const maxItems = options.maxItems || MAX_HISTORY_ITEMS;
+        const maxAgeDays = options.maxAgeDays || MAX_HISTORY_AGE_DAYS;
+        const keepCompleted = options.keepCompleted !== false; // Default true
+
+        ext.storage.local.get('tracking_history', (result) => {
+            let history = result.tracking_history || [];
+            const originalCount = history.length;
+
+            if (originalCount === 0) {
+                console.log(LOG_PREFIX, "No history to prune");
+                return;
+            }
+
+            const now = Date.now();
+            const maxAgeMs = maxAgeDays * 24 * 60 * 60 * 1000;
+
+            // Filter by age - keep items within age limit or completed items if keepCompleted is true
+            history = history.filter(item => {
+                const itemDate = item.movedToHistoryDate || item.addedDate;
+                if (!itemDate) return true; // Keep if no date
+
+                const age = now - new Date(itemDate).getTime();
+                const isComplete = item.manuallyMarkedComplete ||
+                                  (item.checkedProgress && item.checkedProgress.percentage === 100);
+
+                // Keep if within age limit, or if completed and keepCompleted is true
+                return age < maxAgeMs || (keepCompleted && isComplete);
+            });
+
+            // If still over limit, sort by date and keep most recent
+            if (history.length > maxItems) {
+                // Sort by date (most recent first)
+                history.sort((a, b) => {
+                    const dateA = new Date(b.movedToHistoryDate || b.addedDate || 0);
+                    const dateB = new Date(a.movedToHistoryDate || a.addedDate || 0);
+                    return dateB - dateA;
+                });
+
+                // Keep only maxItems most recent
+                history = history.slice(0, maxItems);
+            }
+
+            const prunedCount = originalCount - history.length;
+
+            if (prunedCount > 0) {
+                ext.storage.local.set({ tracking_history: history }, () => {
+                    console.log(LOG_PREFIX, `Pruned ${prunedCount} items from history (${originalCount} → ${history.length})`);
+
+                    // Show notification to user
+                    if (typeof window !== 'undefined' && document.body) {
+                        showPruneNotification(prunedCount, history.length);
+                    }
+                });
+            } else {
+                console.log(LOG_PREFIX, `No pruning needed (${originalCount} items within limits)`);
+            }
+        });
+    }
+
+    /**
+     * Export history to JSON file for backup before pruning
+     */
+    function exportHistory() {
+        ext.storage.local.get('tracking_history', (result) => {
+            const history = result.tracking_history || [];
+
+            if (history.length === 0) {
+                console.log(LOG_PREFIX, "No history to export");
+                return;
+            }
+
+            const exportData = {
+                exportDate: new Date().toISOString(),
+                itemCount: history.length,
+                history: history
+            };
+
+            const dataStr = JSON.stringify(exportData, null, 2);
+            const dataBlob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(dataBlob);
+
+            const filename = `processing-checklist-history-${new Date().toISOString().split('T')[0]}.json`;
+
+            // Use browser download API
+            ext.downloads.download({
+                url: url,
+                filename: filename,
+                saveAs: true
+            }, (downloadId) => {
+                console.log(LOG_PREFIX, `History exported: ${filename} (${history.length} items)`);
+
+                // Clean up blob URL after download starts
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+            });
+        });
+    }
+
+    /**
+     * Show a temporary notification about pruning
+     */
+    function showPruneNotification(prunedCount, remainingCount) {
+        const notification = document.createElement('div');
+        notification.id = 'prune-notification';
+        notification.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 10002;
+            background: #17a2b8;
+            color: white;
+            border-radius: 8px;
+            padding: 15px 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            font-size: 14px;
+            max-width: 350px;
+            animation: slideInRight 0.3s ease-out;
+        `;
+        notification.innerHTML = `
+            <div style="font-weight: bold; margin-bottom: 8px;">📋 History Pruned</div>
+            <div>Removed ${prunedCount} old items</div>
+            <div style="font-size: 12px; opacity: 0.9; margin-top: 4px;">${remainingCount} items remaining</div>
+        `;
+        document.body.appendChild(notification);
+
+        // Auto-remove after 5 seconds
+        setTimeout(() => {
+            notification.style.animation = 'fadeOut 0.3s ease-out';
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.parentNode.removeChild(notification);
+                }
+            }, 300);
+        }, 5000);
+    }
+
+    /**
+     * Check if pruning is needed and run if necessary
+     * Should be called periodically (e.g., on extension load)
+     */
+    function checkAndPrune() {
+        ext.storage.local.get(['tracking_history', 'lastPruneCheck'], (result) => {
+            const history = result.tracking_history || [];
+            const lastCheck = result.lastPruneCheck || 0;
+            const now = Date.now();
+
+            // Check if enough time has passed since last prune check
+            if (now - lastCheck < PRUNE_CHECK_INTERVAL) {
+                return; // Too soon to check again
+            }
+
+            // Update last check time
+            ext.storage.local.set({ lastPruneCheck: now });
+
+            // Check if pruning is needed
+            if (history.length > MAX_HISTORY_ITEMS) {
+                console.log(LOG_PREFIX, `Auto-pruning triggered (${history.length} items)`);
+                pruneHistory();
+            }
+        });
+    }
+
+    // Run initial prune check when helper loads
+    setTimeout(checkAndPrune, 5000); // Wait 5 seconds after load
+
+    /**
+     * Store original field values for change tracking
+     * Called when form is first loaded to capture broker-entered values
+     */
+    window.trackingHelper.storeOriginalValues = function(originalValues) {
+        const urlId = window.trackingHelper.currentUrlId;
+        if (!urlId) {
+            console.log(LOG_PREFIX, "[ChangeTracking] No urlId, skipping storeOriginalValues");
+            return;
+        }
+
+        ext.storage.local.get('tracking_history', (result) => {
+            let history = result.tracking_history || [];
+            const index = history.findIndex(h => h.urlId === urlId);
+
+            if (index !== -1) {
+                // Only store original values if they haven't been stored yet
+                if (!history[index].originalFieldValues) {
+                    history[index].originalFieldValues = originalValues;
+                    ext.storage.local.set({ tracking_history: history });
+                    console.log(LOG_PREFIX, "[ChangeTracking] Original values stored for", urlId);
+                } else {
+                    console.log(LOG_PREFIX, "[ChangeTracking] Original values already exist for", urlId);
+                }
+            }
+        });
+    };
+
+    /**
+     * Store detected field changes
+     * Called from content.js when changes are detected
+     */
+    window.trackingHelper.storeChanges = function(changeData) {
+        const urlId = window.trackingHelper.currentUrlId;
+        if (!urlId) {
+            console.log(LOG_PREFIX, "[ChangeTracking] No urlId, skipping storeChanges");
+            return;
+        }
+
+        ext.storage.local.get('tracking_history', (result) => {
+            let history = result.tracking_history || [];
+            const index = history.findIndex(h => h.urlId === urlId);
+
+            if (index !== -1) {
+                // Store changes in appropriate property based on review mode
+                if (changeData.isReviewMode) {
+                    history[index].reviewModeChanges = {
+                        stepsWithChanges: changeData.stepsWithChanges,
+                        totalStepsWithChanges: changeData.totalStepsWithChanges,
+                        totalFieldsChanged: changeData.totalFieldsChanged
+                    };
+                } else {
+                    history[index].fieldChanges = {
+                        stepsWithChanges: changeData.stepsWithChanges,
+                        totalStepsWithChanges: changeData.totalStepsWithChanges,
+                        totalFieldsChanged: changeData.totalFieldsChanged
+                    };
+                }
+
+                // Update summary
+                const normalChanges = history[index].fieldChanges || {};
+                const reviewChanges = history[index].reviewModeChanges || {};
+                history[index].changesSummary = {
+                    totalStepsWithChanges: normalChanges.totalStepsWithChanges || 0,
+                    totalFieldsChanged: normalChanges.totalFieldsChanged || 0,
+                    reviewModeStepsWithChanges: reviewChanges.totalStepsWithChanges || 0,
+                    reviewModeFieldsChanged: reviewChanges.totalFieldsChanged || 0
+                };
+
+                ext.storage.local.set({ tracking_history: history });
+                console.log(LOG_PREFIX, `[ChangeTracking] Changes stored for ${urlId} (reviewMode=${changeData.isReviewMode}):`, changeData);
+            }
         });
     };
 

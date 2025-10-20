@@ -7,7 +7,8 @@
     "storage",
     "tabs",
     "downloads",
-    "<all_urls>"
+    "*://rapid.slacal.com/*",
+    "file:///*"
   ],
   "browser_action": {
     "default_title": "Processing Checklist",
@@ -20,7 +21,7 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["config-loader-simple.js", "kendo-widget-utils.js", "alphabetize-helper.js", "tracking-helper.js", "content.js"],
+      "js": ["utils.js", "config-loader-simple.js", "kendo-widget-utils.js", "alphabetize-helper.js", "tracking-helper.js", "content.js"],
       "css": ["style.css"],
       "run_at": "document_end"
     }
@@ -30,6 +31,8 @@
     "tracking.html",
     "extended-history.html",
     "calculator.html",
+    "changes-report.html",
+    "changes-report.js",
     "style.css",
     "checklist-config.json"
   ]

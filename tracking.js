@@ -120,6 +120,7 @@
             btn.addEventListener('click', (e) => handleFilterChange(e.target.dataset.filter));
         });
         document.getElementById('extended-history-btn').addEventListener('click', handleExtendedHistory);
+        document.getElementById('changes-report-btn').addEventListener('click', handleChangesReport);
     }
 
     /**
@@ -664,6 +665,11 @@
 
     function handleExtendedHistory() {
         const url = ext.runtime.getURL('extended-history.html');
+        ext.tabs.create({ url });
+    }
+
+    function handleChangesReport() {
+        const url = ext.runtime.getURL('changes-report.html');
         ext.tabs.create({ url });
     }
 
