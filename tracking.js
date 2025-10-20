@@ -197,7 +197,7 @@
 
         // Check if tracking data changed
         if (changes.tracking_availableForms || changes.tracking_history) {
-            dbg("Tracking data changed, refreshing");
+            console.log(LOG_PREFIX, "Tracking data changed, refreshing display");
 
             // Auto-resolve top X items when queue changes
             if (changes.tracking_availableForms && changes.tracking_availableForms.newValue) {
