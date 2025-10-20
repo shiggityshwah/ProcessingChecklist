@@ -1208,27 +1208,20 @@
     }
 
     /**
-     * Fetch attendance data from URL
+     * Fetch attendance data from URL or existing tab
      */
     function fetchAttendanceData() {
         const url = document.getElementById('attendance-url').value.trim();
         const statusDiv = document.getElementById('attendance-status');
 
-        if (!url) {
-            statusDiv.className = 'attendance-status-error';
-            statusDiv.textContent = 'Please enter an attendance page URL';
-            statusDiv.style.display = 'block';
-            return;
-        }
-
         statusDiv.className = 'attendance-status-info';
-        statusDiv.textContent = 'Opening attendance page...';
+        statusDiv.textContent = url ? 'Opening attendance page...' : 'Searching for open attendance page...';
         statusDiv.style.display = 'block';
 
         // Open attendance page in background and parse it
         ext.runtime.sendMessage({
             action: 'parseAttendancePage',
-            url: url
+            url: url // Can be empty string - background.js will search for existing tabs
         }, (response) => {
             if (response && response.success) {
                 // Merge the imported data with existing entries
