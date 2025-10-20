@@ -529,9 +529,13 @@
 
             // Save to storage if anything was updated
             if (updated) {
+                console.log(LOG_PREFIX, `Saving progress to storage for urlId ${urlId}, index ${index}`);
+                console.log(LOG_PREFIX, `Data to save:`, history[index].checkedProgress);
                 ext.storage.local.set({ tracking_history: history }, () => {
                     if (ext.runtime.lastError) {
                         console.error(LOG_PREFIX, `Error saving progress:`, ext.runtime.lastError);
+                    } else {
+                        console.log(LOG_PREFIX, `Progress successfully saved to storage`);
                     }
                 });
             }
