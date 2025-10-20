@@ -479,7 +479,10 @@
      */
     window.trackingHelper.updateProgress = function(checkedCurrent, checkedTotal, isReview = false) {
         const urlId = window.trackingHelper.currentUrlId;
-        if (!urlId) return;
+        if (!urlId) {
+            console.log(LOG_PREFIX, `updateProgress skipped - no urlId`);
+            return;
+        }
 
         const percentage = checkedTotal > 0 ? Math.round((checkedCurrent / checkedTotal) * 100) : 0;
 
@@ -487,38 +490,50 @@
             let history = result.tracking_history || [];
             const index = history.findIndex(h => h.urlId === urlId);
 
-            if (index !== -1) {
-                if (isReview) {
-                    // Always allow reviewedProgress updates
-                    history[index].reviewedProgress = {
+            if (index === -1) {
+                console.log(LOG_PREFIX, `updateProgress skipped - form not found in history (urlId: ${urlId})`);
+                return;
+            }
+
+            let updated = false;
+
+            if (isReview) {
+                // Always allow reviewedProgress updates
+                history[index].reviewedProgress = {
+                    current: checkedCurrent,
+                    total: checkedTotal,
+                    percentage: percentage
+                };
+                updated = true;
+                console.log(LOG_PREFIX, `Review progress updated: ${checkedCurrent}/${checkedTotal} (${percentage}%)`);
+            } else {
+                // Only update checkedProgress if form is not already complete
+                if (!window.trackingHelper.formIsComplete) {
+                    history[index].checkedProgress = {
                         current: checkedCurrent,
                         total: checkedTotal,
                         percentage: percentage
                     };
-                } else {
-                    // Only update checkedProgress if form is not already complete
-                    if (!window.trackingHelper.formIsComplete) {
-                        history[index].checkedProgress = {
-                            current: checkedCurrent,
-                            total: checkedTotal,
-                            percentage: percentage
-                        };
 
-                        // Update completed date if reaching 100%
-                        if (percentage === 100 && !history[index].completedDate) {
-                            history[index].completedDate = new Date().toISOString();
-                        }
-
-                        ext.storage.local.set({ tracking_history: history });
-                        console.log(LOG_PREFIX, `Progress updated: ${checkedCurrent}/${checkedTotal} (${percentage}%)`);
-                    } else {
-                        console.log(LOG_PREFIX, `Skipping checkedProgress update - form is complete (frozen at ${history[index].checkedProgress.percentage}%)`);
+                    // Update completed date if reaching 100%
+                    if (percentage === 100 && !history[index].completedDate) {
+                        history[index].completedDate = new Date().toISOString();
                     }
-                    return; // Exit early for non-review mode
-                }
 
-                ext.storage.local.set({ tracking_history: history });
-                console.log(LOG_PREFIX, `Review progress updated: ${checkedCurrent}/${checkedTotal} (${percentage}%)`);
+                    updated = true;
+                    console.log(LOG_PREFIX, `Progress updated: ${checkedCurrent}/${checkedTotal} (${percentage}%)`);
+                } else {
+                    console.log(LOG_PREFIX, `Skipping checkedProgress update - form is complete (frozen at ${history[index].checkedProgress?.percentage || 0}%)`);
+                }
+            }
+
+            // Save to storage if anything was updated
+            if (updated) {
+                ext.storage.local.set({ tracking_history: history }, () => {
+                    if (ext.runtime.lastError) {
+                        console.error(LOG_PREFIX, `Error saving progress:`, ext.runtime.lastError);
+                    }
+                });
             }
         });
     };
