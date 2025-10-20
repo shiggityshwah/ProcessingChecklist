@@ -48,10 +48,18 @@ ext.runtime.onConnect.addListener((port) => {
         // Set up keep-alive ping for this popout
         const pingInterval = setInterval(() => {
             try {
-                port.postMessage({ action: 'ping' });
+                if (port && popoutPorts.has(portId)) {
+                    port.postMessage({ action: 'ping' });
+                } else {
+                    // Port no longer exists, clean up
+                    clearInterval(pingInterval);
+                    pingTimers.delete(portId);
+                }
             } catch (e) {
+                console.warn(`[ProcessingChecklist-Background] Ping failed for ${portId}, cleaning up:`, e);
                 clearInterval(pingInterval);
                 pingTimers.delete(portId);
+                popoutPorts.delete(portId);
             }
         }, PING_INTERVAL);
         pingTimers.set(portId, pingInterval);
@@ -92,7 +100,11 @@ ext.runtime.onConnect.addListener((port) => {
                 clearInterval(pingInterval);
                 pingTimers.delete(portId);
             }
+
+            // Remove port from tracking
             popoutPorts.delete(portId);
+
+            console.log(`[ProcessingChecklist-Background] Popout port ${portId} disconnected and cleaned up`);
         });
     } else if (port.name === "tracking") {
         const trackingPortId = `tracking-${trackingPortIdCounter++}`;
@@ -100,10 +112,18 @@ ext.runtime.onConnect.addListener((port) => {
         // Set up keep-alive ping for tracking window
         const pingInterval = setInterval(() => {
             try {
-                port.postMessage({ action: 'ping' });
+                if (port && trackingPorts.has(trackingPortId)) {
+                    port.postMessage({ action: 'ping' });
+                } else {
+                    // Port no longer exists, clean up
+                    clearInterval(pingInterval);
+                    pingTimers.delete(trackingPortId);
+                }
             } catch (e) {
+                console.warn(`[ProcessingChecklist-Background] Tracking ping failed for ${trackingPortId}, cleaning up:`, e);
                 clearInterval(pingInterval);
                 pingTimers.delete(trackingPortId);
+                trackingPorts.delete(trackingPortId);
             }
         }, PING_INTERVAL);
         pingTimers.set(trackingPortId, pingInterval);
@@ -288,34 +308,74 @@ ext.runtime.onMessage.addListener((request, sender, sendResponse) => {
  */
 async function parseAttendancePage(url) {
     try {
-        // Open the attendance page in a hidden tab
-        const tab = await ext.tabs.create({ url: url, active: false });
+        // First, try to find an existing tab with the attendance page
+        const allTabs = await ext.tabs.query({});
 
-        // Wait for the page to load
-        await new Promise((resolve) => {
-            const listener = (tabId, changeInfo) => {
-                if (tabId === tab.id && changeInfo.status === 'complete') {
+        // Look for tabs that match the attendance URL pattern
+        let matchingTab = null;
+
+        if (url) {
+            // If URL is provided, look for exact or partial match
+            const urlPattern = url.toLowerCase();
+            matchingTab = allTabs.find(tab =>
+                tab.url && tab.url.toLowerCase().includes(urlPattern)
+            );
+        }
+
+        // If no URL provided or no exact match, look for any tab with summary-table element
+        if (!matchingTab) {
+            // Try to find a tab that contains the attendance table by URL pattern
+            // Common patterns: attendance, timesheet, etc.
+            matchingTab = allTabs.find(tab =>
+                tab.url && (
+                    tab.url.toLowerCase().includes('attendance') ||
+                    tab.url.toLowerCase().includes('timesheet')
+                )
+            );
+        }
+
+        let tabToUse = matchingTab;
+        let shouldCloseTab = false;
+
+        // If no matching tab found and URL is provided, open a new one
+        if (!tabToUse && url) {
+            console.log('[ProcessingChecklist] No existing attendance tab found, opening new tab...');
+            tabToUse = await ext.tabs.create({ url: url, active: false });
+            shouldCloseTab = true;
+
+            // Wait for the page to load
+            await new Promise((resolve) => {
+                const listener = (tabId, changeInfo) => {
+                    if (tabId === tabToUse.id && changeInfo.status === 'complete') {
+                        ext.tabs.onUpdated.removeListener(listener);
+                        resolve();
+                    }
+                };
+                ext.tabs.onUpdated.addListener(listener);
+
+                // Timeout after 10 seconds
+                setTimeout(() => {
                     ext.tabs.onUpdated.removeListener(listener);
                     resolve();
-                }
+                }, 10000);
+            });
+        } else if (!tabToUse) {
+            return {
+                success: false,
+                error: 'No attendance page found. Please open the attendance page in a Firefox tab first, or provide the attendance URL.'
             };
-            ext.tabs.onUpdated.addListener(listener);
-
-            // Timeout after 10 seconds
-            setTimeout(() => {
-                ext.tabs.onUpdated.removeListener(listener);
-                resolve();
-            }, 10000);
-        });
+        } else {
+            console.log('[ProcessingChecklist] Found existing attendance tab:', tabToUse.id);
+        }
 
         // Execute script to parse the table
-        const results = await ext.tabs.executeScript(tab.id, {
+        const results = await ext.tabs.executeScript(tabToUse.id, {
             code: `
                 (function() {
                     try {
                         const table = document.getElementById('summary-table');
                         if (!table) {
-                            return { error: 'Attendance table not found on page' };
+                            return { error: 'Attendance table not found on page. Make sure you have the correct page open.' };
                         }
 
                         const tbody = table.querySelector('tbody');
@@ -374,8 +434,10 @@ async function parseAttendancePage(url) {
             `
         });
 
-        // Close the tab
-        await ext.tabs.remove(tab.id);
+        // Close the tab only if we opened it ourselves
+        if (shouldCloseTab) {
+            await ext.tabs.remove(tabToUse.id);
+        }
 
         // Return the parsed data
         const result = results && results[0];
