@@ -379,11 +379,13 @@
             }
 
             const itemName = checklistNames[i] || `Item ${i + 1}`;
+            const escapedItemName = window.ProcessingChecklistUtils ?
+                window.ProcessingChecklistUtils.escapeHtml(itemName) : itemName;
 
             itemsHtml += `
                 <div class="full-checklist-item ${statusClass}" style="display: flex; align-items: center; padding: 8px 0; border-bottom: 1px solid #f0f0f0;">
                     <input type="checkbox" class="full-checklist-item-checkbox" data-item-index="${i}" ${itemState.processed ? 'checked' : ''} style="margin-right: 10px; cursor: pointer; flex-shrink: 0;">
-                    <span class="full-checklist-item-name" style="flex: 1; font-size: 13px; color: ${itemState.processed ? '#28a745' : (itemState.skipped ? '#ffc107' : '#333')};">${itemName}</span>
+                    <span class="full-checklist-item-name" style="flex: 1; font-size: 13px; color: ${itemState.processed ? '#28a745' : (itemState.skipped ? '#ffc107' : '#333')};">${escapedItemName}</span>
                 </div>
             `;
         }

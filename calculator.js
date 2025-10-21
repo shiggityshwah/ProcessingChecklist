@@ -305,12 +305,16 @@
             return;
         }
 
-        container.innerHTML = results.map(({ label, result }) => `
-            <div class="result-row">
-                <span class="result-label">${label}</span>
-                <span class="result-value">${formatDollar(result)}</span>
-            </div>
-        `).join('');
+        container.innerHTML = results.map(({ label, result }) => {
+            const escapedLabel = window.ProcessingChecklistUtils ?
+                window.ProcessingChecklistUtils.escapeHtml(label) : label;
+            return `
+                <div class="result-row">
+                    <span class="result-label">${escapedLabel}</span>
+                    <span class="result-value">${formatDollar(result)}</span>
+                </div>
+            `;
+        }).join('');
     }
 
     function attachCoverageEventListeners() {
@@ -508,12 +512,16 @@
         }
 
         // Render results
-        container.innerHTML = results.map(({ label, scaledPercentage }) => `
-            <div class="result-row">
-                <span class="result-label">${label}</span>
-                <span class="result-value">${scaledPercentage.toFixed(1)}%</span>
-            </div>
-        `).join('');
+        container.innerHTML = results.map(({ label, scaledPercentage }) => {
+            const escapedLabel = window.ProcessingChecklistUtils ?
+                window.ProcessingChecklistUtils.escapeHtml(label) : label;
+            return `
+                <div class="result-row">
+                    <span class="result-label">${escapedLabel}</span>
+                    <span class="result-value">${scaledPercentage.toFixed(1)}%</span>
+                </div>
+            `;
+        }).join('');
 
         // Apply grayed-out style if not showing final results
         if (!showResults) {

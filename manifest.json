@@ -24,6 +24,16 @@
       "js": ["utils.js", "config-loader-simple.js", "kendo-widget-utils.js", "alphabetize-helper.js", "tracking-helper.js", "content.js"],
       "css": ["style.css"],
       "run_at": "document_end"
+    },
+    {
+      "matches": [
+        "*://rapid.slacal.com/Insurer/Search",
+        "*://rapid.slacal.com/*CompanyDetails.aspx*",
+        "*://rapid.slacal.com/*AdmittedCompaniesDetails.aspx*"
+      ],
+      "js": ["insurer-history.js"],
+      "css": ["insurer-history.css"],
+      "run_at": "document_idle"
     }
   ],
   "web_accessible_resources": [

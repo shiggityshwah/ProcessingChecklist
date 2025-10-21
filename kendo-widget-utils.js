@@ -192,11 +192,28 @@
                 this.setWidgetValue(originalElement, inputElement.value);
             });
 
-            // Sync from original to input
+            // Sync from original to input with error handling
             const syncInterval = setInterval(() => {
-                const originalValue = this.getWidgetValue(originalElement);
-                if (originalValue !== inputElement.value) {
-                    inputElement.value = originalValue || '';
+                try {
+                    // Check if elements still exist in DOM
+                    if (!document.contains(inputElement) || !document.contains(originalElement)) {
+                        clearInterval(syncInterval);
+                        if (inputElement.dataset) {
+                            delete inputElement.dataset.syncInterval;
+                        }
+                        return;
+                    }
+
+                    const originalValue = this.getWidgetValue(originalElement);
+                    if (originalValue !== inputElement.value) {
+                        inputElement.value = originalValue || '';
+                    }
+                } catch (e) {
+                    console.warn('[KendoWidgetUtils] Sync error, clearing interval:', e);
+                    clearInterval(syncInterval);
+                    if (inputElement.dataset) {
+                        delete inputElement.dataset.syncInterval;
+                    }
                 }
             }, 500);
 

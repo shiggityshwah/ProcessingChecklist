@@ -1295,10 +1295,11 @@
 
         // Update tracking progress and metadata
         if (window.trackingHelper) {
-            if (window.trackingHelper.updateProgress) {
+            if (window.trackingHelper.updateProgress && state && Array.isArray(state)) {
                 const checkedCount = state.filter(item => item.processed).length;
                 const total = state.length;
                 const isReview = window.trackingHelper.isReviewMode || false;
+                console.log("[ProcessingChecklist] Calling updateProgress:", checkedCount, "/", total, "isReview:", isReview);
                 window.trackingHelper.updateProgress(checkedCount, total, isReview);
             }
 

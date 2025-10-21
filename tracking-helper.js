@@ -391,6 +391,7 @@
 
                     // New form is not complete
                     window.trackingHelper.formIsComplete = false;
+                    console.log(LOG_PREFIX, "[DEBUG] Set formIsComplete = false (new form added to history)");
 
                     console.log(LOG_PREFIX, "Form detected and moved to history:", urlId);
                 } else if (existingHistoryIndex !== -1) {
@@ -416,10 +417,12 @@
 
                     if (isComplete) {
                         console.log(LOG_PREFIX, "Reconnected to completed form - checkedProgress will remain frozen:", urlId);
+                        console.log(LOG_PREFIX, "[DEBUG] Set formIsComplete = true (existing form is complete)");
                         // Set flag to prevent updateProgress from modifying checkedProgress
                         window.trackingHelper.formIsComplete = true;
                     } else {
                         console.log(LOG_PREFIX, "Reconnected to incomplete form - checkedProgress can be updated:", urlId);
+                        console.log(LOG_PREFIX, "[DEBUG] Set formIsComplete = false (existing form is incomplete)");
                         window.trackingHelper.formIsComplete = false;
                     }
                 } else {
@@ -466,6 +469,7 @@
 
                         // New form is not complete
                         window.trackingHelper.formIsComplete = false;
+                        console.log(LOG_PREFIX, "[DEBUG] Set formIsComplete = false (new form auto-added)");
 
                         console.log(LOG_PREFIX, "New form auto-added to history:", urlId, "Type:", typeCode);
                     }
@@ -479,25 +483,32 @@
      */
     window.trackingHelper.updateProgress = function(checkedCurrent, checkedTotal, isReview = false) {
         const urlId = window.trackingHelper.currentUrlId;
+        console.log(LOG_PREFIX, `[DEBUG] updateProgress called: urlId=${urlId}, checked=${checkedCurrent}/${checkedTotal}, isReview=${isReview}, formIsComplete=${window.trackingHelper.formIsComplete}`);
+
         if (!urlId) {
             console.log(LOG_PREFIX, `updateProgress skipped - no urlId`);
             return;
         }
 
         const percentage = checkedTotal > 0 ? Math.round((checkedCurrent / checkedTotal) * 100) : 0;
+        console.log(LOG_PREFIX, `[DEBUG] Calculated percentage: ${percentage}%`);
 
         ext.storage.local.get('tracking_history', (result) => {
             let history = result.tracking_history || [];
             const index = history.findIndex(h => h.urlId === urlId);
+            console.log(LOG_PREFIX, `[DEBUG] Found form in history at index: ${index}, total history items: ${history.length}`);
 
             if (index === -1) {
                 console.log(LOG_PREFIX, `updateProgress skipped - form not found in history (urlId: ${urlId})`);
                 return;
             }
 
+            console.log(LOG_PREFIX, `[DEBUG] Current progress in history:`, history[index].checkedProgress);
+
             let updated = false;
 
             if (isReview) {
+                console.log(LOG_PREFIX, `[DEBUG] Review mode - updating reviewedProgress`);
                 // Always allow reviewedProgress updates
                 history[index].reviewedProgress = {
                     current: checkedCurrent,
@@ -507,8 +518,10 @@
                 updated = true;
                 console.log(LOG_PREFIX, `Review progress updated: ${checkedCurrent}/${checkedTotal} (${percentage}%)`);
             } else {
+                console.log(LOG_PREFIX, `[DEBUG] Normal mode - formIsComplete=${window.trackingHelper.formIsComplete}`);
                 // Only update checkedProgress if form is not already complete
                 if (!window.trackingHelper.formIsComplete) {
+                    console.log(LOG_PREFIX, `[DEBUG] Form not complete, updating checkedProgress`);
                     history[index].checkedProgress = {
                         current: checkedCurrent,
                         total: checkedTotal,
@@ -527,6 +540,8 @@
                 }
             }
 
+            console.log(LOG_PREFIX, `[DEBUG] updated flag = ${updated}`);
+
             // Save to storage if anything was updated
             if (updated) {
                 console.log(LOG_PREFIX, `Saving progress to storage for urlId ${urlId}, index ${index}`);
@@ -538,6 +553,8 @@
                         console.log(LOG_PREFIX, `Progress successfully saved to storage`);
                     }
                 });
+            } else {
+                console.log(LOG_PREFIX, `[DEBUG] NOT saving to storage - updated=${updated}`);
             }
         });
     };
