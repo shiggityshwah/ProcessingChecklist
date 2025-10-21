@@ -358,32 +358,54 @@
         const item = document.createElement('div');
         item.className = 'insurer-item';
 
-        // Add classes as tooltip data
-        if (insurer.classes && insurer.classes.length > 0) {
-            const classesText = insurer.classes.join('\n');
-            item.setAttribute('data-classes', classesText);
-            console.log(LOG_PREFIX, `Set data-classes for ${insurer.name}: ${classesText}`);
-        } else {
-            console.log(LOG_PREFIX, `No classes data for ${insurer.name}`, insurer.classes);
-        }
-
         // Status indicator class - use the stored status from history
         // Check if status contains "Admitted" but not "Non" (handles "Non-Admitted", "Non Admitted", etc.)
         const statusLower = (insurer.status || '').toLowerCase();
         const isAdmitted = statusLower.includes('admitted') && !statusLower.includes('non');
         const statusClass = isAdmitted ? 'admitted' : 'non-admitted';
 
+        // Build HTML with optional classes button
+        const hasClasses = insurer.classes && insurer.classes.length > 0;
+        const classesButton = hasClasses ? '<span class="classes-icon" title="Show classes">📋</span>' : '';
+
         item.innerHTML = `
-            <div class="insurer-name">
-                <span class="status-indicator ${statusClass}"></span>
-                <span>${escapeHtml(insurer.name)}</span>
+            <div class="insurer-main">
+                <div class="insurer-name">
+                    <span class="status-indicator ${statusClass}"></span>
+                    <span class="insurer-name-text">${escapeHtml(insurer.name)}</span>
+                    ${classesButton}
+                </div>
+                <div class="insurer-naic">NAIC: ${escapeHtml(insurer.naicCode)}</div>
             </div>
-            <div class="insurer-naic">NAIC: ${escapeHtml(insurer.naicCode)}</div>
         `;
 
-        // Click handler - navigate to insurer detail page
-        item.addEventListener('click', () => {
-            window.open(insurer.url, '_blank');
+        // Add classes list if available (initially hidden)
+        if (hasClasses) {
+            const classesList = document.createElement('div');
+            classesList.className = 'classes-list';
+            classesList.innerHTML = insurer.classes.map(c => `<div class="class-item">• ${escapeHtml(c)}</div>`).join('');
+            item.appendChild(classesList);
+
+            // Toggle classes list on icon click
+            const icon = item.querySelector('.classes-icon');
+            icon.addEventListener('click', (e) => {
+                e.stopPropagation(); // Prevent opening the insurer page
+                classesList.classList.toggle('expanded');
+                icon.textContent = classesList.classList.contains('expanded') ? '📂' : '📋';
+            });
+
+            console.log(LOG_PREFIX, `Added ${insurer.classes.length} classes for ${insurer.name}`);
+        } else {
+            console.log(LOG_PREFIX, `No classes data for ${insurer.name}`, insurer.classes);
+        }
+
+        // Click handler - navigate to insurer detail page (only on main area)
+        const mainArea = item.querySelector('.insurer-main');
+        mainArea.addEventListener('click', (e) => {
+            // Don't open if clicking the icon
+            if (!e.target.classList.contains('classes-icon')) {
+                window.open(insurer.url, '_blank');
+            }
         });
 
         return item;
