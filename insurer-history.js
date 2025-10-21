@@ -180,6 +180,26 @@
     }
 
     /**
+     * Map class of insurance number to description
+     */
+    const CLASS_MAP = {
+        '1': 'Life',
+        '2': 'Fire',
+        '3': 'Marine',
+        '5': 'Surety and Bonds',
+        '6': 'Disability',
+        '7': 'Plate Glass',
+        '8': 'Liability',
+        '9': 'Workers\' Compensation',
+        '10': 'Common Carrier Liability',
+        '11': 'Boiler and Machinery',
+        '12': 'Burglary and Crime',
+        '16': 'Automobile',
+        '18': 'Aircraft',
+        '20': 'Miscellaneous'
+    };
+
+    /**
      * Extract classes of insurance from the COI page
      */
     function extractClasses() {
@@ -190,8 +210,12 @@
 
         classLabels.forEach(label => {
             const text = label.textContent.trim();
-            if (text && !classes.includes(text)) {
-                classes.push(text);
+            if (text) {
+                // Try to map number to description
+                const description = CLASS_MAP[text] || text;
+                if (!classes.includes(description)) {
+                    classes.push(description);
+                }
             }
         });
 

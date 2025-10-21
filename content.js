@@ -3376,7 +3376,7 @@
      */
     function markAllUncheckedItems() {
         const keys = getStorageKeys();
-        ext.storage.local.get(keys.checklistState, (result) => {
+        ext.storage.local.get([keys.checklistState, keys.uiState, keys.viewMode], (result) => {
             const state = result[keys.checklistState] || checklist.map(() => ({ processed: false, skipped: false }));
 
             let markedCount = 0;
@@ -3390,6 +3390,9 @@
             if (markedCount > 0) {
                 ext.storage.local.set({ [keys.checklistState]: state }, () => {
                     console.log(LOG_PREFIX, `Marked ${markedCount} items as checked`);
+
+                    // Update tracking progress
+                    updateAndBroadcast(state, result[keys.uiState], result[keys.viewMode]);
 
                     // Show brief confirmation
                     const btn = document.getElementById('btnMarkChecked');
