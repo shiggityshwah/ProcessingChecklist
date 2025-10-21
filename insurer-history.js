@@ -75,8 +75,19 @@
     async function addToHistory(insurerData) {
         let history = await getHistory();
 
-        // Remove if already exists (by NAIC code)
-        history = history.filter(item => item.naicCode !== insurerData.naicCode);
+        // Check if this insurer already exists
+        const existingIndex = history.findIndex(item => item.naicCode === insurerData.naicCode);
+
+        if (existingIndex !== -1) {
+            // Preserve status from existing entry if new data doesn't have a valid status
+            const existing = history[existingIndex];
+            if (!insurerData.status || insurerData.status === 'Unknown') {
+                console.log(LOG_PREFIX, 'Preserving existing status:', existing.status);
+                insurerData.status = existing.status;
+            }
+            // Remove the old entry
+            history.splice(existingIndex, 1);
+        }
 
         // Add to beginning
         history.unshift(insurerData);
