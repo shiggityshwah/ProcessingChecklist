@@ -1269,17 +1269,18 @@
      * Fetch attendance data from URL or existing tab
      */
     function fetchAttendanceData() {
-        const url = document.getElementById('attendance-url').value.trim();
+        const defaultUrl = 'https://rapid.slacal.com/Operations/AttendanceSheet/Details';
         const statusDiv = document.getElementById('attendance-status');
 
         statusDiv.className = 'attendance-status-info';
-        statusDiv.textContent = url ? 'Opening attendance page...' : 'Searching for open attendance page...';
+        statusDiv.textContent = 'Searching for open attendance page or opening default...';
         statusDiv.style.display = 'block';
 
         // Open attendance page in background and parse it
+        // background.js will first search for existing tabs, then fall back to defaultUrl
         ext.runtime.sendMessage({
             action: 'parseAttendancePage',
-            url: url // Can be empty string - background.js will search for existing tabs
+            url: defaultUrl
         }, (response) => {
             if (response && response.success) {
                 // Merge the imported data with existing entries
