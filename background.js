@@ -301,6 +301,15 @@ ext.runtime.onMessage.addListener((request, sender, sendResponse) => {
         });
         return true; // Keep channel open for async response
     }
+
+    if (request.action === 'parseWorkQueue') {
+        parseWorkQueue().then((result) => {
+            sendResponse(result);
+        }).catch((error) => {
+            sendResponse({ success: false, error: error.message });
+        });
+        return true; // Keep channel open for async response
+    }
 });
 
 /**
@@ -420,6 +429,113 @@ async function parseAttendancePage(url) {
 
         if (result?.success && result?.timeEntries) {
             return { success: true, timeEntries: result.timeEntries };
+        }
+
+        return { success: false, error: 'Unknown parsing error' };
+
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+}
+
+/**
+ * Parse work queue page to extract unprocessed items
+ */
+async function parseWorkQueue() {
+    try {
+        // Find an existing tab with the work queue page
+        const allTabs = await ext.tabs.query({});
+
+        // Look for tabs that match the work queue URL pattern
+        const matchingTab = allTabs.find(tab =>
+            tab.url && tab.url.includes('Operations/WorkItem/MyQueue')
+        );
+
+        if (!matchingTab) {
+            return {
+                success: false,
+                error: 'No work queue page found. Please open https://rapid.slacal.com/Operations/WorkItem/MyQueue in a Firefox tab first, then try again.'
+            };
+        }
+
+        console.log('[ProcessingChecklist] Found work queue tab:', matchingTab.id);
+
+        // Execute script to parse the work queue grid
+        const results = await ext.tabs.executeScript(matchingTab.id, {
+            code: `
+                (function() {
+                    try {
+                        const grid = document.getElementById('WorkItemGrid');
+                        if (!grid) {
+                            return { error: 'Work queue grid not found on page. Make sure you have the correct page open.' };
+                        }
+
+                        const tbody = grid.querySelector('.k-grid-content tbody');
+                        if (!tbody) {
+                            return { error: 'Grid content not found' };
+                        }
+
+                        const rows = Array.from(tbody.querySelectorAll('tr[role="row"]'));
+                        const forms = [];
+
+                        rows.forEach((row, index) => {
+                            try {
+                                const cells = row.querySelectorAll('td[role="gridcell"]');
+                                if (cells.length < 8) return; // Skip invalid rows
+
+                                // Extract data from cells (based on the column structure)
+                                const submissionNumber = cells[0].textContent.trim();
+                                const submissionType = cells[1].textContent.trim();
+
+                                // Policy number and URL from link in cell 2
+                                const policyLink = cells[2].querySelector('a');
+                                const policyNumber = policyLink ? policyLink.textContent.trim() : cells[2].textContent.trim();
+                                const url = policyLink ? policyLink.href : '';
+
+                                const premium = cells[3].textContent.trim();
+                                const policyType = cells[4].textContent.trim();
+
+                                // Broker name from link in cell 5
+                                const brokerLink = cells[5].querySelector('a');
+                                const broker = brokerLink ? brokerLink.textContent.trim() : cells[5].textContent.trim();
+
+                                const transactionType = cells[6].textContent.trim();
+                                const status = cells[7].textContent.trim();
+
+                                // Only add unprocessed items (status contains "In Progress")
+                                if (status.includes('In Progress') && url) {
+                                    forms.push({
+                                        submissionNumber: submissionNumber,
+                                        policyNumber: policyNumber,
+                                        url: url,
+                                        premium: premium,
+                                        broker: broker,
+                                        policyType: policyType,
+                                        addedDate: new Date().toISOString()
+                                    });
+                                }
+                            } catch (err) {
+                                console.error('Error parsing row:', err);
+                            }
+                        });
+
+                        return { success: true, forms: forms, totalRows: rows.length };
+                    } catch (error) {
+                        return { error: 'Failed to parse work queue: ' + error.message };
+                    }
+                })();
+            `
+        });
+
+        // Return the parsed data
+        const result = results && results[0];
+        if (result?.error) {
+            return { success: false, error: result.error };
+        }
+
+        if (result?.success && result?.forms) {
+            console.log(\`[ProcessingChecklist] Parsed \${result.forms.length} forms from work queue (out of \${result.totalRows} total rows)\`);
+            return { success: true, forms: result.forms };
         }
 
         return { success: false, error: 'Unknown parsing error' };

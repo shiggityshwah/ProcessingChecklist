@@ -111,6 +111,7 @@
 
         // Queue view buttons
         document.getElementById('add-forms-btn').addEventListener('click', handleAddForms);
+        document.getElementById('import-workqueue-btn').addEventListener('click', importFromWorkQueue);
         document.getElementById('clear-paste-btn').addEventListener('click', handleClearPaste);
         document.getElementById('clear-queue-btn').addEventListener('click', handleClearQueue);
         document.getElementById('next-form-btn').addEventListener('click', handleNextForm);
@@ -523,6 +524,61 @@
                         renderHistory();
                     });
                 }
+            }
+        });
+    }
+
+    // Import forms from work queue
+    function importFromWorkQueue() {
+        const statusDiv = document.getElementById('workqueue-status');
+
+        statusDiv.className = 'attendance-status-info';
+        statusDiv.textContent = 'Searching for open work queue page...';
+        statusDiv.style.display = 'block';
+
+        // Parse work queue page - will only use existing tabs
+        ext.runtime.sendMessage({
+            action: 'parseWorkQueue'
+        }, (response) => {
+            if (response && response.success) {
+                // Add all forms to the queue
+                ext.storage.local.get('tracking_availableForms', (result) => {
+                    let availableForms = result.tracking_availableForms || [];
+                    const addedForms = [];
+                    const skippedForms = [];
+
+                    response.forms.forEach(form => {
+                        // Check if form already exists (by URL)
+                        const exists = availableForms.some(f => f.url === form.url);
+                        if (!exists) {
+                            availableForms.push(form);
+                            addedForms.push(form);
+                        } else {
+                            skippedForms.push(form);
+                        }
+                    });
+
+                    if (addedForms.length > 0) {
+                        ext.storage.local.set({ tracking_availableForms: availableForms }, () => {
+                            statusDiv.className = 'attendance-status-success';
+                            statusDiv.textContent = `Successfully imported ${addedForms.length} form(s). ${skippedForms.length > 0 ? `Skipped ${skippedForms.length} duplicate(s).` : ''}`;
+
+                            // Auto-hide success message after 3 seconds
+                            setTimeout(() => {
+                                statusDiv.style.display = 'none';
+                            }, 3000);
+                        });
+                    } else {
+                        statusDiv.className = 'attendance-status-info';
+                        statusDiv.textContent = 'No new forms to import (all forms already in queue).';
+                        setTimeout(() => {
+                            statusDiv.style.display = 'none';
+                        }, 3000);
+                    }
+                });
+            } else {
+                statusDiv.className = 'attendance-status-error';
+                statusDiv.textContent = response?.error || 'Failed to parse work queue page';
             }
         });
     }
