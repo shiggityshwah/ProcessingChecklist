@@ -624,17 +624,10 @@
                             return;
                         }
 
-                        // Skip redundant updateProgress if this is our own storage update
-                        // (updateProgress was already called in updateAndBroadcast before storage was saved)
-                        if (isOwnStorageUpdate) {
-                            console.log(LOG_PREFIX, `Skipping storage change handler - this is our own update`);
-                            return;
-                        }
-
-                        // Normal state update from another tab/window
+                        // Normal state update (from this tab or another tab/window)
                         ext.storage.local.get([keys.uiState, keys.viewMode], (result) => {
                             const state = changes[changedKey].newValue;
-                            updateAndBroadcast(state, result[keys.uiState], result[keys.viewMode]);
+                            updateAndBroadcast(state, result[keys.uiState], result[keys.viewMode], isOwnStorageUpdate);
                         });
                     } else {
                         // Storage was removed (reset clicked) - recreate fresh state
@@ -1292,7 +1285,7 @@
         return fieldData;
     }
 
-    function updateAndBroadcast(state, uiState, viewMode) {
+    function updateAndBroadcast(state, uiState, viewMode, skipTrackingUpdate = false) {
         viewMode = viewMode || 'single';
         const nextIndex = findNextStep(state);
         const fieldData = getFieldData(nextIndex);
@@ -1303,7 +1296,8 @@
         updateItemVisuals(state);
 
         // Update tracking progress and metadata
-        if (window.trackingHelper) {
+        // Skip if this is our own storage update (tracking was already updated before save)
+        if (window.trackingHelper && !skipTrackingUpdate) {
             if (window.trackingHelper.updateProgress && state && Array.isArray(state)) {
                 const checkedCount = state.filter(item => item.processed).length;
                 const total = state.length;
@@ -1320,6 +1314,8 @@
             // Detect and store field changes
             const isReview = window.trackingHelper.isReviewMode || false;
             detectAllChanges(isReview);
+        } else if (skipTrackingUpdate) {
+            console.log("[ProcessingChecklist] Skipping tracking update - already called before storage save");
         }
     }
 
@@ -2312,7 +2308,18 @@
             newState[index] = { processed, skipped };
             console.log(LOG_PREFIX, `Saving new state to ${stateKey}:`, newState);
 
+            // Update tracking progress BEFORE saving to storage
+            // This ensures the correct value is saved and prevents race conditions
+            if (window.trackingHelper && window.trackingHelper.updateProgress) {
+                const checkedCount = newState.filter(item => item.processed).length;
+                const total = newState.length;
+                const isReview = window.trackingHelper.isReviewMode || false;
+                console.log(LOG_PREFIX, `Calling updateProgress from updateState: ${checkedCount}/${total}, isReview=${isReview}`);
+                window.trackingHelper.updateProgress(checkedCount, total, isReview);
+            }
+
             // Set flag to indicate this is our own storage update
+            // (so storage change handler won't call updateProgress again)
             isOwnStorageUpdate = true;
             ext.storage.local.set({ [stateKey]: newState }, () => {
                 // Clear flag after a short delay to allow storage change event to fire
