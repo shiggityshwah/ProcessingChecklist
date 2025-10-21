@@ -204,6 +204,7 @@
                 console.log(LOG_PREFIX, "[DEBUG] tracking_history changed");
                 if (changes.tracking_history.newValue) {
                     console.log(LOG_PREFIX, "[DEBUG] New history data:", changes.tracking_history.newValue);
+                    console.log(LOG_PREFIX, "[DEBUG] New history data length:", changes.tracking_history.newValue.length);
                 }
             }
 
@@ -213,7 +214,10 @@
                 ensureTopItemsResolved(updatedForms);
             }
 
-            loadAndRender();
+            // Pass the fresh data from the change event to avoid race condition
+            const freshHistoryData = changes.tracking_history ? changes.tracking_history.newValue : null;
+            const freshAvailableFormsData = changes.tracking_availableForms ? changes.tracking_availableForms.newValue : null;
+            loadAndRender(freshHistoryData, freshAvailableFormsData);
         }
     }
 
@@ -243,191 +247,221 @@
     }
 
     // Load and render all data
-    function loadAndRender() {
+    function loadAndRender(freshHistoryData = null, freshAvailableFormsData = null) {
         if (currentView === 'queue') {
-            renderQueue();
+            renderQueue(freshAvailableFormsData);
         } else {
-            renderHistory();
+            renderHistory(freshHistoryData, freshAvailableFormsData);
             updateRateDisplay();
         }
     }
 
     // Queue view rendering
-    function renderQueue() {
-        ext.storage.local.get('tracking_availableForms', (result) => {
-            const forms = result.tracking_availableForms || [];
-            const tbody = document.querySelector('#available-forms-table tbody');
-            tbody.innerHTML = '';
-
-            // Update title with count
-            const titleElement = document.getElementById('available-forms-title');
-            if (titleElement) {
-                titleElement.textContent = `Available Forms (${forms.length})`;
-            }
-
-            if (forms.length === 0) {
-                tbody.innerHTML = '<tr class="empty-state"><td colspan="5">No forms in queue. Paste forms above to get started.</td></tr>';
-                document.getElementById('next-form-btn').disabled = true;
-                return;
-            }
-
-            forms.forEach((form, index) => {
-                const row = document.createElement('tr');
-                const urlTooltip = form.url || '';
-                dbg(`Rendering queue item ${index}: URL = "${urlTooltip}"`);
-                row.innerHTML = `
-                    <td style="max-width: 150px;"><a href="#" class="clickable-link" data-index="${index}" title="${escapeHtml(urlTooltip)}">${escapeHtml(form.policyNumber || 'N/A')}</a></td>
-                    <td style="max-width: 125px;">${escapeHtml(form.submissionNumber || 'N/A')}</td>
-                    <td style="max-width: 100px;">${escapeHtml(form.premium || '')}</td>
-                    <td>${escapeHtml(form.policyType || '')}</td>
-                    <td style="max-width: 125px;">${escapeHtml(form.broker || '')}</td>
-                    <td style="white-space: nowrap;">
-                        <button class="action-btn action-btn-delete" data-action="delete" data-index="${index}" title="Delete">✕</button>
-                        <button class="action-btn action-btn-move" data-action="move-up" data-index="${index}" ${index === 0 ? 'disabled' : ''} title="Move Up">↑</button>
-                        <button class="action-btn action-btn-move" data-action="move-top" data-index="${index}" ${index === 0 ? 'disabled' : ''} title="Move to Top">⇈</button>
-                    </td>
-                `;
-                tbody.appendChild(row);
+    function renderQueue(freshData = null) {
+        // Use fresh data if provided, otherwise fetch from storage
+        if (freshData !== null) {
+            console.log(LOG_PREFIX, "[DEBUG] renderQueue using fresh data from storage event");
+            renderQueueWithData(freshData);
+        } else {
+            ext.storage.local.get('tracking_availableForms', (result) => {
+                const forms = result.tracking_availableForms || [];
+                renderQueueWithData(forms);
             });
+        }
+    }
 
-            // Add click handlers
-            tbody.querySelectorAll('.clickable-link').forEach(link => {
-                link.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    const index = parseInt(e.target.dataset.index);
-                    openForm(forms[index]);
-                });
-            });
+    function renderQueueWithData(forms) {
+        const tbody = document.querySelector('#available-forms-table tbody');
+        tbody.innerHTML = '';
 
-            tbody.querySelectorAll('.action-btn').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    const action = e.target.dataset.action;
-                    const index = parseInt(e.target.dataset.index);
-                    handleQueueAction(action, index);
-                });
-            });
+        // Update title with count
+        const titleElement = document.getElementById('available-forms-title');
+        if (titleElement) {
+            titleElement.textContent = `Available Forms (${forms.length})`;
+        }
 
-            // Enable next form button
-            document.getElementById('next-form-btn').disabled = false;
+        if (forms.length === 0) {
+            tbody.innerHTML = '<tr class="empty-state"><td colspan="5">No forms in queue. Paste forms above to get started.</td></tr>';
+            document.getElementById('next-form-btn').disabled = true;
+            return;
+        }
+
+        forms.forEach((form, index) => {
+            const row = document.createElement('tr');
+            const urlTooltip = form.url || '';
+            dbg(`Rendering queue item ${index}: URL = "${urlTooltip}"`);
+            row.innerHTML = `
+                <td style="max-width: 150px;"><a href="#" class="clickable-link" data-index="${index}" title="${escapeHtml(urlTooltip)}">${escapeHtml(form.policyNumber || 'N/A')}</a></td>
+                <td style="max-width: 125px;">${escapeHtml(form.submissionNumber || 'N/A')}</td>
+                <td style="max-width: 100px;">${escapeHtml(form.premium || '')}</td>
+                <td>${escapeHtml(form.policyType || '')}</td>
+                <td style="max-width: 125px;">${escapeHtml(form.broker || '')}</td>
+                <td style="white-space: nowrap;">
+                    <button class="action-btn action-btn-delete" data-action="delete" data-index="${index}" title="Delete">✕</button>
+                    <button class="action-btn action-btn-move" data-action="move-up" data-index="${index}" ${index === 0 ? 'disabled' : ''} title="Move Up">↑</button>
+                    <button class="action-btn action-btn-move" data-action="move-top" data-index="${index}" ${index === 0 ? 'disabled' : ''} title="Move to Top">⇈</button>
+                </td>
+            `;
+            tbody.appendChild(row);
         });
+
+        // Add click handlers
+        tbody.querySelectorAll('.clickable-link').forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                const index = parseInt(e.target.dataset.index);
+                openForm(forms[index]);
+            });
+        });
+
+        tbody.querySelectorAll('.action-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const action = e.target.dataset.action;
+                const index = parseInt(e.target.dataset.index);
+                handleQueueAction(action, index);
+            });
+        });
+
+        // Enable next form button
+        document.getElementById('next-form-btn').disabled = false;
     }
 
     // History view rendering
-    function renderHistory() {
-        ext.storage.local.get(['tracking_history', 'tracking_availableForms'], (result) => {
-            const history = result.tracking_history || [];
-            const availableForms = result.tracking_availableForms || [];
-            console.log(LOG_PREFIX, "[DEBUG] renderHistory - fetched history from storage:", history);
-            const tbody = document.querySelector('#history-table tbody');
-            tbody.innerHTML = '';
-
-            // Update Next Form button based on queue status
-            const nextFormBtn = document.getElementById('next-form-btn');
-            if (availableForms.length === 0) {
-                nextFormBtn.disabled = true;
-                nextFormBtn.title = 'No forms in queue';
+    function renderHistory(freshHistoryData = null, freshAvailableFormsData = null) {
+        // Use fresh data if provided, otherwise fetch from storage
+        if (freshHistoryData !== null || freshAvailableFormsData !== null) {
+            console.log(LOG_PREFIX, "[DEBUG] renderHistory using fresh data from storage event");
+            // Fetch missing data from storage if needed
+            if (freshHistoryData !== null && freshAvailableFormsData !== null) {
+                renderHistoryWithData(freshHistoryData, freshAvailableFormsData);
             } else {
-                nextFormBtn.disabled = false;
-                nextFormBtn.title = `Forms left: ${availableForms.length}`;
-            }
-
-            // Apply filter
-            const filteredHistory = history.filter(item => {
-                if (currentFilter === 'all') return true;
-                if (currentFilter === 'completed') {
-                    return item.manuallyMarkedComplete || (item.checkedProgress && item.checkedProgress.percentage === 100);
-                }
-                if (currentFilter === 'reviewed') {
-                    return item.reviewedProgress && item.reviewedProgress.current > 0;
-                }
-                if (currentFilter === 'in-progress') {
-                    return !item.manuallyMarkedComplete && (!item.checkedProgress || item.checkedProgress.percentage < 100);
-                }
-                return true;
-            });
-
-            // Update title with count
-            const historyTitle = document.getElementById('history-title');
-            if (historyTitle) {
-                historyTitle.textContent = `History (${filteredHistory.length})`;
-            }
-
-            if (filteredHistory.length === 0) {
-                tbody.innerHTML = '<tr class="empty-state"><td colspan="4">No forms match this filter.</td></tr>';
-                return;
-            }
-
-            // Sort by most recent first (newest moved to history first)
-            filteredHistory.sort((a, b) => {
-                const dateA = new Date(a.movedToHistoryDate || a.addedDate || 0);
-                const dateB = new Date(b.movedToHistoryDate || b.addedDate || 0);
-                return dateB - dateA;
-            });
-
-            filteredHistory.forEach((item) => {
-                const row = document.createElement('tr');
-
-                // Calculate progress display
-                const checkedProgress = item.checkedProgress || { current: 0, total: 0, percentage: 0 };
-                console.log(LOG_PREFIX, `[DEBUG] Rendering item ${item.policyNumber}, checkedProgress:`, checkedProgress);
-
-                let checkedDisplay = `${checkedProgress.current}/${checkedProgress.total} (${checkedProgress.percentage}%)`;
-                let checkedClass = 'progress-incomplete';
-
-                if (item.manuallyMarkedComplete) {
-                    checkedDisplay = `${checkedProgress.total}/${checkedProgress.total} (100%)`;
-                    checkedClass = 'progress-complete';
-                } else if (checkedProgress.percentage === 100) {
-                    checkedClass = 'progress-complete';
-                } else if (checkedProgress.percentage === 0) {
-                    checkedClass = 'progress-empty';
-                }
-
-                // Show checkmark for both manually marked complete AND 100% progress
-                const showCheckmark = item.manuallyMarkedComplete || checkedProgress.percentage === 100;
-                const checkmarkTitle = item.manuallyMarkedComplete ? 'Manually marked complete' : 'Automatically completed';
-
-                // Simplify policy type code for display
-                const displayTypeCode = getSimplifiedTypeCode(item.policyType || '');
-
-                // Check if type was changed
-                const typeChanged = item.originalPolicyType && item.originalPolicyType !== item.policyType;
-                const typeStyle = typeChanged ? ' style="color: #28a745; font-weight: 600;"' : '';
-                const typeTitle = typeChanged ? ` title="Initial value: ${getSimplifiedTypeCode(item.originalPolicyType)}"` : '';
-
-                row.innerHTML = `
-                    <td><a href="#" class="clickable-link" data-url-id="${escapeHtml(item.urlId)}" title="${escapeHtml(item.url || '')}">${escapeHtml(item.policyNumber || 'N/A')}</a></td>
-                    <td><span${typeStyle}${typeTitle}>${escapeHtml(displayTypeCode)}</span></td>
-                    <td>
-                        <span class="progress-badge ${checkedClass}">${checkedDisplay}</span>
-                        ${showCheckmark ? `<span class="manual-complete-badge" title="${checkmarkTitle}">✓</span>` : ''}
-                    </td>
-                    <td>
-                        <button class="action-btn action-btn-complete" data-action="toggle-complete" data-url-id="${escapeHtml(item.urlId)}">${item.manuallyMarkedComplete ? 'Undo' : 'Mark Complete'}</button>
-                        <button class="action-btn action-btn-delete" data-action="delete-history" data-url-id="${escapeHtml(item.urlId)}">Delete</button>
-                    </td>
-                `;
-                tbody.appendChild(row);
-            });
-
-            // Add click handlers
-            tbody.querySelectorAll('.clickable-link').forEach(link => {
-                link.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    const urlId = e.target.dataset.urlId;
-                    const item = history.find(h => h.urlId === urlId);
-                    if (item) {
-                        reopenForm(item);
-                    }
+                ext.storage.local.get(['tracking_history', 'tracking_availableForms'], (result) => {
+                    const history = freshHistoryData !== null ? freshHistoryData : (result.tracking_history || []);
+                    const availableForms = freshAvailableFormsData !== null ? freshAvailableFormsData : (result.tracking_availableForms || []);
+                    renderHistoryWithData(history, availableForms);
                 });
+            }
+        } else {
+            ext.storage.local.get(['tracking_history', 'tracking_availableForms'], (result) => {
+                const history = result.tracking_history || [];
+                const availableForms = result.tracking_availableForms || [];
+                console.log(LOG_PREFIX, "[DEBUG] renderHistory - fetched history from storage:", history);
+                renderHistoryWithData(history, availableForms);
             });
+        }
+    }
 
-            tbody.querySelectorAll('.action-btn').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    const action = e.target.dataset.action;
-                    const urlId = e.target.dataset.urlId;
-                    handleHistoryAction(action, urlId);
-                });
+    function renderHistoryWithData(history, availableForms) {
+        console.log(LOG_PREFIX, "[DEBUG] renderHistoryWithData called with history length:", history.length);
+        const tbody = document.querySelector('#history-table tbody');
+        tbody.innerHTML = '';
+
+        // Update Next Form button based on queue status
+        const nextFormBtn = document.getElementById('next-form-btn');
+        if (availableForms.length === 0) {
+            nextFormBtn.disabled = true;
+            nextFormBtn.title = 'No forms in queue';
+        } else {
+            nextFormBtn.disabled = false;
+            nextFormBtn.title = `Forms left: ${availableForms.length}`;
+        }
+
+        // Apply filter
+        const filteredHistory = history.filter(item => {
+            if (currentFilter === 'all') return true;
+            if (currentFilter === 'completed') {
+                return item.manuallyMarkedComplete || (item.checkedProgress && item.checkedProgress.percentage === 100);
+            }
+            if (currentFilter === 'reviewed') {
+                return item.reviewedProgress && item.reviewedProgress.current > 0;
+            }
+            if (currentFilter === 'in-progress') {
+                return !item.manuallyMarkedComplete && (!item.checkedProgress || item.checkedProgress.percentage < 100);
+            }
+            return true;
+        });
+
+        // Update title with count
+        const historyTitle = document.getElementById('history-title');
+        if (historyTitle) {
+            historyTitle.textContent = `History (${filteredHistory.length})`;
+        }
+
+        if (filteredHistory.length === 0) {
+            tbody.innerHTML = '<tr class="empty-state"><td colspan="4">No forms match this filter.</td></tr>';
+            return;
+        }
+
+        // Sort by most recent first (newest moved to history first)
+        filteredHistory.sort((a, b) => {
+            const dateA = new Date(a.movedToHistoryDate || a.addedDate || 0);
+            const dateB = new Date(b.movedToHistoryDate || b.addedDate || 0);
+            return dateB - dateA;
+        });
+
+        filteredHistory.forEach((item) => {
+            const row = document.createElement('tr');
+
+            // Calculate progress display
+            const checkedProgress = item.checkedProgress || { current: 0, total: 0, percentage: 0 };
+            console.log(LOG_PREFIX, `[DEBUG] Rendering item ${item.policyNumber}, checkedProgress:`, checkedProgress);
+
+            let checkedDisplay = `${checkedProgress.current}/${checkedProgress.total} (${checkedProgress.percentage}%)`;
+            let checkedClass = 'progress-incomplete';
+
+            if (item.manuallyMarkedComplete) {
+                checkedDisplay = `${checkedProgress.total}/${checkedProgress.total} (100%)`;
+                checkedClass = 'progress-complete';
+            } else if (checkedProgress.percentage === 100) {
+                checkedClass = 'progress-complete';
+            } else if (checkedProgress.percentage === 0) {
+                checkedClass = 'progress-empty';
+            }
+
+            // Show checkmark for both manually marked complete AND 100% progress
+            const showCheckmark = item.manuallyMarkedComplete || checkedProgress.percentage === 100;
+            const checkmarkTitle = item.manuallyMarkedComplete ? 'Manually marked complete' : 'Automatically completed';
+
+            // Simplify policy type code for display
+            const displayTypeCode = getSimplifiedTypeCode(item.policyType || '');
+
+            // Check if type was changed
+            const typeChanged = item.originalPolicyType && item.originalPolicyType !== item.policyType;
+            const typeStyle = typeChanged ? ' style="color: #28a745; font-weight: 600;"' : '';
+            const typeTitle = typeChanged ? ` title="Initial value: ${getSimplifiedTypeCode(item.originalPolicyType)}"` : '';
+
+            row.innerHTML = `
+                <td><a href="#" class="clickable-link" data-url-id="${escapeHtml(item.urlId)}" title="${escapeHtml(item.url || '')}">${escapeHtml(item.policyNumber || 'N/A')}</a></td>
+                <td><span${typeStyle}${typeTitle}>${escapeHtml(displayTypeCode)}</span></td>
+                <td>
+                    <span class="progress-badge ${checkedClass}">${checkedDisplay}</span>
+                    ${showCheckmark ? `<span class="manual-complete-badge" title="${checkmarkTitle}">✓</span>` : ''}
+                </td>
+                <td>
+                    <button class="action-btn action-btn-complete" data-action="toggle-complete" data-url-id="${escapeHtml(item.urlId)}">${item.manuallyMarkedComplete ? 'Undo' : 'Mark Complete'}</button>
+                    <button class="action-btn action-btn-delete" data-action="delete-history" data-url-id="${escapeHtml(item.urlId)}">Delete</button>
+                </td>
+            `;
+            tbody.appendChild(row);
+        });
+
+        // Add click handlers
+        tbody.querySelectorAll('.clickable-link').forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                const urlId = e.target.dataset.urlId;
+                const item = history.find(h => h.urlId === urlId);
+                if (item) {
+                    reopenForm(item);
+                }
+            });
+        });
+
+        tbody.querySelectorAll('.action-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const action = e.target.dataset.action;
+                const urlId = e.target.dataset.urlId;
+                handleHistoryAction(action, urlId);
             });
         });
     }
