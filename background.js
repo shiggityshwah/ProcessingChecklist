@@ -335,38 +335,16 @@ async function parseAttendancePage(url) {
         }
 
         let tabToUse = matchingTab;
-        let shouldCloseTab = false;
 
-        // If no matching tab found and URL is provided, open a new one
-        if (!tabToUse && url) {
-            console.log('[ProcessingChecklist] No existing attendance tab found, opening new tab...');
-            tabToUse = await ext.tabs.create({ url: url, active: false });
-            shouldCloseTab = true;
-
-            // Wait for the page to load
-            await new Promise((resolve) => {
-                const listener = (tabId, changeInfo) => {
-                    if (tabId === tabToUse.id && changeInfo.status === 'complete') {
-                        ext.tabs.onUpdated.removeListener(listener);
-                        resolve();
-                    }
-                };
-                ext.tabs.onUpdated.addListener(listener);
-
-                // Timeout after 10 seconds
-                setTimeout(() => {
-                    ext.tabs.onUpdated.removeListener(listener);
-                    resolve();
-                }, 10000);
-            });
-        } else if (!tabToUse) {
+        // If no matching tab found, return error
+        if (!tabToUse) {
             return {
                 success: false,
-                error: 'No attendance page found. Please open the attendance page in a Firefox tab first, or provide the attendance URL.'
+                error: 'No attendance page found. Please open https://rapid.slacal.com/Operations/AttendanceSheet/Details in a Firefox tab first, then try again.'
             };
-        } else {
-            console.log('[ProcessingChecklist] Found existing attendance tab:', tabToUse.id);
         }
+
+        console.log('[ProcessingChecklist] Found existing attendance tab:', tabToUse.id);
 
         // Execute script to parse the table
         const results = await ext.tabs.executeScript(tabToUse.id, {
@@ -433,11 +411,6 @@ async function parseAttendancePage(url) {
                 })();
             `
         });
-
-        // Close the tab only if we opened it ourselves
-        if (shouldCloseTab) {
-            await ext.tabs.remove(tabToUse.id);
-        }
 
         // Return the parsed data
         const result = results && results[0];
