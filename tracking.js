@@ -199,6 +199,14 @@
         if (changes.tracking_availableForms || changes.tracking_history) {
             console.log(LOG_PREFIX, "Tracking data changed, refreshing display");
 
+            // Log what changed
+            if (changes.tracking_history) {
+                console.log(LOG_PREFIX, "[DEBUG] tracking_history changed");
+                if (changes.tracking_history.newValue) {
+                    console.log(LOG_PREFIX, "[DEBUG] New history data:", changes.tracking_history.newValue);
+                }
+            }
+
             // Auto-resolve top X items when queue changes
             if (changes.tracking_availableForms && changes.tracking_availableForms.newValue) {
                 const updatedForms = changes.tracking_availableForms.newValue;
@@ -309,6 +317,7 @@
         ext.storage.local.get(['tracking_history', 'tracking_availableForms'], (result) => {
             const history = result.tracking_history || [];
             const availableForms = result.tracking_availableForms || [];
+            console.log(LOG_PREFIX, "[DEBUG] renderHistory - fetched history from storage:", history);
             const tbody = document.querySelector('#history-table tbody');
             tbody.innerHTML = '';
 
@@ -360,6 +369,7 @@
 
                 // Calculate progress display
                 const checkedProgress = item.checkedProgress || { current: 0, total: 0, percentage: 0 };
+                console.log(LOG_PREFIX, `[DEBUG] Rendering item ${item.policyNumber}, checkedProgress:`, checkedProgress);
 
                 let checkedDisplay = `${checkedProgress.current}/${checkedProgress.total} (${checkedProgress.percentage}%)`;
                 let checkedClass = 'progress-incomplete';
