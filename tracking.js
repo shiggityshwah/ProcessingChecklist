@@ -1030,7 +1030,6 @@
     // ============= PRODUCTION RATE TRACKING =============
 
     let productionRateData = {
-        attendanceUrl: '',
         timeEntries: {} // dateString: { totalHours, lunch, nonProd, prodHours }
     };
 
@@ -1064,9 +1063,6 @@
      */
     function openRateSettingsModal() {
         loadProductionRateData().then(() => {
-            // Populate attendance URL
-            document.getElementById('attendance-url').value = productionRateData.attendanceUrl || '';
-
             // Always show empty list (entries are in storage but not displayed)
             const container = document.getElementById('time-entries-container');
             container.innerHTML = '<div style="color: #999; font-size: 13px; padding: 12px; text-align: center;">No time entries yet. Click "+ Add Date Entry" to add one.</div>';
@@ -1189,9 +1185,6 @@
      * Save production rate settings
      */
     function saveRateSettings() {
-        // Save attendance URL
-        productionRateData.attendanceUrl = document.getElementById('attendance-url').value.trim();
-
         // Collect all time entries from the modal
         const container = document.getElementById('time-entries-container');
         const rows = container.querySelectorAll('.time-entry-row');
