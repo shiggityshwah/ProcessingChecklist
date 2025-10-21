@@ -534,7 +534,7 @@ async function parseWorkQueue() {
         }
 
         if (result?.success && result?.forms) {
-            console.log(\`[ProcessingChecklist] Parsed \${result.forms.length} forms from work queue (out of \${result.totalRows} total rows)\`);
+            console.log(`[ProcessingChecklist] Parsed ${result.forms.length} forms from work queue (out of ${result.totalRows} total rows)`);
             return { success: true, forms: result.forms };
         }
 
