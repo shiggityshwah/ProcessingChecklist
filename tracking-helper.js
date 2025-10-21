@@ -433,46 +433,48 @@
                     const totalPremium = extractTotalTaxablePremium();
                     const transactionType = extractTransactionType();
 
-                    if (policyNumber) {
-                        // Add doc=open to the URL if not already present
-                        let formUrl = window.location.href;
-                        if (!formUrl.includes('doc=open')) {
-                            const url = new URL(formUrl);
-                            url.searchParams.set('doc', 'open');
-                            formUrl = url.href;
-                        }
+                    // Always add forms with Edit URL, even if policy number hasn't loaded yet
+                    // Policy number will be updated via updateTrackingMetadata
+                    console.log(LOG_PREFIX, "Form not in queue/history - auto-adding to history. Policy:", policyNumber || "(pending)");
 
-                        // Convert transaction type to letter code
-                        const typeCode = transactionType ? mapTransactionTypeToCode(transactionType) : '';
-
-                        // Get checklist total from content.js
-                        const checklistTotal = (window.trackingHelper.getChecklistTotal && window.trackingHelper.getChecklistTotal()) || 0;
-
-                        history.push({
-                            urlId: urlId,
-                            url: formUrl,
-                            policyNumber: policyNumber,
-                            submissionNumber: submissionNumber || '',
-                            premium: totalPremium || '',
-                            broker: '',
-                            policyType: typeCode,
-                            checkedProgress: { current: 0, total: checklistTotal, percentage: 0 },
-                            reviewedProgress: null,
-                            manuallyMarkedComplete: false,
-                            primaryNamedInsured: primaryInsured,
-                            totalTaxablePremium: totalPremium,
-                            addedDate: new Date().toISOString(),
-                            movedToHistoryDate: new Date().toISOString(),
-                            completedDate: null
-                        });
-                        ext.storage.local.set({ tracking_history: history });
-
-                        // New form is not complete
-                        window.trackingHelper.formIsComplete = false;
-                        console.log(LOG_PREFIX, "[DEBUG] Set formIsComplete = false (new form auto-added)");
-
-                        console.log(LOG_PREFIX, "New form auto-added to history:", urlId, "Type:", typeCode);
+                    // Add doc=open to the URL if not already present
+                    let formUrl = window.location.href;
+                    if (!formUrl.includes('doc=open')) {
+                        const url = new URL(formUrl);
+                        url.searchParams.set('doc', 'open');
+                        formUrl = url.href;
                     }
+
+                    // Convert transaction type to letter code
+                    const typeCode = transactionType ? mapTransactionTypeToCode(transactionType) : '';
+
+                    // Get checklist total from content.js
+                    const checklistTotal = (window.trackingHelper.getChecklistTotal && window.trackingHelper.getChecklistTotal()) || 0;
+
+                    history.push({
+                        urlId: urlId,
+                        url: formUrl,
+                        policyNumber: policyNumber || '',  // Allow empty, will be updated later
+                        submissionNumber: submissionNumber || '',
+                        premium: totalPremium || '',
+                        broker: '',
+                        policyType: typeCode,
+                        checkedProgress: { current: 0, total: checklistTotal, percentage: 0 },
+                        reviewedProgress: null,
+                        manuallyMarkedComplete: false,
+                        primaryNamedInsured: primaryInsured || '',
+                        totalTaxablePremium: totalPremium || '',
+                        addedDate: new Date().toISOString(),
+                        movedToHistoryDate: new Date().toISOString(),
+                        completedDate: null
+                    });
+                    ext.storage.local.set({ tracking_history: history });
+
+                    // New form is not complete
+                    window.trackingHelper.formIsComplete = false;
+                    console.log(LOG_PREFIX, "[DEBUG] Set formIsComplete = false (new form auto-added)");
+
+                    console.log(LOG_PREFIX, "New form auto-added to history:", urlId, "Policy:", policyNumber || "(pending)", "Type:", typeCode);
                 }
             });
         }, 500);
