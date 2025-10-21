@@ -109,6 +109,12 @@
                 ext.tabs.create({ url });
             });
 
+            document.getElementById('changes-report-button').addEventListener('click', () => {
+                dbg("Changes Report button clicked.");
+                const url = ext.runtime.getURL('changes-report.html');
+                ext.tabs.create({ url });
+            });
+
             document.getElementById('calculator-button').addEventListener('click', () => {
                 dbg("Processing Calculator button clicked.");
                 const url = ext.runtime.getURL('calculator.html');
