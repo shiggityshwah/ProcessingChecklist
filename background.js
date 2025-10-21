@@ -502,8 +502,8 @@ async function parseWorkQueue() {
                                 const transactionType = cells[6].textContent.trim();
                                 const status = cells[7].textContent.trim();
 
-                                // Only add unprocessed items (status contains "In Progress")
-                                if (status.includes('In Progress') && url) {
+                                // Only add unprocessed items (status contains "Unprocessed")
+                                if (status.includes('Unprocessed') && url) {
                                     forms.push({
                                         submissionNumber: submissionNumber,
                                         policyNumber: policyNumber,
