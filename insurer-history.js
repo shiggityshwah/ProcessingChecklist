@@ -41,13 +41,16 @@
         return INSURER_URL_PATTERNS.some(pattern => url.includes(pattern));
     }
 
+    // Browser extension API compatibility
+    const ext = (typeof browser !== 'undefined') ? browser : chrome;
+
     /**
-     * Get insurer history from sessionStorage
+     * Get insurer history from browser.storage.local (async)
      */
-    function getHistory() {
+    async function getHistory() {
         try {
-            const data = sessionStorage.getItem(STORAGE_KEY);
-            return data ? JSON.parse(data) : [];
+            const result = await ext.storage.local.get(STORAGE_KEY);
+            return result[STORAGE_KEY] || [];
         } catch (e) {
             console.error(LOG_PREFIX, 'Error reading history:', e);
             return [];
@@ -55,11 +58,11 @@
     }
 
     /**
-     * Save insurer history to sessionStorage
+     * Save insurer history to browser.storage.local (async)
      */
-    function saveHistory(history) {
+    async function saveHistory(history) {
         try {
-            sessionStorage.setItem(STORAGE_KEY, JSON.stringify(history));
+            await ext.storage.local.set({ [STORAGE_KEY]: history });
             console.log(LOG_PREFIX, 'History saved:', history.length, 'items');
         } catch (e) {
             console.error(LOG_PREFIX, 'Error saving history:', e);
@@ -69,8 +72,8 @@
     /**
      * Add insurer to history (maintains max 10 items, newest first)
      */
-    function addToHistory(insurerData) {
-        let history = getHistory();
+    async function addToHistory(insurerData) {
+        let history = await getHistory();
 
         // Remove if already exists (by NAIC code)
         history = history.filter(item => item.naicCode !== insurerData.naicCode);
@@ -83,7 +86,7 @@
             history = history.slice(0, MAX_HISTORY_ITEMS);
         }
 
-        saveHistory(history);
+        await saveHistory(history);
         return history;
     }
 
@@ -285,11 +288,11 @@
     /**
      * Render insurer list in the widget
      */
-    function renderList() {
+    async function renderList() {
         if (!widgetContainer) return;
 
         const listContainer = widgetContainer.querySelector('.insurer-list');
-        const history = getHistory();
+        const history = await getHistory();
 
         if (history.length === 0) {
             listContainer.innerHTML = `
@@ -322,11 +325,10 @@
         }
 
         // Status indicator class - use the stored status from history
-        // Check if status contains "Admitted" but not "Non-Admitted"
+        // Check if status contains "Admitted" but not "Non" (handles "Non-Admitted", "Non Admitted", etc.)
         const statusLower = (insurer.status || '').toLowerCase();
-        const statusClass = (statusLower.includes('admitted') && !statusLower.includes('non'))
-            ? 'admitted'
-            : 'non-admitted';
+        const isAdmitted = statusLower.includes('admitted') && !statusLower.includes('non');
+        const statusClass = isAdmitted ? 'admitted' : 'non-admitted';
 
         item.innerHTML = `
             <div class="insurer-name">
@@ -412,13 +414,13 @@
         }
 
         // Additional delay to ensure dynamic content is loaded
-        setTimeout(() => {
+        setTimeout(async () => {
             // Extract insurer data from page
             const insurerData = detectInsurerData();
 
             if (insurerData) {
                 // Add to history
-                addToHistory(insurerData);
+                await addToHistory(insurerData);
                 console.log(LOG_PREFIX, 'Insurer added to history');
             }
 
@@ -426,6 +428,14 @@
             initWidget();
         }, 1000);
     }
+
+    // Listen for storage changes to update widget across tabs
+    ext.storage.onChanged.addListener((changes, namespace) => {
+        if (namespace === 'local' && changes[STORAGE_KEY]) {
+            console.log(LOG_PREFIX, 'History updated in another tab, refreshing widget');
+            renderList();
+        }
+    });
 
     // Start initialization
     init();
