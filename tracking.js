@@ -203,8 +203,10 @@
             if (changes.tracking_history) {
                 console.log(LOG_PREFIX, "[DEBUG] tracking_history changed");
                 if (changes.tracking_history.newValue) {
-                    console.log(LOG_PREFIX, "[DEBUG] New history data:", changes.tracking_history.newValue);
                     console.log(LOG_PREFIX, "[DEBUG] New history data length:", changes.tracking_history.newValue.length);
+                    changes.tracking_history.newValue.forEach((item, idx) => {
+                        console.log(LOG_PREFIX, `  [${idx}] urlId=${item.urlId}, policy=${item.policyNumber}, progress=${item.checkedProgress?.current || 0}/${item.checkedProgress?.total || 0} (${item.checkedProgress?.percentage || 0}%)`);
+                    });
                 }
             }
 
@@ -353,6 +355,12 @@
 
     function renderHistoryWithData(history, availableForms) {
         console.log(LOG_PREFIX, "[DEBUG] renderHistoryWithData called with history length:", history.length);
+        if (history.length > 0) {
+            console.log(LOG_PREFIX, "[DEBUG] History items (urlId: policyNumber):");
+            history.forEach((item, idx) => {
+                console.log(LOG_PREFIX, `  [${idx}] urlId=${item.urlId}, policy=${item.policyNumber}, progress=${item.checkedProgress?.current || 0}/${item.checkedProgress?.total || 0} (${item.checkedProgress?.percentage || 0}%)`);
+            });
+        }
         const tbody = document.querySelector('#history-table tbody');
         tbody.innerHTML = '';
 
