@@ -116,7 +116,7 @@
 .insurer-list {
     max-height: 520px;
     overflow-y: auto;
-    overflow-x: hidden;
+    overflow-x: visible;
 }
 
 .insurer-list::-webkit-scrollbar {
@@ -143,6 +143,7 @@
     cursor: pointer;
     transition: background 0.2s ease;
     position: relative;
+    overflow: visible;
 }
 
 .insurer-item:last-child {

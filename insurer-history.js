@@ -208,6 +208,8 @@
         // Look for class labels in the grid
         const classLabels = document.querySelectorAll('[id*="lblClass"]');
 
+        console.log(LOG_PREFIX, `Found ${classLabels.length} class label elements`);
+
         classLabels.forEach(label => {
             const text = label.textContent.trim();
             if (text) {
@@ -215,10 +217,12 @@
                 const description = CLASS_MAP[text] || text;
                 if (!classes.includes(description)) {
                     classes.push(description);
+                    console.log(LOG_PREFIX, `Extracted class: ${text} -> ${description}`);
                 }
             }
         });
 
+        console.log(LOG_PREFIX, `Total classes extracted: ${classes.length}`, classes);
         return classes;
     }
 
@@ -356,7 +360,11 @@
 
         // Add classes as tooltip data
         if (insurer.classes && insurer.classes.length > 0) {
-            item.setAttribute('data-classes', insurer.classes.join('\n'));
+            const classesText = insurer.classes.join('\n');
+            item.setAttribute('data-classes', classesText);
+            console.log(LOG_PREFIX, `Set data-classes for ${insurer.name}: ${classesText}`);
+        } else {
+            console.log(LOG_PREFIX, `No classes data for ${insurer.name}`, insurer.classes);
         }
 
         // Status indicator class - use the stored status from history
