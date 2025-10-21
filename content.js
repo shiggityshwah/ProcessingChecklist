@@ -11,6 +11,7 @@
     let myTabId = null;
     let reconnectTimer = null;
     let isConnected = false;
+    let isOwnStorageUpdate = false; // True when we're updating storage ourselves (to prevent duplicate updateProgress calls)
     let isProgrammaticUpdate = false; // Flag to prevent change event loops
     let isResetting = false; // Flag to track reset in progress
     let highlightZones = new Map(); // Track created zone divs by index
@@ -622,7 +623,15 @@
                         if (isResetting) {
                             return;
                         }
-                        // Normal state update
+
+                        // Skip redundant updateProgress if this is our own storage update
+                        // (updateProgress was already called in updateAndBroadcast before storage was saved)
+                        if (isOwnStorageUpdate) {
+                            console.log(LOG_PREFIX, `Skipping storage change handler - this is our own update`);
+                            return;
+                        }
+
+                        // Normal state update from another tab/window
                         ext.storage.local.get([keys.uiState, keys.viewMode], (result) => {
                             const state = changes[changedKey].newValue;
                             updateAndBroadcast(state, result[keys.uiState], result[keys.viewMode]);
@@ -2302,7 +2311,15 @@
             const newState = [...currentState];
             newState[index] = { processed, skipped };
             console.log(LOG_PREFIX, `Saving new state to ${stateKey}:`, newState);
-            ext.storage.local.set({ [stateKey]: newState });
+
+            // Set flag to indicate this is our own storage update
+            isOwnStorageUpdate = true;
+            ext.storage.local.set({ [stateKey]: newState }, () => {
+                // Clear flag after a short delay to allow storage change event to fire
+                setTimeout(() => {
+                    isOwnStorageUpdate = false;
+                }, 100);
+            });
         });
     }
 
