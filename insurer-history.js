@@ -198,7 +198,7 @@
      */
     function buildInsurerUrl(insurerId) {
         if (!insurerId) return window.location.href;
-        return `CompanyDetails.aspx?ID=${insurerId}`;
+        return `https://rapid.slacal.com/Financial/CompanySearch/Company/CompanyDetails.aspx?Id=${insurerId}`;
     }
 
     /**
@@ -321,8 +321,10 @@
             item.setAttribute('data-classes', insurer.classes.join('\n'));
         }
 
-        // Status indicator class
-        const statusClass = insurer.status.toLowerCase().includes('admitted')
+        // Status indicator class - use the stored status from history
+        // Check if status contains "Admitted" but not "Non-Admitted"
+        const statusLower = (insurer.status || '').toLowerCase();
+        const statusClass = (statusLower.includes('admitted') && !statusLower.includes('non'))
             ? 'admitted'
             : 'non-admitted';
 
