@@ -116,7 +116,7 @@
                     url: url,
                     type: 'popup',
                     width: 400,
-                    height: Math.min(680, 800)
+                    height: 715
                 });
             });
 
