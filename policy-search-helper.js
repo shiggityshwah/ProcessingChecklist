@@ -519,6 +519,17 @@
             results.push({ field: 'Transaction Type', selector: '#TransactionTypeId', success: false, reason: 'No value provided' });
         }
 
+        // Fill Transaction Status (for transaction search only)
+        console.log(LOG_PREFIX, "\n--- Attempting to fill Transaction Status ---");
+        if (params.transactionStatus) {
+            const success = fillKendoComboBox('#TransactionStatus', params.transactionStatus, true);
+            results.push({ field: 'Transaction Status', selector: '#TransactionStatus', success });
+            if (success) successCount++;
+        } else {
+            console.log(LOG_PREFIX, "Transaction Status not provided, skipping");
+            results.push({ field: 'Transaction Status', selector: '#TransactionStatus', success: false, reason: 'No value provided' });
+        }
+
         console.log(LOG_PREFIX, "\n═══════════════════════════════════════");
         console.log(LOG_PREFIX, "AUTO-FILL COMPLETE");
         console.log(LOG_PREFIX, `Success: ${successCount} / ${results.length} fields`);
@@ -528,8 +539,8 @@
         // Show success notification
         showSuccessNotification(successCount);
 
-        // Clear pending search
-        ext.storage.local.remove('pendingPolicySearch');
+        // Clear pending search (check both keys)
+        ext.storage.local.remove(['pendingPolicySearch', 'pendingTransactionSearch']);
     }
 
     /**

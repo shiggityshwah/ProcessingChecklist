@@ -3497,6 +3497,16 @@
         const brokerIdInput = document.querySelector('#SlaBrokerNumber');
         const brokerId = brokerIdInput ? brokerIdInput.value : null;
 
+        // Extract transaction type from the form
+        const transactionTypeSelect = document.querySelector('#TransactionTypeId');
+        let transactionType = null;
+        if (transactionTypeSelect) {
+            // Get the selected option text (e.g., "New Business", "Renewal", etc.)
+            const selectedOption = transactionTypeSelect.options[transactionTypeSelect.selectedIndex];
+            transactionType = selectedOption ? selectedOption.text : null;
+        }
+        console.log(LOG_PREFIX, 'Extracted transaction type:', transactionType);
+
         // Extract insurer data from the structured display elements
         // Format: [SLA#] INSURER NAME (#NAIC#) - STATUS
         let insurerName = null;
@@ -3603,7 +3613,8 @@
             slaNumber: slaNumber || '',
             naicNumber: naicNumber || '',
             insurerStatus: insurerStatus || '',
-            transactionType: 'Registered', // Always set to "Registered"
+            transactionType: transactionType || '', // From form (New Business, Renewal, etc.)
+            transactionStatus: 'Registered', // Always set to "Registered"
             dateFrom: dateFrom,
             dateTo: dateTo,
             timestamp: Date.now()
