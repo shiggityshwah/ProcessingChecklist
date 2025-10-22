@@ -483,9 +483,9 @@
     /**
      * Update progress tracking in history
      */
-    window.trackingHelper.updateProgress = function(checkedCurrent, checkedTotal, isReview = false) {
+    window.trackingHelper.updateProgress = function(checkedCurrent, checkedTotal, isReview = false, force = false) {
         const urlId = window.trackingHelper.currentUrlId;
-        console.log(LOG_PREFIX, `[DEBUG] updateProgress called: urlId=${urlId}, checked=${checkedCurrent}/${checkedTotal}, isReview=${isReview}, formIsComplete=${window.trackingHelper.formIsComplete}`);
+        console.log(LOG_PREFIX, `[DEBUG] updateProgress called: urlId=${urlId}, checked=${checkedCurrent}/${checkedTotal}, isReview=${isReview}, formIsComplete=${window.trackingHelper.formIsComplete}, force=${force}`);
 
         if (!urlId) {
             console.log(LOG_PREFIX, `updateProgress skipped - no urlId`);
@@ -520,10 +520,15 @@
                 updated = true;
                 console.log(LOG_PREFIX, `Review progress updated: ${checkedCurrent}/${checkedTotal} (${percentage}%)`);
             } else {
-                console.log(LOG_PREFIX, `[DEBUG] Normal mode - formIsComplete=${window.trackingHelper.formIsComplete}`);
-                // Only update checkedProgress if form is not already complete
-                if (!window.trackingHelper.formIsComplete) {
-                    console.log(LOG_PREFIX, `[DEBUG] Form not complete, updating checkedProgress`);
+                console.log(LOG_PREFIX, `[DEBUG] Normal mode - formIsComplete=${window.trackingHelper.formIsComplete}, force=${force}`);
+                // Only update checkedProgress if form is not already complete OR if force flag is set
+                if (!window.trackingHelper.formIsComplete || force) {
+                    if (force) {
+                        console.log(LOG_PREFIX, `[DEBUG] FORCE UPDATE - bypassing formIsComplete check`);
+                    } else {
+                        console.log(LOG_PREFIX, `[DEBUG] Form not complete, updating checkedProgress`);
+                    }
+
                     history[index].checkedProgress = {
                         current: checkedCurrent,
                         total: checkedTotal,

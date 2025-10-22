@@ -3792,17 +3792,26 @@
                 });
 
                 if (markedCount > 0) {
-                    // IMPORTANT: Set formIsComplete = true to prevent tracking from overwriting progress
-                    if (window.trackingHelper) {
-                        window.trackingHelper.formIsComplete = true;
-                        console.log(LOG_PREFIX, 'Set formIsComplete = true to lock progress at 100%');
-                    }
-
                     ext.storage.local.set({ [keys.checklistState]: state }, () => {
                         console.log(LOG_PREFIX, `Marked ${markedCount} items as checked`);
 
-                        // Update tracking progress
-                        updateAndBroadcast(state, result[keys.uiState], result[keys.viewMode]);
+                        // Force update tracking progress to 100% (bypassing formIsComplete check)
+                        if (window.trackingHelper && window.trackingHelper.updateProgress) {
+                            const checkedCount = state.filter(item => item.processed).length;
+                            const total = state.length;
+                            const isReview = window.trackingHelper.isReviewMode || false;
+                            console.log(LOG_PREFIX, 'Force updating progress to 100% via Mark Checked button');
+                            window.trackingHelper.updateProgress(checkedCount, total, isReview, true); // force=true
+                        }
+
+                        // Set formIsComplete = true to prevent subsequent automatic updates
+                        if (window.trackingHelper) {
+                            window.trackingHelper.formIsComplete = true;
+                            console.log(LOG_PREFIX, 'Set formIsComplete = true to lock progress at 100%');
+                        }
+
+                        // Update UI
+                        updateAndBroadcast(state, result[keys.uiState], result[keys.viewMode], true); // skipTrackingUpdate=true
 
                         // Update button to show undo option
                         if (btn) {
