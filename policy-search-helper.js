@@ -14,12 +14,29 @@
     console.log(LOG_PREFIX, "Kendo available:", typeof window.kendo !== 'undefined');
 
     // Wait for page to be fully loaded and jQuery/Kendo to be available
+    let waitAttempts = 0;
+    const MAX_WAIT_ATTEMPTS = 100; // 10 seconds max
+
     function waitForKendo(callback) {
-        if (typeof window.jQuery !== 'undefined' && typeof window.kendo !== 'undefined') {
+        waitAttempts++;
+
+        // Check multiple jQuery locations
+        const $ = window.jQuery || window.$ || (window.frames && window.frames.jQuery);
+        const kendo = window.kendo;
+
+        if ($ && kendo) {
             console.log(LOG_PREFIX, "jQuery and Kendo are now available, proceeding with callback");
+            window.jQuery = $; // Ensure it's accessible
             callback();
+        } else if (waitAttempts >= MAX_WAIT_ATTEMPTS) {
+            console.error(LOG_PREFIX, "Timeout waiting for jQuery/Kendo after 10 seconds");
+            console.log(LOG_PREFIX, "Attempting to proceed without Kendo widgets...");
+            // Still try to check storage and show notification
+            autoFillSearchForm();
         } else {
-            console.log(LOG_PREFIX, "Waiting for jQuery/Kendo... jQuery:", typeof window.jQuery, "Kendo:", typeof window.kendo);
+            if (waitAttempts % 10 === 0) {
+                console.log(LOG_PREFIX, `Still waiting for jQuery/Kendo... Attempt ${waitAttempts}/${MAX_WAIT_ATTEMPTS}. jQuery:`, typeof $, "Kendo:", typeof kendo);
+            }
             setTimeout(() => waitForKendo(callback), 100);
         }
     }
@@ -143,29 +160,60 @@
             max-width: 400px;
         `;
 
-        let html = '<div style="font-weight: bold; margin-bottom: 8px;">🔍 Auto-fill Policy Search?</div>';
-        if (params.brokerId) html += `<div>Broker ID: ${params.brokerId}</div>`;
-        if (params.insurerName) html += `<div>Insurer: ${params.insurerName}</div>`;
-        html += `<div>Date Range: ${params.dateFrom} to ${params.dateTo}</div>`;
-        html += '<div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.3); display: flex; gap: 8px;">';
-        html += '<button id="autoFillYesBtn" style="flex: 1; background: white; color: #5cb85c; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: bold;">Yes, Fill Form</button>';
-        html += '<button id="autoFillNoBtn" style="flex: 1; background: rgba(255,255,255,0.2); color: white; border: 1px solid white; padding: 8px 16px; border-radius: 4px; cursor: pointer;">No Thanks</button>';
-        html += '</div>';
+        // Check if we have jQuery/Kendo for auto-fill
+        const hasKendo = typeof window.jQuery !== 'undefined' && typeof window.kendo !== 'undefined';
+
+        let html = '<div style="font-weight: bold; margin-bottom: 8px;">🔍 Search Parameters Ready!</div>';
+        if (params.brokerId) html += `<div style="margin-bottom: 3px;">Broker ID: <strong>${params.brokerId}</strong></div>`;
+        if (params.insurerName) html += `<div style="margin-bottom: 3px;">Insurer: <strong>${params.insurerName}</strong></div>`;
+        html += `<div style="margin-bottom: 8px;">Date Range: <strong>${params.dateFrom} to ${params.dateTo}</strong></div>`;
+
+        if (hasKendo) {
+            // Show auto-fill option
+            html += '<div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.3); display: flex; gap: 8px;">';
+            html += '<button id="autoFillYesBtn" style="flex: 1; background: white; color: #5cb85c; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: bold;">Fill Form</button>';
+            html += '<button id="autoFillNoBtn" style="flex: 1; background: rgba(255,255,255,0.2); color: white; border: 1px solid white; padding: 8px 16px; border-radius: 4px; cursor: pointer;">Dismiss</button>';
+            html += '</div>';
+        } else {
+            // Show manual instructions
+            html += '<div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.3); font-size: 13px;">';
+            html += '📋 <strong>Manual Fill Instructions:</strong><br>';
+            html += 'Enter the values above into the search form fields.';
+            html += '</div>';
+            html += '<button id="dismissBtn" style="margin-top: 10px; width: 100%; background: white; color: #5cb85c; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: bold;">Got It</button>';
+        }
 
         notification.innerHTML = html;
         document.body.appendChild(notification);
 
-        // Yes button - perform auto-fill
-        document.getElementById('autoFillYesBtn').addEventListener('click', () => {
-            notification.remove();
-            performAutoFill(params);
-        });
+        if (hasKendo) {
+            // Yes button - perform auto-fill
+            const yesBtn = document.getElementById('autoFillYesBtn');
+            if (yesBtn) {
+                yesBtn.addEventListener('click', () => {
+                    notification.remove();
+                    performAutoFill(params);
+                });
+            }
 
-        // No button - dismiss
-        document.getElementById('autoFillNoBtn').addEventListener('click', () => {
-            notification.remove();
-            ext.storage.local.remove('pendingPolicySearch');
-        });
+            // No button - dismiss
+            const noBtn = document.getElementById('autoFillNoBtn');
+            if (noBtn) {
+                noBtn.addEventListener('click', () => {
+                    notification.remove();
+                    ext.storage.local.remove('pendingPolicySearch');
+                });
+            }
+        } else {
+            // Dismiss button
+            const dismissBtn = document.getElementById('dismissBtn');
+            if (dismissBtn) {
+                dismissBtn.addEventListener('click', () => {
+                    notification.remove();
+                    ext.storage.local.remove('pendingPolicySearch');
+                });
+            }
+        }
 
         // Auto-dismiss after 30 seconds
         setTimeout(() => {
