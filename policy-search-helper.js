@@ -45,32 +45,48 @@
      * Fill Kendo ComboBox with value
      */
     function fillKendoComboBox(selector, value, isText = false) {
+        console.log(LOG_PREFIX, `fillKendoComboBox called with selector: ${selector}, value:`, value, `isText: ${isText}`);
+
         const element = window.jQuery(selector);
+        console.log(LOG_PREFIX, `jQuery element found:`, element.length > 0, `Element:`, element);
+
         if (element.length === 0) {
             console.warn(LOG_PREFIX, `Element not found: ${selector}`);
             return false;
         }
 
         const widget = element.data('kendoComboBox');
+        console.log(LOG_PREFIX, `Kendo ComboBox widget:`, widget);
+
         if (!widget) {
             console.warn(LOG_PREFIX, `Kendo ComboBox widget not found for: ${selector}`);
+            // List all available data attributes to help debug
+            const allData = element.data();
+            console.log(LOG_PREFIX, `Available data attributes on element:`, allData);
             return false;
         }
 
         try {
+            console.log(LOG_PREFIX, `Widget state before fill - value:`, widget.value(), `text:`, widget.text());
+
             if (isText) {
                 // For text input (like insurer name), just set the text
+                console.log(LOG_PREFIX, `Setting text to:`, value);
                 widget.text(value);
                 widget.trigger('change');
             } else {
                 // For ID value, set the value
+                console.log(LOG_PREFIX, `Setting value to:`, value);
                 widget.value(value);
                 widget.trigger('change');
             }
-            console.log(LOG_PREFIX, `Filled ${selector} with:`, value);
+
+            console.log(LOG_PREFIX, `Widget state after fill - value:`, widget.value(), `text:`, widget.text());
+            console.log(LOG_PREFIX, `✓ Successfully filled ${selector} with:`, value);
             return true;
         } catch (error) {
             console.error(LOG_PREFIX, `Error filling ${selector}:`, error);
+            console.error(LOG_PREFIX, `Error stack:`, error.stack);
             return false;
         }
     }
@@ -79,29 +95,44 @@
      * Fill Kendo DatePicker with date
      */
     function fillKendoDatePicker(selector, dateString) {
+        console.log(LOG_PREFIX, `fillKendoDatePicker called with selector: ${selector}, dateString:`, dateString);
+
         const element = window.jQuery(selector);
+        console.log(LOG_PREFIX, `jQuery element found:`, element.length > 0, `Element:`, element);
+
         if (element.length === 0) {
             console.warn(LOG_PREFIX, `Element not found: ${selector}`);
             return false;
         }
 
         const widget = element.data('kendoDatePicker');
+        console.log(LOG_PREFIX, `Kendo DatePicker widget:`, widget);
+
         if (!widget) {
             console.warn(LOG_PREFIX, `Kendo DatePicker widget not found for: ${selector}`);
+            // List all available data attributes to help debug
+            const allData = element.data();
+            console.log(LOG_PREFIX, `Available data attributes on element:`, allData);
             return false;
         }
 
         try {
+            console.log(LOG_PREFIX, `Widget state before fill - value:`, widget.value());
+
             // Parse MM/DD/YYYY format
             const parts = dateString.split('/');
             const date = new Date(parts[2], parts[0] - 1, parts[1]);
+            console.log(LOG_PREFIX, `Parsed date object:`, date);
 
             widget.value(date);
             widget.trigger('change');
-            console.log(LOG_PREFIX, `Filled ${selector} with:`, dateString);
+
+            console.log(LOG_PREFIX, `Widget state after fill - value:`, widget.value());
+            console.log(LOG_PREFIX, `✓ Successfully filled ${selector} with:`, dateString);
             return true;
         } catch (error) {
             console.error(LOG_PREFIX, `Error filling ${selector}:`, error);
+            console.error(LOG_PREFIX, `Error stack:`, error.stack);
             return false;
         }
     }
@@ -173,10 +204,41 @@
         const hasKendo = typeof window.jQuery !== 'undefined' && typeof window.kendo !== 'undefined';
         console.log(LOG_PREFIX, "hasKendo:", hasKendo);
 
-        let html = '<div style="font-weight: bold; margin-bottom: 8px;">🔍 Search Parameters Ready!</div>';
-        if (params.brokerId) html += `<div style="margin-bottom: 3px;">Broker ID: <strong>${params.brokerId}</strong></div>`;
-        if (params.insurerName) html += `<div style="margin-bottom: 3px;">Insurer: <strong>${params.insurerName}</strong></div>`;
-        html += `<div style="margin-bottom: 8px;">Date Range: <strong>${params.dateFrom} to ${params.dateTo}</strong></div>`;
+        // Create properly formatted insurer name with all details
+        // Format: [SLA#] INSURER NAME (#NAIC#) - STATUS
+        let insurerDisplay = params.insurerName;
+        if (params.slaNumber && params.insurerName && params.naicNumber) {
+            insurerDisplay = `[${params.slaNumber}] ${params.insurerName} (#${params.naicNumber})`;
+            if (params.insurerStatus) {
+                insurerDisplay += ` - ${params.insurerStatus}`;
+            }
+        } else if (params.insurerId && params.insurerName) {
+            // Fallback format if we only have insurer ID
+            insurerDisplay = `[${params.insurerId}] ${params.insurerName} (#${params.insurerId})`;
+        }
+
+        let html = '<div style="font-weight: bold; margin-bottom: 10px;">🔍 Search Parameters Ready!</div>';
+        html += '<div style="font-size: 12px; margin-bottom: 10px; opacity: 0.9;">Click any value to copy</div>';
+
+        if (params.brokerId) {
+            html += `<div class="copy-field" data-value="${params.brokerId}" style="margin-bottom: 5px; padding: 6px; background: rgba(255,255,255,0.1); border-radius: 4px; cursor: pointer; transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.2)'" onmouseout="this.style.background='rgba(255,255,255,0.1)'">`;
+            html += `<span style="opacity: 0.8;">Broker:</span> <strong>${params.brokerId}</strong>`;
+            html += `</div>`;
+        }
+
+        if (insurerDisplay) {
+            html += `<div class="copy-field" data-value="${insurerDisplay}" style="margin-bottom: 5px; padding: 6px; background: rgba(255,255,255,0.1); border-radius: 4px; cursor: pointer; transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.2)'" onmouseout="this.style.background='rgba(255,255,255,0.1)'">`;
+            html += `<span style="opacity: 0.8;">Insurer:</span> <strong style="font-size: 11px;">${insurerDisplay}</strong>`;
+            html += `</div>`;
+        }
+
+        html += `<div class="copy-field" data-value="${params.dateFrom}" style="margin-bottom: 5px; padding: 6px; background: rgba(255,255,255,0.1); border-radius: 4px; cursor: pointer; transition: background 0.2s; display: inline-block; width: 48%; margin-right: 4%;" onmouseover="this.style.background='rgba(255,255,255,0.2)'" onmouseout="this.style.background='rgba(255,255,255,0.1)'">`;
+        html += `<span style="opacity: 0.8;">From:</span> <strong>${params.dateFrom}</strong>`;
+        html += `</div>`;
+
+        html += `<div class="copy-field" data-value="${params.dateTo}" style="margin-bottom: 5px; padding: 6px; background: rgba(255,255,255,0.1); border-radius: 4px; cursor: pointer; transition: background 0.2s; display: inline-block; width: 48%;" onmouseover="this.style.background='rgba(255,255,255,0.2)'" onmouseout="this.style.background='rgba(255,255,255,0.1)'">`;
+        html += `<span style="opacity: 0.8;">To:</span> <strong>${params.dateTo}</strong>`;
+        html += `</div>`;
 
         if (hasKendo) {
             // Show auto-fill option
@@ -197,6 +259,27 @@
         console.log(LOG_PREFIX, "Appending notification to document.body");
         document.body.appendChild(notification);
         console.log(LOG_PREFIX, "Notification appended successfully. Element:", notification);
+
+        // Add click-to-copy functionality for all copy-field elements
+        const copyFields = notification.querySelectorAll('.copy-field');
+        copyFields.forEach(field => {
+            field.addEventListener('click', () => {
+                const value = field.getAttribute('data-value');
+                navigator.clipboard.writeText(value).then(() => {
+                    // Show temporary "Copied!" feedback
+                    const originalHTML = field.innerHTML;
+                    field.innerHTML = '<span style="color: #fff;">✓ Copied!</span>';
+                    field.style.background = 'rgba(255,255,255,0.3)';
+
+                    setTimeout(() => {
+                        field.innerHTML = originalHTML;
+                        field.style.background = 'rgba(255,255,255,0.1)';
+                    }, 1000);
+                }).catch(err => {
+                    console.error(LOG_PREFIX, 'Failed to copy to clipboard:', err);
+                });
+            });
+        });
 
         if (hasKendo) {
             // Yes button - perform auto-fill
@@ -227,49 +310,114 @@
             }
         }
 
-        // Auto-dismiss after 30 seconds
-        setTimeout(() => {
-            if (notification.parentNode) {
-                notification.remove();
-                ext.storage.local.remove('pendingPolicySearch');
+        // Notification is now persistent - user must dismiss manually
+        // (No auto-dismiss timeout)
+    }
+
+    /**
+     * Debug function to list all Kendo widgets on the page
+     */
+    function debugListKendoWidgets() {
+        console.log(LOG_PREFIX, "\n🔍 DEBUGGING: Scanning page for Kendo widgets...");
+
+        const $ = window.jQuery;
+        if (!$) {
+            console.log(LOG_PREFIX, "jQuery not available");
+            return;
+        }
+
+        // Find all elements with Kendo widgets
+        const widgets = [];
+        $('[id], [name]').each(function() {
+            const el = $(this);
+            const data = el.data();
+            const kendoData = {};
+
+            for (const key in data) {
+                if (key.startsWith('kendo')) {
+                    kendoData[key] = data[key];
+                }
             }
-        }, 30000);
+
+            if (Object.keys(kendoData).length > 0) {
+                widgets.push({
+                    id: el.attr('id'),
+                    name: el.attr('name'),
+                    tagName: this.tagName,
+                    kendoWidgets: Object.keys(kendoData)
+                });
+            }
+        });
+
+        console.log(LOG_PREFIX, `Found ${widgets.length} elements with Kendo widgets:`);
+        console.table(widgets);
+
+        return widgets;
     }
 
     /**
      * Perform the actual auto-fill
      */
     function performAutoFill(params) {
-        console.log(LOG_PREFIX, "Performing auto-fill with params:", params);
+        console.log(LOG_PREFIX, "═══════════════════════════════════════");
+        console.log(LOG_PREFIX, "STARTING AUTO-FILL");
+        console.log(LOG_PREFIX, "Parameters received:", params);
+        console.log(LOG_PREFIX, "═══════════════════════════════════════");
+
+        // Debug: List all Kendo widgets on the page
+        debugListKendoWidgets();
 
         let successCount = 0;
+        const results = [];
 
         // Fill Broker ID
+        console.log(LOG_PREFIX, "\n--- Attempting to fill Broker ID ---");
         if (params.brokerId) {
-            if (fillKendoComboBox('#Broker', params.brokerId, false)) {
-                successCount++;
-            }
+            const success = fillKendoComboBox('#Broker', params.brokerId, false);
+            results.push({ field: 'Broker ID', selector: '#Broker', success });
+            if (success) successCount++;
+        } else {
+            console.log(LOG_PREFIX, "Broker ID not provided, skipping");
+            results.push({ field: 'Broker ID', selector: '#Broker', success: false, reason: 'No value provided' });
         }
 
         // Fill Insurer Name (use text mode)
+        console.log(LOG_PREFIX, "\n--- Attempting to fill Insurer Name ---");
         if (params.insurerName) {
-            if (fillKendoComboBox('#Insurer_input', params.insurerName, true)) {
-                successCount++;
-            }
+            const success = fillKendoComboBox('#Insurer_input', params.insurerName, true);
+            results.push({ field: 'Insurer Name', selector: '#Insurer_input', success });
+            if (success) successCount++;
+        } else {
+            console.log(LOG_PREFIX, "Insurer Name not provided, skipping");
+            results.push({ field: 'Insurer Name', selector: '#Insurer_input', success: false, reason: 'No value provided' });
         }
 
         // Fill Date Range
+        console.log(LOG_PREFIX, "\n--- Attempting to fill Date From ---");
         if (params.dateFrom) {
-            if (fillKendoDatePicker('#SLASubmissionDateFrom', params.dateFrom)) {
-                successCount++;
-            }
+            const success = fillKendoDatePicker('#SLASubmissionDateFrom', params.dateFrom);
+            results.push({ field: 'Date From', selector: '#SLASubmissionDateFrom', success });
+            if (success) successCount++;
+        } else {
+            console.log(LOG_PREFIX, "Date From not provided, skipping");
+            results.push({ field: 'Date From', selector: '#SLASubmissionDateFrom', success: false, reason: 'No value provided' });
         }
 
+        console.log(LOG_PREFIX, "\n--- Attempting to fill Date To ---");
         if (params.dateTo) {
-            if (fillKendoDatePicker('#SLASubmissionDateTo', params.dateTo)) {
-                successCount++;
-            }
+            const success = fillKendoDatePicker('#SLASubmissionDateTo', params.dateTo);
+            results.push({ field: 'Date To', selector: '#SLASubmissionDateTo', success });
+            if (success) successCount++;
+        } else {
+            console.log(LOG_PREFIX, "Date To not provided, skipping");
+            results.push({ field: 'Date To', selector: '#SLASubmissionDateTo', success: false, reason: 'No value provided' });
         }
+
+        console.log(LOG_PREFIX, "\n═══════════════════════════════════════");
+        console.log(LOG_PREFIX, "AUTO-FILL COMPLETE");
+        console.log(LOG_PREFIX, `Success: ${successCount} / ${results.length} fields`);
+        console.log(LOG_PREFIX, "Results:", results);
+        console.log(LOG_PREFIX, "═══════════════════════════════════════\n");
 
         // Show success notification
         showSuccessNotification(successCount);

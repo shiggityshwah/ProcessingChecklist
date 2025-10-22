@@ -3497,20 +3497,63 @@
         const brokerIdInput = document.querySelector('#SlaBrokerNumber');
         const brokerId = brokerIdInput ? brokerIdInput.value : null;
 
-        // Extract insurer name - try multiple selectors
+        // Extract insurer data from the structured display elements
+        // Format: [SLA#] INSURER NAME (#NAIC#) - STATUS
         let insurerName = null;
+        let insurerId = null;
+        let slaNumber = null;
+        let naicNumber = null;
+        let insurerStatus = null;
 
-        // Primary: singleSelectedInsurerName (from the form display)
-        const insurerNameSpan = document.querySelector('#singleSelectedInsurerName');
-        if (insurerNameSpan) {
-            const insurerLink = insurerNameSpan.querySelector('a');
-            insurerName = insurerLink ? insurerLink.textContent.trim() : insurerNameSpan.textContent.trim();
+        // Primary: selectedInsurerName (from the row-buffer display)
+        const insurerNameLink = document.querySelector('#selectedInsurerName');
+        if (insurerNameLink) {
+            insurerName = insurerNameLink.textContent.trim();
+            // Extract ID from href: /Financial/CompanySearch/Company/CompanyDetails.aspx?Id=757
+            const href = insurerNameLink.getAttribute('href');
+            const idMatch = href ? href.match(/Id=(\d+)/) : null;
+            insurerId = idMatch ? idMatch[1] : null;
         }
 
-        // Fallback: SingleSelectedInsurerId_input (Kendo input)
+        // Extract additional details from the same row
+        slaNumber = document.querySelector('#selectedSlaNumber')?.textContent.trim();
+        naicNumber = document.querySelector('#selectedNAICNumber')?.textContent.trim();
+        insurerStatus = document.querySelector('#selectedInsurerStatus')?.textContent.trim();
+
+        console.log(LOG_PREFIX, 'Insurer extraction results:', {
+            insurerName,
+            insurerId,
+            slaNumber,
+            naicNumber,
+            insurerStatus
+        });
+
+        // Fallback: singleSelectedInsurerName (alternate display)
+        if (!insurerName) {
+            const insurerNameSpan = document.querySelector('#singleSelectedInsurerName');
+            if (insurerNameSpan) {
+                const insurerLink = insurerNameSpan.querySelector('a');
+                if (insurerLink) {
+                    insurerName = insurerLink.textContent.trim();
+                    const href = insurerLink.getAttribute('href');
+                    const idMatch = href ? href.match(/Id=(\d+)/) : null;
+                    insurerId = idMatch ? idMatch[1] : null;
+                } else {
+                    insurerName = insurerNameSpan.textContent.trim();
+                }
+            }
+        }
+
+        // Final fallback: SingleSelectedInsurerId_input (Kendo input)
         if (!insurerName) {
             const insurerInput = document.querySelector('#SingleSelectedInsurerId_input');
             insurerName = insurerInput ? insurerInput.value.trim() : null;
+        }
+
+        // If we have an ID, also get it from the hidden input
+        if (!insurerId) {
+            const insurerIdInput = document.querySelector('#SingleSelectedInsurerId');
+            insurerId = insurerIdInput ? insurerIdInput.value : null;
         }
 
         // Extract submission date from link text
@@ -3552,6 +3595,10 @@
         const searchParams = {
             brokerId: brokerId || '',
             insurerName: insurerName || '',
+            insurerId: insurerId || '',
+            slaNumber: slaNumber || '',
+            naicNumber: naicNumber || '',
+            insurerStatus: insurerStatus || '',
             dateFrom: dateFrom,
             dateTo: dateTo,
             timestamp: Date.now()
@@ -3589,7 +3636,19 @@
     function formatSearchParamsForClipboard(params) {
         let text = '[Policy Search Parameters]\n';
         if (params.brokerId) text += `Broker ID: ${params.brokerId}\n`;
-        if (params.insurerName) text += `Insurer: ${params.insurerName}\n`;
+
+        // Format insurer with full details: [SLA#] NAME (#NAIC#) - STATUS
+        if (params.insurerName) {
+            let insurerText = params.insurerName;
+            if (params.slaNumber && params.naicNumber) {
+                insurerText = `[${params.slaNumber}] ${params.insurerName} (#${params.naicNumber})`;
+                if (params.insurerStatus) {
+                    insurerText += ` - ${params.insurerStatus}`;
+                }
+            }
+            text += `Insurer: ${insurerText}\n`;
+        }
+
         text += `SLA Submission Date Range: ${params.dateFrom} to ${params.dateTo}\n`;
         text += '\n→ Parameters saved! Open Policy Search tab to auto-fill, or paste these values manually.';
         return text;
