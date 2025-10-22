@@ -79,12 +79,22 @@
         const existingIndex = history.findIndex(item => item.naicCode === insurerData.naicCode);
 
         if (existingIndex !== -1) {
-            // Preserve status from existing entry if new data doesn't have a valid status
             const existing = history[existingIndex];
+
+            // Preserve status from existing entry if new data doesn't have a valid status
             if (!insurerData.status || insurerData.status === 'Unknown') {
                 console.log(LOG_PREFIX, 'Preserving existing status:', existing.status);
                 insurerData.status = existing.status;
             }
+
+            // IMPORTANT: Preserve classes from existing entry if new data has no classes
+            // This prevents wiping out COI data when visiting company details page
+            if ((!insurerData.classes || insurerData.classes.length === 0) &&
+                existing.classes && existing.classes.length > 0) {
+                console.log(LOG_PREFIX, 'Preserving existing classes:', existing.classes);
+                insurerData.classes = existing.classes;
+            }
+
             // Remove the old entry
             history.splice(existingIndex, 1);
         }

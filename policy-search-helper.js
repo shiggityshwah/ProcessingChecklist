@@ -9,13 +9,17 @@
     const ext = (typeof browser !== 'undefined') ? browser : chrome;
     const LOG_PREFIX = "[ProcessingChecklist-PolicySearch]";
 
-    console.log(LOG_PREFIX, "Policy search helper loaded");
+    console.log(LOG_PREFIX, "Policy search helper loaded on URL:", window.location.href);
+    console.log(LOG_PREFIX, "jQuery available:", typeof window.jQuery !== 'undefined');
+    console.log(LOG_PREFIX, "Kendo available:", typeof window.kendo !== 'undefined');
 
     // Wait for page to be fully loaded and jQuery/Kendo to be available
     function waitForKendo(callback) {
         if (typeof window.jQuery !== 'undefined' && typeof window.kendo !== 'undefined') {
+            console.log(LOG_PREFIX, "jQuery and Kendo are now available, proceeding with callback");
             callback();
         } else {
+            console.log(LOG_PREFIX, "Waiting for jQuery/Kendo... jQuery:", typeof window.jQuery, "Kendo:", typeof window.kendo);
             setTimeout(() => waitForKendo(callback), 100);
         }
     }
@@ -89,23 +93,29 @@
      * Auto-fill search form with pending parameters
      */
     function autoFillSearchForm() {
+        console.log(LOG_PREFIX, "autoFillSearchForm called, checking storage...");
         ext.storage.local.get('pendingPolicySearch', (result) => {
+            console.log(LOG_PREFIX, "Storage result:", result);
+
             if (!result.pendingPolicySearch) {
-                console.log(LOG_PREFIX, "No pending search parameters found");
+                console.log(LOG_PREFIX, "No pending search parameters found in storage");
                 return;
             }
 
             const params = result.pendingPolicySearch;
+            console.log(LOG_PREFIX, "Found params:", params);
 
             // Check if parameters are recent (within last 5 minutes)
             const age = Date.now() - params.timestamp;
+            console.log(LOG_PREFIX, "Parameter age (ms):", age, "Max allowed:", 5 * 60 * 1000);
+
             if (age > 5 * 60 * 1000) {
                 console.log(LOG_PREFIX, "Pending search parameters are too old, ignoring");
                 ext.storage.local.remove('pendingPolicySearch');
                 return;
             }
 
-            console.log(LOG_PREFIX, "Found pending search parameters:", params);
+            console.log(LOG_PREFIX, "Parameters are recent, showing confirmation dialog");
 
             // Show confirmation notification
             showAutoFillConfirmation(params);
@@ -238,11 +248,13 @@
     }
 
     // Initialize when Kendo is ready
+    console.log(LOG_PREFIX, "Starting waitForKendo...");
     waitForKendo(() => {
         console.log(LOG_PREFIX, "jQuery and Kendo are available, checking for pending search");
 
         // Wait a bit more for form to be fully initialized
         setTimeout(() => {
+            console.log(LOG_PREFIX, "Calling autoFillSearchForm after 1 second delay");
             autoFillSearchForm();
         }, 1000);
     });

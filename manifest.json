@@ -39,7 +39,8 @@
     },
     {
       "matches": [
-        "*://rapid.slacal.com/policy/search*"
+        "*://rapid.slacal.com/policy/search*",
+        "*://rapid.slacal.com/Policy/Search*"
       ],
       "js": ["policy-search-helper.js"],
       "run_at": "document_idle"

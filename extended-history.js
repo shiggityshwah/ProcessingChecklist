@@ -109,6 +109,11 @@
             const daySection = createDaySection(day, items);
             container.appendChild(daySection);
         });
+
+        // After rendering, update delete button states if in delete mode
+        if (deleteMode) {
+            updateDeleteButtonStates();
+        }
     }
 
     function groupByDay(history) {
@@ -145,7 +150,7 @@
         header.className = 'day-header';
         header.innerHTML = `
             <div class="day-title">${day} (${items.length} form${items.length !== 1 ? 's' : ''})</div>
-            <div class="day-delete-controls" style="display: none;">
+            <div class="day-delete-controls" style="display: ${deleteMode ? 'flex' : 'none'};">
                 <button class="select-all-btn day-select-all" data-day="${escapeHtml(day)}">Select All (This Day)</button>
                 <button class="deselect-all-btn day-deselect-all" data-day="${escapeHtml(day)}">Deselect All (This Day)</button>
                 <button class="delete-selected-btn day-delete-selected" data-day="${escapeHtml(day)}" disabled>Delete 0 from This Day</button>
@@ -183,7 +188,7 @@
         table.innerHTML = `
             <thead>
                 <tr>
-                    <th class="checkbox-column" style="display: none;"></th>
+                    <th class="checkbox-column" style="display: ${deleteMode ? 'table-cell' : 'none'};"></th>
                     <th>Policy Number</th>
                     <th>Submission Number</th>
                     <th>Broker</th>
@@ -283,7 +288,7 @@
 
         const isChecked = selectedItems.has(item.urlId);
         row.innerHTML = `
-            <td class="checkbox-column" style="display: none;"><input type="checkbox" class="delete-checkbox" data-url-id="${escapeHtml(item.urlId)}" ${isChecked ? 'checked' : ''}></td>
+            <td class="checkbox-column" style="display: ${deleteMode ? 'table-cell' : 'none'};"><input type="checkbox" class="delete-checkbox" data-url-id="${escapeHtml(item.urlId)}" ${isChecked ? 'checked' : ''}></td>
             <td><a href="#" class="clickable-link" data-url-id="${escapeHtml(item.urlId)}" title="${escapeHtml(item.url || '')}">${escapeHtml(item.policyNumber || 'N/A')}</a></td>
             <td>${escapeHtml(item.submissionNumber || 'N/A')}</td>
             <td>${escapeHtml(item.broker || '')}</td>
@@ -429,8 +434,10 @@
         );
 
         const completedCount = completed.length;
-        const prodHours = timeEntry?.prodHours || 0;
-        const rate = prodHours > 0 ? completedCount / prodHours : 0;
+
+        // Use stored production time OR default to 7.5 hours
+        const prodHours = timeEntry?.prodHours || 7.5;
+        const rate = prodHours > 0 && completedCount > 0 ? completedCount / prodHours : 0;
         const avgMinutes = completedCount > 0 && prodHours > 0 ? (prodHours * 60) / completedCount : 0;
 
         return {
@@ -438,7 +445,8 @@
             prodHours,
             rate,
             avgMinutes,
-            hasTimeData: !!timeEntry
+            hasTimeData: !!timeEntry,
+            isDefaultProdHours: !timeEntry // Flag to indicate using default
         };
     }
 
@@ -493,43 +501,42 @@
      */
     function createStatsBox(stats, isToday) {
         const statsBox = document.createElement('div');
-        statsBox.className = stats.hasTimeData ? 'day-stats' : 'day-stats no-data';
+        statsBox.className = 'day-stats';
 
-        if (!stats.hasTimeData) {
+        // Don't show stats if no forms completed
+        if (stats.completedCount === 0) {
             statsBox.innerHTML = `
                 <div class="stat-item" style="grid-column: 1 / -1;">
-                    <div class="stat-value no-data">⏱️ No production time data</div>
-                    <div class="stat-message">Set production time in the Tracking window to see rate statistics</div>
+                    <div class="stat-value no-data">⏱️ No completed forms yet</div>
                 </div>
             `;
             return statsBox;
         }
 
-        let statsHtml = `
-            <div class="stat-item">
-                <div class="stat-label">Completed Today</div>
-                <div class="stat-value">${stats.completedCount} forms</div>
-            </div>
-            <div class="stat-item">
-                <div class="stat-label">Production Time</div>
-                <div class="stat-value">${stats.prodHours.toFixed(2)} hours</div>
-            </div>
-            <div class="stat-item">
-                <div class="stat-label">Rate</div>
-                <div class="stat-value">${stats.rate.toFixed(2)} forms/hr</div>
-            </div>
-            <div class="stat-item">
-                <div class="stat-label">Avg Time per Form</div>
-                <div class="stat-value">${stats.avgMinutes.toFixed(1)} min/form</div>
-            </div>
-        `;
+        let statsHtml = '';
 
-        // Add current rate for today
-        if (isToday && stats.completedCount > 0) {
-            const currentRateItems = Array.from(document.querySelectorAll('.day-section'))
-                .find(section => section.querySelector('.day-title').textContent.includes(new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })));
+        // For today: show both current rate and daily rate (matching tracking window)
+        if (isToday) {
+            statsHtml = `
+                <div class="stat-item">
+                    <div class="stat-label">Completed Today</div>
+                    <div class="stat-value">${stats.completedCount} forms</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Current Rate (Live)</div>
+                    <div class="stat-value current-rate current-rate-value">Calculating...</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Daily Rate</div>
+                    <div class="stat-value">${stats.rate.toFixed(2)} forms/hr</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Production Time</div>
+                    <div class="stat-value">${stats.prodHours.toFixed(2)} hours${stats.isDefaultProdHours ? ' (default)' : ''}</div>
+                </div>
+            `;
 
-            // Get all items from this day for current rate calculation
+            // Calculate current rate asynchronously
             ext.storage.local.get('tracking_history', (result) => {
                 const history = result.tracking_history || [];
                 const today = new Date().toISOString().split('T')[0];
@@ -548,11 +555,35 @@
                     currentRateEl.textContent = `${currentRate.toFixed(2)} forms/hr`;
                 }
             });
-
-            statsHtml += `
+        } else {
+            // For past days: show only daily rate
+            statsHtml = `
                 <div class="stat-item">
-                    <div class="stat-label">Current Rate (Live)</div>
-                    <div class="stat-value current-rate current-rate-value">Calculating...</div>
+                    <div class="stat-label">Completed</div>
+                    <div class="stat-value">${stats.completedCount} forms</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Daily Rate</div>
+                    <div class="stat-value">${stats.rate.toFixed(2)} forms/hr</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Production Time</div>
+                    <div class="stat-value">${stats.prodHours.toFixed(2)} hours${stats.isDefaultProdHours ? ' (default)' : ''}</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Avg Time per Form</div>
+                    <div class="stat-value">${stats.avgMinutes.toFixed(1)} min/form</div>
+                </div>
+            `;
+        }
+
+        // Add note about setting production time if using defaults
+        if (stats.isDefaultProdHours) {
+            statsHtml += `
+                <div class="stat-item" style="grid-column: 1 / -1; margin-top: 8px;">
+                    <div class="stat-message" style="font-size: 12px; color: #666; text-align: center;">
+                        💡 Using default 7.5 hours. Set production time in the Tracking window for accurate rates.
+                    </div>
                 </div>
             `;
         }
