@@ -197,6 +197,183 @@
             margin-bottom: 20px;
             font-size: 13px;
         }
+
+        /* Delete Mode Controls */
+        .delete-controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .delete-mode-btn {
+            padding: 10px 20px;
+            background: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .delete-mode-btn:hover {
+            background: #c82333;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(220, 53, 69, 0.3);
+        }
+
+        .delete-mode-btn:active {
+            transform: translateY(0);
+        }
+
+        .cancel-delete-btn {
+            padding: 10px 20px;
+            background: #6c757d;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .cancel-delete-btn:hover {
+            background: #5a6268;
+        }
+
+        .select-all-btn, .deselect-all-btn {
+            padding: 8px 16px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .select-all-btn:hover, .deselect-all-btn:hover {
+            background: #5568d3;
+        }
+
+        .delete-selected-btn {
+            padding: 10px 20px;
+            background: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-left: auto;
+        }
+
+        .delete-selected-btn:hover:not(:disabled) {
+            background: #c82333;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(220, 53, 69, 0.3);
+        }
+
+        .delete-selected-btn:disabled {
+            background: #e2e8f0;
+            color: #a0aec0;
+            cursor: not-allowed;
+        }
+
+        .day-delete-controls {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .day-delete-controls button {
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+
+        /* Checkbox column */
+        th.checkbox-column, td.checkbox-column {
+            width: 40px;
+            text-align: center;
+        }
+
+        .delete-checkbox {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+            accent-color: #667eea;
+        }
+
+        /* Delete mode styling */
+        body.delete-mode .clickable-link {
+            pointer-events: none;
+            color: #a0aec0;
+            cursor: default;
+        }
+
+        body.delete-mode .daily-review-btn {
+            pointer-events: none;
+            opacity: 0.5;
+        }
+
+        /* Daily stats box */
+        .day-stats {
+            background: #f7fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 12px 16px;
+            margin-bottom: 16px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+        }
+
+        .day-stats.no-data {
+            background: #f8f9fa;
+            border-color: #dee2e6;
+        }
+
+        .stat-item {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .stat-label {
+            font-size: 11px;
+            font-weight: 600;
+            color: #6c757d;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+
+        .stat-value {
+            font-size: 18px;
+            font-weight: 600;
+            color: #28a745;
+        }
+
+        .stat-value.current-rate {
+            color: #667eea;
+        }
+
+        .stat-value.no-data {
+            color: #a0aec0;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .stat-message {
+            font-size: 12px;
+            color: #6c757d;
+            font-style: italic;
+            margin-top: 8px;
+        }
     </style>
 </head>
 <body>
@@ -207,6 +384,15 @@
 
     <div class="export-info">
         💡 <strong>Tip:</strong> You can select the entire table and copy it to paste into Excel or Google Sheets.
+    </div>
+
+    <!-- Global Delete Controls -->
+    <div class="delete-controls" id="global-delete-controls">
+        <button class="delete-mode-btn" id="enter-delete-mode-btn">Delete Items</button>
+        <button class="cancel-delete-btn" id="cancel-delete-mode-btn" style="display: none;">Cancel</button>
+        <button class="select-all-btn" id="select-all-btn" style="display: none;">Select All</button>
+        <button class="deselect-all-btn" id="deselect-all-btn" style="display: none;">Deselect All</button>
+        <button class="delete-selected-btn" id="delete-selected-btn" style="display: none;" disabled>Delete 0 Selected Items</button>
     </div>
 
     <div id="history-container">

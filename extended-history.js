@@ -7,6 +7,13 @@
 
     const ext = (typeof browser !== 'undefined') ? browser : chrome;
 
+    // Delete mode state
+    let deleteMode = false;
+    let selectedItems = new Set(); // urlIds
+
+    // Production rate data
+    let productionRateData = { timeEntries: {} };
+
     /**
      * Map transaction type letter code to full description
      */
@@ -34,13 +41,41 @@
 
     function init() {
         console.info(LOG_PREFIX, "Extended history page initialized");
-        loadAndRender();
+
+        // Load production rate data
+        loadProductionRateData().then(() => {
+            loadAndRender();
+        });
+
+        // Attach delete mode button listeners
+        attachDeleteModeListeners();
 
         // Listen for storage changes
         ext.storage.onChanged.addListener((changes, namespace) => {
-            if (namespace === 'local' && changes.tracking_history) {
-                loadAndRender();
+            if (namespace === 'local') {
+                if (changes.tracking_history) {
+                    loadAndRender();
+                }
+                if (changes.tracking_productionRate) {
+                    productionRateData = changes.tracking_productionRate.newValue || { timeEntries: {} };
+                    loadAndRender(); // Re-render to update rates
+                }
             }
+        });
+    }
+
+    /**
+     * Load production rate data from storage
+     */
+    function loadProductionRateData() {
+        return new Promise((resolve) => {
+            ext.storage.local.get('tracking_productionRate', (result) => {
+                if (result.tracking_productionRate) {
+                    productionRateData = result.tracking_productionRate;
+                }
+                dbg("Production rate data loaded:", productionRateData);
+                resolve();
+            });
         });
     }
 
@@ -102,10 +137,19 @@
             return item.manuallyMarkedComplete || (item.checkedProgress && item.checkedProgress.percentage === 100);
         });
 
+        // Calculate daily stats
+        const stats = calculateDayStats(day, items);
+        const isTodayFlag = isTodayDay(day);
+
         const header = document.createElement('div');
         header.className = 'day-header';
         header.innerHTML = `
             <div class="day-title">${day} (${items.length} form${items.length !== 1 ? 's' : ''})</div>
+            <div class="day-delete-controls" style="display: none;">
+                <button class="select-all-btn day-select-all" data-day="${escapeHtml(day)}">Select All (This Day)</button>
+                <button class="deselect-all-btn day-deselect-all" data-day="${escapeHtml(day)}">Deselect All (This Day)</button>
+                <button class="delete-selected-btn day-delete-selected" data-day="${escapeHtml(day)}" disabled>Delete 0 from This Day</button>
+            </div>
             <button class="daily-review-btn" ${completedItems.length === 0 ? 'disabled' : ''} data-day="${day}">
                 Random Review (${completedItems.length} completed)
             </button>
@@ -118,6 +162,19 @@
             reviewBtn.addEventListener('click', () => handleDailyReview(completedItems));
         }
 
+        // Add click handlers for day delete controls
+        const daySelectAll = header.querySelector('.day-select-all');
+        const dayDeselectAll = header.querySelector('.day-deselect-all');
+        const dayDeleteSelected = header.querySelector('.day-delete-selected');
+
+        daySelectAll.addEventListener('click', () => selectAllInDay(items));
+        dayDeselectAll.addEventListener('click', () => deselectAllInDay(items));
+        dayDeleteSelected.addEventListener('click', () => deleteSelectedItems());
+
+        // Add stats box
+        const statsBox = createStatsBox(stats, isTodayFlag);
+        section.appendChild(statsBox);
+
         // Create table
         const tableContainer = document.createElement('div');
         tableContainer.className = 'table-container';
@@ -126,6 +183,7 @@
         table.innerHTML = `
             <thead>
                 <tr>
+                    <th class="checkbox-column" style="display: none;"></th>
                     <th>Policy Number</th>
                     <th>Submission Number</th>
                     <th>Broker</th>
@@ -223,7 +281,9 @@
         const typeStyle = typeChanged ? ' style="color: #28a745; font-weight: 600;"' : '';
         const typeTitle = typeChanged ? ` title="Initial value: ${mapTypeCodeToDescription(item.originalPolicyType)}"` : '';
 
+        const isChecked = selectedItems.has(item.urlId);
         row.innerHTML = `
+            <td class="checkbox-column" style="display: none;"><input type="checkbox" class="delete-checkbox" data-url-id="${escapeHtml(item.urlId)}" ${isChecked ? 'checked' : ''}></td>
             <td><a href="#" class="clickable-link" data-url-id="${escapeHtml(item.urlId)}" title="${escapeHtml(item.url || '')}">${escapeHtml(item.policyNumber || 'N/A')}</a></td>
             <td>${escapeHtml(item.submissionNumber || 'N/A')}</td>
             <td>${escapeHtml(item.broker || '')}</td>
@@ -245,6 +305,14 @@
             e.preventDefault();
             reopenForm(item);
         });
+
+        // Add click handler for checkbox
+        const checkbox = row.querySelector('.delete-checkbox');
+        if (checkbox) {
+            checkbox.addEventListener('change', (e) => {
+                handleCheckboxChange(item.urlId, e.target.checked);
+            });
+        }
 
         return row;
     }
@@ -348,6 +416,313 @@
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    /**
+     * Calculate daily statistics
+     */
+    function calculateDayStats(day, items) {
+        const dateKey = convertDayToDateKey(day);
+        const timeEntry = productionRateData.timeEntries[dateKey];
+        const completed = items.filter(item =>
+            item.manuallyMarkedComplete || (item.checkedProgress && item.checkedProgress.percentage === 100)
+        );
+
+        const completedCount = completed.length;
+        const prodHours = timeEntry?.prodHours || 0;
+        const rate = prodHours > 0 ? completedCount / prodHours : 0;
+        const avgMinutes = completedCount > 0 && prodHours > 0 ? (prodHours * 60) / completedCount : 0;
+
+        return {
+            completedCount,
+            prodHours,
+            rate,
+            avgMinutes,
+            hasTimeData: !!timeEntry
+        };
+    }
+
+    /**
+     * Convert day string to date key (YYYY-MM-DD)
+     */
+    function convertDayToDateKey(day) {
+        // day format: "January 21, 2025"
+        const date = new Date(day);
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const dayNum = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${dayNum}`;
+    }
+
+    /**
+     * Check if a day string represents today
+     */
+    function isTodayDay(day) {
+        const today = new Date();
+        const todayStr = today.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+        return day === todayStr;
+    }
+
+    /**
+     * Calculate current rate for today
+     */
+    function calculateCurrentRate(items) {
+        const completed = items.filter(item =>
+            item.manuallyMarkedComplete || (item.checkedProgress && item.checkedProgress.percentage === 100)
+        );
+
+        if (completed.length === 0) return 0;
+
+        // Get first form timestamp
+        const timestamps = completed
+            .map(f => new Date(f.movedToHistoryDate || f.addedDate))
+            .sort((a, b) => a - b);
+        const firstFormTime = timestamps[0];
+
+        if (!firstFormTime) return 0;
+
+        // Calculate elapsed hours
+        const now = new Date();
+        const elapsedHours = (now - firstFormTime) / (1000 * 60 * 60);
+
+        return elapsedHours > 0 ? completed.length / elapsedHours : 0;
+    }
+
+    /**
+     * Create stats box element
+     */
+    function createStatsBox(stats, isToday) {
+        const statsBox = document.createElement('div');
+        statsBox.className = stats.hasTimeData ? 'day-stats' : 'day-stats no-data';
+
+        if (!stats.hasTimeData) {
+            statsBox.innerHTML = `
+                <div class="stat-item" style="grid-column: 1 / -1;">
+                    <div class="stat-value no-data">⏱️ No production time data</div>
+                    <div class="stat-message">Set production time in the Tracking window to see rate statistics</div>
+                </div>
+            `;
+            return statsBox;
+        }
+
+        let statsHtml = `
+            <div class="stat-item">
+                <div class="stat-label">Completed Today</div>
+                <div class="stat-value">${stats.completedCount} forms</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Production Time</div>
+                <div class="stat-value">${stats.prodHours.toFixed(2)} hours</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Rate</div>
+                <div class="stat-value">${stats.rate.toFixed(2)} forms/hr</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Avg Time per Form</div>
+                <div class="stat-value">${stats.avgMinutes.toFixed(1)} min/form</div>
+            </div>
+        `;
+
+        // Add current rate for today
+        if (isToday && stats.completedCount > 0) {
+            const currentRateItems = Array.from(document.querySelectorAll('.day-section'))
+                .find(section => section.querySelector('.day-title').textContent.includes(new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })));
+
+            // Get all items from this day for current rate calculation
+            ext.storage.local.get('tracking_history', (result) => {
+                const history = result.tracking_history || [];
+                const today = new Date().toISOString().split('T')[0];
+
+                const todayItems = history.filter(item => {
+                    if (!item.movedToHistoryDate && !item.addedDate) return false;
+                    const itemDate = new Date(item.movedToHistoryDate || item.addedDate).toISOString().split('T')[0];
+                    return itemDate === today;
+                });
+
+                const currentRate = calculateCurrentRate(todayItems);
+
+                // Update the stats box with current rate
+                const currentRateEl = statsBox.querySelector('.current-rate-value');
+                if (currentRateEl) {
+                    currentRateEl.textContent = `${currentRate.toFixed(2)} forms/hr`;
+                }
+            });
+
+            statsHtml += `
+                <div class="stat-item">
+                    <div class="stat-label">Current Rate (Live)</div>
+                    <div class="stat-value current-rate current-rate-value">Calculating...</div>
+                </div>
+            `;
+        }
+
+        statsBox.innerHTML = statsHtml;
+        return statsBox;
+    }
+
+    /**
+     * Delete mode functions
+     */
+    function attachDeleteModeListeners() {
+        const enterBtn = document.getElementById('enter-delete-mode-btn');
+        const cancelBtn = document.getElementById('cancel-delete-mode-btn');
+        const selectAllBtn = document.getElementById('select-all-btn');
+        const deselectAllBtn = document.getElementById('deselect-all-btn');
+        const deleteSelectedBtn = document.getElementById('delete-selected-btn');
+
+        enterBtn.addEventListener('click', enterDeleteMode);
+        cancelBtn.addEventListener('click', exitDeleteMode);
+        selectAllBtn.addEventListener('click', selectAll);
+        deselectAllBtn.addEventListener('click', deselectAll);
+        deleteSelectedBtn.addEventListener('click', deleteSelectedItems);
+    }
+
+    function enterDeleteMode() {
+        deleteMode = true;
+        document.body.classList.add('delete-mode');
+
+        // Show/hide buttons
+        document.getElementById('enter-delete-mode-btn').style.display = 'none';
+        document.getElementById('cancel-delete-mode-btn').style.display = 'block';
+        document.getElementById('select-all-btn').style.display = 'block';
+        document.getElementById('deselect-all-btn').style.display = 'block';
+        document.getElementById('delete-selected-btn').style.display = 'block';
+
+        // Show checkboxes
+        document.querySelectorAll('.checkbox-column').forEach(el => {
+            el.style.display = 'table-cell';
+        });
+
+        // Show day delete controls
+        document.querySelectorAll('.day-delete-controls').forEach(el => {
+            el.style.display = 'flex';
+        });
+    }
+
+    function exitDeleteMode() {
+        deleteMode = false;
+        document.body.classList.remove('delete-mode');
+        selectedItems.clear();
+
+        // Show/hide buttons
+        document.getElementById('enter-delete-mode-btn').style.display = 'block';
+        document.getElementById('cancel-delete-mode-btn').style.display = 'none';
+        document.getElementById('select-all-btn').style.display = 'none';
+        document.getElementById('deselect-all-btn').style.display = 'none';
+        document.getElementById('delete-selected-btn').style.display = 'none';
+
+        // Hide checkboxes
+        document.querySelectorAll('.checkbox-column').forEach(el => {
+            el.style.display = 'none';
+        });
+
+        // Hide day delete controls
+        document.querySelectorAll('.day-delete-controls').forEach(el => {
+            el.style.display = 'none';
+        });
+
+        updateDeleteButtonStates();
+    }
+
+    function handleCheckboxChange(urlId, checked) {
+        if (checked) {
+            selectedItems.add(urlId);
+        } else {
+            selectedItems.delete(urlId);
+        }
+        updateDeleteButtonStates();
+    }
+
+    function selectAll() {
+        document.querySelectorAll('.delete-checkbox').forEach(checkbox => {
+            checkbox.checked = true;
+            selectedItems.add(checkbox.dataset.urlId);
+        });
+        updateDeleteButtonStates();
+    }
+
+    function deselectAll() {
+        document.querySelectorAll('.delete-checkbox').forEach(checkbox => {
+            checkbox.checked = false;
+        });
+        selectedItems.clear();
+        updateDeleteButtonStates();
+    }
+
+    function selectAllInDay(items) {
+        items.forEach(item => {
+            const checkbox = document.querySelector(`.delete-checkbox[data-url-id="${escapeAttribute(item.urlId)}"]`);
+            if (checkbox) {
+                checkbox.checked = true;
+                selectedItems.add(item.urlId);
+            }
+        });
+        updateDeleteButtonStates();
+    }
+
+    function deselectAllInDay(items) {
+        items.forEach(item => {
+            const checkbox = document.querySelector(`.delete-checkbox[data-url-id="${escapeAttribute(item.urlId)}"]`);
+            if (checkbox) {
+                checkbox.checked = false;
+                selectedItems.delete(item.urlId);
+            }
+        });
+        updateDeleteButtonStates();
+    }
+
+    function updateDeleteButtonStates() {
+        const count = selectedItems.size;
+        const globalDeleteBtn = document.getElementById('delete-selected-btn');
+
+        if (globalDeleteBtn) {
+            globalDeleteBtn.disabled = count === 0;
+            globalDeleteBtn.textContent = `Delete ${count} Selected Item${count !== 1 ? 's' : ''}`;
+        }
+
+        // Update per-day delete buttons
+        document.querySelectorAll('.day-delete-selected').forEach(btn => {
+            const day = btn.dataset.day;
+            const daySections = document.querySelectorAll('.day-section');
+
+            daySections.forEach(section => {
+                const dayTitle = section.querySelector('.day-title');
+                if (dayTitle && dayTitle.textContent.includes(day)) {
+                    const checkboxes = section.querySelectorAll('.delete-checkbox:checked');
+                    const dayCount = checkboxes.length;
+                    const dayBtn = section.querySelector('.day-delete-selected');
+
+                    if (dayBtn) {
+                        dayBtn.disabled = dayCount === 0;
+                        dayBtn.textContent = `Delete ${dayCount} from This Day`;
+                    }
+                }
+            });
+        });
+    }
+
+    function deleteSelectedItems() {
+        if (selectedItems.size === 0) return;
+
+        const confirmed = confirm(`Delete ${selectedItems.size} item${selectedItems.size !== 1 ? 's' : ''}? This cannot be undone.`);
+        if (!confirmed) return;
+
+        ext.storage.local.get('tracking_history', (result) => {
+            const history = result.tracking_history || [];
+            const filtered = history.filter(item => !selectedItems.has(item.urlId));
+
+            ext.storage.local.set({ tracking_history: filtered }, () => {
+                console.log(LOG_PREFIX, `Deleted ${selectedItems.size} items`);
+                selectedItems.clear();
+                exitDeleteMode();
+                // Re-render will be triggered by storage listener
+            });
+        });
+    }
+
+    function escapeAttribute(text) {
+        return text.replace(/"/g, '&quot;');
     }
 
     init();
