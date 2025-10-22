@@ -126,6 +126,13 @@
                 });
             });
 
+            document.getElementById('clipboard-manager-button').addEventListener('click', () => {
+                dbg("Clipboard Manager button clicked.");
+                if (port) {
+                    port.postMessage({ action: 'openClipboardManager' });
+                }
+            });
+
             document.getElementById('reset-button').addEventListener('click', () => {
                 dbg("Reset button clicked.");
                 if (currentTabId) {

@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clipboard Manager</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        html {
+            min-height: 100%;
+        }
+
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background-attachment: fixed;
+            min-height: 100vh;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            max-width: 500px;
+            margin: 0 auto;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+            max-height: calc(100vh - 40px);
+            display: flex;
+            flex-direction: column;
+        }
+
+        h1 {
+            margin: 0 0 20px 0;
+            font-size: 20px;
+            font-weight: 600;
+            color: #333;
+            text-align: center;
+        }
+
+        .section {
+            margin-bottom: 24px;
+        }
+
+        .section-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #495057;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .custom-input-container {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .custom-input {
+            flex: 1;
+            padding: 10px 12px;
+            border: 2px solid #cbd5e0;
+            border-radius: 8px;
+            font-size: 14px;
+            font-family: inherit;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .custom-input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .add-custom-btn {
+            width: 40px;
+            height: 40px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 20px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .add-custom-btn:hover {
+            background: #5568d3;
+            transform: scale(1.05);
+        }
+
+        .add-custom-btn:active {
+            transform: scale(0.98);
+        }
+
+        .items-list {
+            overflow-y: auto;
+            max-height: 400px;
+            flex: 1;
+        }
+
+        .clipboard-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
+        }
+
+        .clipboard-item:hover {
+            background: #e9ecef;
+            transform: translateX(2px);
+        }
+
+        .clipboard-item.copied {
+            background: #d4edda;
+            animation: copyFlash 0.5s ease-out;
+        }
+
+        @keyframes copyFlash {
+            0%, 100% {
+                background: #d4edda;
+            }
+            50% {
+                background: #c3e6cb;
+            }
+        }
+
+        .item-text {
+            flex: 1;
+            font-size: 14px;
+            color: #2d3748;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            word-break: break-all;
+        }
+
+        .item-controls {
+            display: flex;
+            gap: 6px;
+            flex-shrink: 0;
+        }
+
+        .pin-btn {
+            width: 28px;
+            height: 28px;
+            background: transparent;
+            border: 1px solid #cbd5e0;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .pin-btn:hover {
+            background: #e2e8f0;
+            transform: scale(1.1);
+        }
+
+        .pin-btn.pinned {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .pin-btn.pinned:hover {
+            background: #5568d3;
+        }
+
+        .delete-btn {
+            width: 28px;
+            height: 28px;
+            background: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .delete-btn:hover {
+            background: #c82333;
+            transform: scale(1.1);
+        }
+
+        .delete-btn:active {
+            transform: scale(0.98);
+        }
+
+        .empty-message {
+            text-align: center;
+            color: #a0aec0;
+            font-size: 14px;
+            padding: 20px 0;
+            font-style: italic;
+        }
+
+        .copied-feedback {
+            position: absolute;
+            right: 50px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: #28a745;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            pointer-events: none;
+            opacity: 0;
+            animation: fadeInOut 1s ease-out;
+        }
+
+        @keyframes fadeInOut {
+            0% {
+                opacity: 0;
+                transform: translateY(-50%) translateX(10px);
+            }
+            30% {
+                opacity: 1;
+                transform: translateY(-50%) translateX(0);
+            }
+            70% {
+                opacity: 1;
+                transform: translateY(-50%) translateX(0);
+            }
+            100% {
+                opacity: 0;
+                transform: translateY(-50%) translateX(-10px);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Clipboard Manager</h1>
+
+        <!-- Pinned & Custom Items Section -->
+        <div class="section">
+            <div class="section-title">Pinned & Custom Items</div>
+            <div class="custom-input-container">
+                <input type="text" class="custom-input" id="custom-text-input" placeholder="Add custom text...">
+                <button class="add-custom-btn" id="add-custom-btn">+</button>
+            </div>
+            <div class="items-list" id="pinned-list">
+                <div class="empty-message">No pinned items</div>
+            </div>
+        </div>
+
+        <!-- Clipboard History Section -->
+        <div class="section">
+            <div class="section-title">Clipboard History</div>
+            <div class="items-list" id="history-list">
+                <div class="empty-message">No clipboard history</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="clipboard-manager.js"></script>
+</body>
+</html>

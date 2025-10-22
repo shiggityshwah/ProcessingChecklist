@@ -2,9 +2,15 @@
  * background.js
  * Handles message passing between the content script and the popout window.
  * Manages tab-specific connections and popout lifecycle.
+ * Also handles clipboard history management.
  */
 
 const ext = (typeof browser !== 'undefined') ? browser : chrome;
+
+// Clipboard history storage
+const CLIPBOARD_HISTORY_KEY = 'clipboardHistory';
+const CLIPBOARD_PINNED_KEY = 'clipboardPinned';
+const MAX_CLIPBOARD_HISTORY = 10;
 
 // Map of tab IDs to their content script ports
 const contentPorts = new Map(); // tabId -> port
@@ -180,6 +186,14 @@ ext.runtime.onConnect.addListener((port) => {
                     width: 450,
                     height: 800,
                 });
+            } else if (message.action === 'openClipboardManager') {
+                // Open clipboard manager window
+                ext.windows.create({
+                    url: ext.runtime.getURL('clipboard-manager.html'),
+                    type: 'popup',
+                    width: 440,
+                    height: 700,
+                });
             } else if (message.action === 'toggleUI') {
                 const tabId = message.tabId;
                 const contentPort = contentPorts.get(tabId);
@@ -291,7 +305,7 @@ ext.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     });
 });
 
-// Handle runtime messages (for attendance page parsing)
+// Handle runtime messages (for attendance page parsing and clipboard)
 ext.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'parseAttendancePage') {
         parseAttendancePage(request.url).then((result) => {
@@ -305,6 +319,15 @@ ext.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'parseWorkQueue') {
         parseWorkQueue().then((result) => {
             sendResponse(result);
+        }).catch((error) => {
+            sendResponse({ success: false, error: error.message });
+        });
+        return true; // Keep channel open for async response
+    }
+
+    if (request.action === 'addToClipboardHistory') {
+        addToClipboardHistory(request.text).then(() => {
+            sendResponse({ success: true });
         }).catch((error) => {
             sendResponse({ success: false, error: error.message });
         });
@@ -542,5 +565,58 @@ async function parseWorkQueue() {
 
     } catch (error) {
         return { success: false, error: error.message };
+    }
+}
+
+
+/**
+ * Add text to clipboard history
+ */
+async function addToClipboardHistory(text) {
+    if (!text || typeof text !== 'string' || text.trim().length === 0) {
+        return; // Skip empty or invalid text
+    }
+
+    const trimmedText = text.trim();
+
+    try {
+        // Get current history and pinned items
+        const result = await ext.storage.local.get([CLIPBOARD_HISTORY_KEY, CLIPBOARD_PINNED_KEY]);
+        let history = result[CLIPBOARD_HISTORY_KEY] || [];
+        const pinned = result[CLIPBOARD_PINNED_KEY] || [];
+
+        // Check if text already exists in pinned items (don't add to history if pinned)
+        const isPinned = pinned.some(item => item.text === trimmedText);
+        if (isPinned) {
+            return; // Already pinned, don't add to history
+        }
+
+        // Check if text already exists in history
+        const existingIndex = history.findIndex(item => item.text === trimmedText);
+        if (existingIndex !== -1) {
+            // Move to top
+            const [existing] = history.splice(existingIndex, 1);
+            history.unshift(existing);
+        } else {
+            // Add new item to top
+            const newItem = {
+                id: Date.now() + Math.random().toString(36).substr(2, 9),
+                text: trimmedText,
+                timestamp: Date.now(),
+                isPinned: false
+            };
+            history.unshift(newItem);
+
+            // Limit to MAX_CLIPBOARD_HISTORY items
+            if (history.length > MAX_CLIPBOARD_HISTORY) {
+                history = history.slice(0, MAX_CLIPBOARD_HISTORY);
+            }
+        }
+
+        // Save updated history
+        await ext.storage.local.set({ [CLIPBOARD_HISTORY_KEY]: history });
+    } catch (error) {
+        console.error('[ProcessingChecklist-Background] Failed to add to clipboard history:', error);
+        throw error;
     }
 }
