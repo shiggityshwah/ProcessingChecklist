@@ -492,6 +492,14 @@
                 if (changes[keys.checklistState]) {
                     if (changes[keys.checklistState].newValue) {
                         if (isResetting) return;
+
+                        // OPTIMIZATION: Skip full update if this was triggered by our own updateState
+                        // Visual updates were already applied immediately
+                        if (isOwnStorageUpdate) {
+                            console.log(LOG_PREFIX, 'Skipping redundant updateAndBroadcast - already handled in updateState');
+                            return;
+                        }
+
                         ext.storage.local.get([keys.uiState, keys.viewMode], (result) => {
                             const state = changes[keys.checklistState].newValue;
                             updateAndBroadcast(state, result[keys.uiState], result[keys.viewMode]);
@@ -560,6 +568,7 @@
                     ext.storage.local.set({ [keys.checklistState]: storedState }, () => {
                         injectConfirmationCheckboxes(storedState);
                         injectMarkCheckedButton();
+                        injectFindSimilarPoliciesButton();
                         attachListenersToPageElements();
                         initializeTableWatchers();
                         updateAndBroadcast(storedState, uiState, viewMode);
@@ -585,6 +594,7 @@
             } else {
                 injectConfirmationCheckboxes(storedState);
                 injectMarkCheckedButton();
+                injectFindSimilarPoliciesButton();
                 attachListenersToPageElements();
                 initializeTableWatchers();
                 updateAndBroadcast(storedState, uiState, viewMode);
@@ -2287,7 +2297,17 @@
 
         console.log(LOG_PREFIX, `updateState called: index=${index}, processed=${processed}, skipped=${skipped}, isReview=${isReview}, stateKey=${stateKey}`);
 
-        ext.storage.local.get(stateKey, (result) => {
+        // OPTIMIZATION: Apply immediate visual feedback before storage round-trip
+        // This makes checkboxes feel instantly responsive
+        const itemState = { processed, skipped };
+        const tempState = [...(window.currentChecklistState || [])];
+        if (tempState[index]) {
+            tempState[index] = itemState;
+            // Update visuals immediately with temporary state
+            updateItemVisualsForSingleItem(index, itemState, isReview);
+        }
+
+        ext.storage.local.get([stateKey, keys.uiState, keys.viewMode], (result) => {
             let currentState = result[stateKey];
 
             console.log(LOG_PREFIX, `Current state from storage:`, currentState);
@@ -2306,6 +2326,10 @@
 
             const newState = [...currentState];
             newState[index] = { processed, skipped };
+
+            // Cache the state for immediate visual updates
+            window.currentChecklistState = newState;
+
             console.log(LOG_PREFIX, `Saving new state to ${stateKey}:`, newState);
 
             // Update tracking progress BEFORE saving to storage
@@ -2319,9 +2343,18 @@
             }
 
             // Set flag to indicate this is our own storage update
-            // (so storage change handler won't call updateProgress again)
+            // (so storage change handler won't call full updateAndBroadcast again)
             isOwnStorageUpdate = true;
             ext.storage.local.set({ [stateKey]: newState }, () => {
+                // Only broadcast to other components (popout), don't re-render this page
+                broadcastUpdate(newState);
+
+                // Update next field indicator without full re-render
+                const nextIndex = findNextStep(newState);
+                const fieldData = getFieldData(nextIndex);
+                currentIndex = nextIndex;
+                renderOnPageUI(fieldData, newState, result[keys.uiState], result[keys.viewMode]);
+
                 // Clear flag after a short delay to allow storage change event to fire
                 setTimeout(() => {
                     isOwnStorageUpdate = false;
@@ -2695,6 +2728,52 @@
     }
 
     let updateItemVisualsInProgress = false;
+
+    /**
+     * OPTIMIZATION: Update visuals for a single item only (fast path for checkbox clicks)
+     * This avoids re-rendering all items when only one changes
+     */
+    function updateItemVisualsForSingleItem(index, itemState, isReviewMode) {
+        const step = checklist[index];
+
+        // Try highlight zones if defined
+        let zonesSucceeded = false;
+        if (step && step.highlight_zones && step.highlight_zones.length > 0) {
+            zonesSucceeded = updateHighlightZones(index, itemState, isReviewMode);
+        }
+
+        // Fallback to container highlighting if zones not defined or all failed
+        if (!zonesSucceeded) {
+            const container = getElementForStep(index);
+            if (container) {
+                container.classList.remove('skipped-item', 'confirmed-item');
+                if (itemState.skipped) {
+                    container.classList.add('skipped-item');
+                } else if (itemState.processed) {
+                    container.classList.add('confirmed-item');
+                }
+            }
+        } else {
+            // Zones succeeded - make sure container highlighting is removed
+            const container = getElementForStep(index);
+            if (container) {
+                container.classList.remove('skipped-item', 'confirmed-item');
+            }
+        }
+
+        // Update traditional checkbox to match state (if it exists)
+        const checkbox = document.getElementById(`checklist-confirm-cb-${index}`);
+        if (checkbox && checkbox.checked !== itemState.processed) {
+            isProgrammaticUpdate = true;
+            checkbox.checked = itemState.processed;
+            setTimeout(() => {
+                isProgrammaticUpdate = false;
+            }, 0);
+        }
+
+        // Update zone checkboxes to match state (if they exist)
+        updateZoneCheckboxes(index, itemState.processed);
+    }
 
     function updateItemVisuals(state) {
         // Prevent recursive/concurrent calls
@@ -3303,6 +3382,9 @@
         }
     });
 
+    // Storage for pre-mark-checked state (to enable undo)
+    let preMarkCheckedState = null;
+
     /**
      * Inject "Mark Checked" button next to Mark for Review or Register button
      */
@@ -3362,7 +3444,7 @@
 
         // Add click handler
         markCheckedBtn.addEventListener('click', () => {
-            markAllUncheckedItems();
+            toggleMarkChecked();
         });
 
         // Insert before the target button (or its wrapper span)
@@ -3372,42 +3454,303 @@
     }
 
     /**
-     * Mark all unchecked items as processed
+     * Inject "Find Similar Policies" button next to Mark Checked button
      */
-    function markAllUncheckedItems() {
+    function injectFindSimilarPoliciesButton() {
+        // Check if button already exists
+        if (document.getElementById('btnFindSimilarPolicies')) {
+            return;
+        }
+
+        // Find the Mark Checked button to insert before it
+        const markCheckedBtn = document.getElementById('btnMarkChecked');
+        if (!markCheckedBtn) {
+            console.log(LOG_PREFIX, "Mark Checked button not found - cannot inject Find Similar Policies button");
+            return;
+        }
+
+        // Create the Find Similar Policies button
+        const similarPoliciesBtn = document.createElement('button');
+        similarPoliciesBtn.type = 'button';
+        similarPoliciesBtn.id = 'btnFindSimilarPolicies';
+        similarPoliciesBtn.className = 'btn btn-info';
+        similarPoliciesBtn.style.marginRight = '8px';
+        similarPoliciesBtn.textContent = 'Search';
+        similarPoliciesBtn.title = 'Search for similar policies from this broker/insurer in the past month';
+
+        // Add click handler
+        similarPoliciesBtn.addEventListener('click', () => {
+            handleFindSimilarPolicies();
+        });
+
+        // Insert before Mark Checked button
+        markCheckedBtn.insertAdjacentElement('beforebegin', similarPoliciesBtn);
+
+        console.log(LOG_PREFIX, "Find Similar Policies button injected");
+    }
+
+    /**
+     * Handle Find Similar Policies button click
+     */
+    function handleFindSimilarPolicies() {
+        // Extract broker ID
+        const brokerIdInput = document.querySelector('#SlaBrokerNumber');
+        const brokerId = brokerIdInput ? brokerIdInput.value : null;
+
+        // Extract insurer name - try multiple selectors
+        let insurerName = null;
+
+        // Primary: singleSelectedInsurerName (from the form display)
+        const insurerNameSpan = document.querySelector('#singleSelectedInsurerName');
+        if (insurerNameSpan) {
+            const insurerLink = insurerNameSpan.querySelector('a');
+            insurerName = insurerLink ? insurerLink.textContent.trim() : insurerNameSpan.textContent.trim();
+        }
+
+        // Fallback: SingleSelectedInsurerId_input (Kendo input)
+        if (!insurerName) {
+            const insurerInput = document.querySelector('#SingleSelectedInsurerId_input');
+            insurerName = insurerInput ? insurerInput.value.trim() : null;
+        }
+
+        // Extract submission date from link text
+        const submissionLink = document.querySelector('#LaunchSubmissionInfoModal');
+        let dateFrom, dateTo;
+
+        if (submissionLink) {
+            const submissionText = submissionLink.textContent.trim(); // "2025-09-04/2211"
+            const datePart = submissionText.split('/')[0]; // "2025-09-04"
+            const submissionDate = new Date(datePart);
+
+            // 1 month before submission date
+            const oneMonthAgo = new Date(submissionDate);
+            oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+
+            // Today
+            const today = new Date();
+
+            // Format as MM/DD/YYYY
+            dateFrom = formatDateMMDDYYYY(oneMonthAgo);
+            dateTo = formatDateMMDDYYYY(today);
+        } else {
+            // Fallback: use last month to today
+            const today = new Date();
+            const oneMonthAgo = new Date();
+            oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+
+            dateFrom = formatDateMMDDYYYY(oneMonthAgo);
+            dateTo = formatDateMMDDYYYY(today);
+        }
+
+        // Validate required fields
+        if (!brokerId && !insurerName) {
+            showNotification('⚠️ Cannot find broker or insurer information', 'warning');
+            return;
+        }
+
+        // Prepare search parameters
+        const searchParams = {
+            brokerId: brokerId || '',
+            insurerName: insurerName || '',
+            dateFrom: dateFrom,
+            dateTo: dateTo,
+            timestamp: Date.now()
+        };
+
+        // Store in browser storage for auto-fill
+        ext.storage.local.set({ pendingPolicySearch: searchParams });
+
+        // Format for clipboard
+        const clipboardText = formatSearchParamsForClipboard(searchParams);
+
+        // Copy to clipboard
+        navigator.clipboard.writeText(clipboardText).then(() => {
+            console.log(LOG_PREFIX, 'Search parameters copied to clipboard');
+            showPolicySearchNotification(searchParams);
+        }).catch(err => {
+            console.error(LOG_PREFIX, 'Failed to copy to clipboard:', err);
+            showNotification('⚠️ Failed to copy search parameters', 'warning');
+        });
+    }
+
+    /**
+     * Format date as MM/DD/YYYY
+     */
+    function formatDateMMDDYYYY(date) {
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const year = date.getFullYear();
+        return `${month}/${day}/${year}`;
+    }
+
+    /**
+     * Format search parameters for clipboard
+     */
+    function formatSearchParamsForClipboard(params) {
+        let text = '[Policy Search Parameters]\n';
+        if (params.brokerId) text += `Broker ID: ${params.brokerId}\n`;
+        if (params.insurerName) text += `Insurer: ${params.insurerName}\n`;
+        text += `SLA Submission Date Range: ${params.dateFrom} to ${params.dateTo}\n`;
+        text += '\n→ Parameters saved! Open Policy Search tab to auto-fill, or paste these values manually.';
+        return text;
+    }
+
+    /**
+     * Show notification with policy search info
+     */
+    function showPolicySearchNotification(params) {
+        const notification = document.createElement('div');
+        notification.id = 'policy-search-notification';
+        notification.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 10002;
+            background: #17a2b8;
+            color: white;
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            font-size: 13px;
+            max-width: 350px;
+            box-sizing: border-box;
+        `;
+
+        let html = '<div style="font-weight: bold; margin-bottom: 8px;">✓ Search Parameters Ready!</div>';
+        if (params.brokerId) html += `<div style="font-size: 12px; margin-bottom: 3px;">Broker: ${params.brokerId}</div>`;
+        if (params.insurerName) {
+            const truncatedName = params.insurerName.length > 35 ? params.insurerName.substring(0, 35) + '...' : params.insurerName;
+            html += `<div style="font-size: 12px; margin-bottom: 3px;" title="${params.insurerName}">Insurer: ${truncatedName}</div>`;
+        }
+        html += `<div style="font-size: 12px; margin-bottom: 8px;">Date: ${params.dateFrom} to ${params.dateTo}</div>`;
+        html += '<div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.3);">';
+        html += '<button id="openPolicySearchBtn" style="background: white; color: #17a2b8; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: 600; width: 100%; font-size: 13px; box-sizing: border-box;">Open Policy Search →</button>';
+        html += '</div>';
+        html += '<div style="margin-top: 8px; font-size: 11px; opacity: 0.85; line-height: 1.3;">Copied to clipboard. Will auto-fill when search opens.</div>';
+
+        notification.innerHTML = html;
+        document.body.appendChild(notification);
+
+        // Add click handler for open button
+        document.getElementById('openPolicySearchBtn').addEventListener('click', () => {
+            window.open('/policy/search', '_blank');
+            notification.remove();
+        });
+
+        // Auto-remove after 10 seconds
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.style.animation = 'fadeOut 0.3s ease-out';
+                setTimeout(() => {
+                    if (notification.parentNode) {
+                        notification.parentNode.removeChild(notification);
+                    }
+                }, 300);
+            }
+        }, 10000);
+    }
+
+    /**
+     * Show simple notification
+     */
+    function showNotification(message, type = 'info') {
+        const notification = document.createElement('div');
+        notification.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 10002;
+            background: ${type === 'warning' ? '#f0ad4e' : '#5bc0de'};
+            color: white;
+            border-radius: 8px;
+            padding: 15px 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            font-size: 14px;
+            max-width: 350px;
+        `;
+        notification.textContent = message;
+        document.body.appendChild(notification);
+
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.parentNode.removeChild(notification);
+            }
+        }, 5000);
+    }
+
+    /**
+     * Toggle between marking all items as checked and restoring previous state
+     */
+    function toggleMarkChecked() {
         const keys = getStorageKeys();
         ext.storage.local.get([keys.checklistState, keys.uiState, keys.viewMode], (result) => {
             const state = result[keys.checklistState] || checklist.map(() => ({ processed: false, skipped: false }));
+            const btn = document.getElementById('btnMarkChecked');
 
-            let markedCount = 0;
-            state.forEach((item, index) => {
-                if (!item.processed && !item.skipped) {
-                    item.processed = true;
-                    markedCount++;
+            // Check if we're in "marked" mode (have a saved state to restore)
+            if (preMarkCheckedState !== null) {
+                // UNMARK: Restore previous state
+                console.log(LOG_PREFIX, 'Restoring pre-mark-checked state');
+
+                // IMPORTANT: Reset formIsComplete flag to allow tracking updates
+                // This prevents the tracking helper from blocking progress updates after unmarking
+                if (window.trackingHelper) {
+                    window.trackingHelper.formIsComplete = false;
+                    console.log(LOG_PREFIX, 'Reset formIsComplete = false to allow progress updates');
                 }
-            });
 
-            if (markedCount > 0) {
-                ext.storage.local.set({ [keys.checklistState]: state }, () => {
-                    console.log(LOG_PREFIX, `Marked ${markedCount} items as checked`);
-
+                ext.storage.local.set({ [keys.checklistState]: preMarkCheckedState }, () => {
                     // Update tracking progress
-                    updateAndBroadcast(state, result[keys.uiState], result[keys.viewMode]);
+                    updateAndBroadcast(preMarkCheckedState, result[keys.uiState], result[keys.viewMode]);
 
-                    // Show brief confirmation
-                    const btn = document.getElementById('btnMarkChecked');
+                    // Clear saved state
+                    preMarkCheckedState = null;
+
+                    // Update button
                     if (btn) {
-                        const originalText = btn.textContent;
-                        btn.textContent = `✓ Marked ${markedCount}`;
-                        btn.disabled = true;
-                        setTimeout(() => {
-                            btn.textContent = originalText;
-                            btn.disabled = false;
-                        }, 2000);
+                        btn.textContent = 'Mark Checked';
+                        btn.title = 'Check all unchecked items';
+                        btn.className = 'btn btn-success';
                     }
+
+                    console.log(LOG_PREFIX, 'State restored successfully');
                 });
             } else {
-                console.log(LOG_PREFIX, "All items already checked");
+                // MARK: Save current state and mark all items
+                console.log(LOG_PREFIX, 'Saving state and marking all unchecked items');
+
+                // Deep clone the current state before modifying
+                preMarkCheckedState = JSON.parse(JSON.stringify(state));
+
+                let markedCount = 0;
+                state.forEach((item, index) => {
+                    if (!item.processed && !item.skipped) {
+                        item.processed = true;
+                        markedCount++;
+                    }
+                });
+
+                if (markedCount > 0) {
+                    ext.storage.local.set({ [keys.checklistState]: state }, () => {
+                        console.log(LOG_PREFIX, `Marked ${markedCount} items as checked`);
+
+                        // Update tracking progress
+                        updateAndBroadcast(state, result[keys.uiState], result[keys.viewMode]);
+
+                        // Update button to show undo option
+                        if (btn) {
+                            btn.textContent = 'Unmark Checked';
+                            btn.title = 'Restore previous checkbox state';
+                            btn.className = 'btn btn-warning';
+                        }
+                    });
+                } else {
+                    console.log(LOG_PREFIX, "All items already checked");
+                    // Clear the saved state since nothing changed
+                    preMarkCheckedState = null;
+                }
             }
         });
     }
