@@ -340,8 +340,8 @@ ext.runtime.onMessage.addListener((request, sender, sendResponse) => {
  */
 async function parseAttendancePage(url) {
     try {
-        // First, try to find an existing tab with the attendance page
-        const allTabs = await ext.tabs.query({});
+        // OPTIMIZATION: Query only current window tabs first (faster with many tabs)
+        let allTabs = await ext.tabs.query({ currentWindow: true });
 
         // Look for tabs that match the attendance URL pattern
         let matchingTab = null;
@@ -366,6 +366,28 @@ async function parseAttendancePage(url) {
             );
         }
 
+        // If still not found in current window, search all windows (fallback)
+        if (!matchingTab) {
+            console.log('[ProcessingChecklist] Attendance tab not in current window, searching all windows...');
+            allTabs = await ext.tabs.query({});
+
+            if (url) {
+                const urlPattern = url.toLowerCase();
+                matchingTab = allTabs.find(tab =>
+                    tab.url && tab.url.toLowerCase().includes(urlPattern)
+                );
+            }
+
+            if (!matchingTab) {
+                matchingTab = allTabs.find(tab =>
+                    tab.url && (
+                        tab.url.toLowerCase().includes('attendance') ||
+                        tab.url.toLowerCase().includes('timesheet')
+                    )
+                );
+            }
+        }
+
         let tabToUse = matchingTab;
 
         // If no matching tab found, return error
@@ -378,8 +400,12 @@ async function parseAttendancePage(url) {
 
         console.log('[ProcessingChecklist] Found existing attendance tab:', tabToUse.id);
 
-        // Execute script to parse the table
-        const results = await ext.tabs.executeScript(tabToUse.id, {
+        // Execute script to parse the table with timeout protection
+        let results;
+        try {
+            // Wrap in Promise.race to add timeout (10 seconds)
+            results = await Promise.race([
+                ext.tabs.executeScript(tabToUse.id, {
             code: `
                 (function() {
                     try {
@@ -442,7 +468,18 @@ async function parseAttendancePage(url) {
                     }
                 })();
             `
-        });
+                }),
+                new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error('Script execution timed out after 10 seconds. Try refreshing the attendance page.')), 10000)
+                )
+            ]);
+        } catch (timeoutError) {
+            console.error('[ProcessingChecklist] executeScript timeout or error:', timeoutError);
+            return {
+                success: false,
+                error: timeoutError.message || 'Failed to execute script on attendance page'
+            };
+        }
 
         // Return the parsed data
         const result = results && results[0];
