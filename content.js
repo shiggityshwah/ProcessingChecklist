@@ -3792,6 +3792,12 @@
                 });
 
                 if (markedCount > 0) {
+                    // IMPORTANT: Set formIsComplete = true to prevent tracking from overwriting progress
+                    if (window.trackingHelper) {
+                        window.trackingHelper.formIsComplete = true;
+                        console.log(LOG_PREFIX, 'Set formIsComplete = true to lock progress at 100%');
+                    }
+
                     ext.storage.local.set({ [keys.checklistState]: state }, () => {
                         console.log(LOG_PREFIX, `Marked ${markedCount} items as checked`);
 
