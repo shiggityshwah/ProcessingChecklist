@@ -78,8 +78,10 @@
         try {
             console.log(LOG_PREFIX, `Found element:`, element);
 
-            // For Kendo ComboBox, we need to fill both hidden and visible inputs
-            const isKendoComboBox = element.getAttribute('data-role') === 'combobox';
+            // Check for Kendo widgets
+            const dataRole = element.getAttribute('data-role');
+            const isKendoComboBox = dataRole === 'combobox';
+            const isKendoDropDownList = dataRole === 'dropdownlist';
 
             if (isKendoComboBox) {
                 console.log(LOG_PREFIX, `Detected Kendo ComboBox, filling both hidden and visible inputs`);
@@ -103,6 +105,42 @@
                     });
                 } else {
                     console.warn(LOG_PREFIX, `Visible input not found for: ${hiddenId}_input`);
+                }
+            } else if (isKendoDropDownList) {
+                console.log(LOG_PREFIX, `Detected Kendo DropDownList, filling hidden input and visible span`);
+
+                // Fill the hidden input (has the actual value)
+                element.value = value;
+
+                // Find the visible span element that displays the text
+                const hiddenId = element.id || element.name;
+
+                // Try multiple selector strategies for finding the visible element
+                let visibleSpan = document.querySelector(`span[aria-owns="${hiddenId}_listbox"] .k-input`);
+
+                if (!visibleSpan) {
+                    // Try finding by parent span with aria-owns
+                    const parentSpan = document.querySelector(`span[aria-owns="${hiddenId}_listbox"]`);
+                    if (parentSpan) {
+                        visibleSpan = parentSpan.querySelector('.k-input');
+                    }
+                }
+
+                if (!visibleSpan) {
+                    // Try finding the wrapper and then the span inside it
+                    const wrapper = element.parentElement;
+                    if (wrapper) {
+                        visibleSpan = wrapper.querySelector('.k-dropdown-wrap .k-input');
+                    }
+                }
+
+                if (visibleSpan) {
+                    console.log(LOG_PREFIX, `Found visible span:`, visibleSpan);
+                    visibleSpan.textContent = value;
+                } else {
+                    console.warn(LOG_PREFIX, `Visible span not found for DropDownList: ${hiddenId}`);
+                    console.log(LOG_PREFIX, `Tried selectors: span[aria-owns="${hiddenId}_listbox"] .k-input`);
+                    console.log(LOG_PREFIX, `Element parent:`, element.parentElement);
                 }
             } else {
                 // Regular input - just set value
