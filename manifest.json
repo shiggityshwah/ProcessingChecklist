@@ -10,6 +10,7 @@
     "clipboardRead",
     "clipboardWrite",
     "*://rapid.slacal.com/*",
+    "https://rapid.slacal.com/Operations/AttendanceSheet/Details",
     "file:///*"
   ],
   "browser_action": {
