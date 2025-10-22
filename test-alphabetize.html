@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alphabetize Helper Test</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            max-width: 1000px;
+            margin: 40px auto;
+            padding: 20px;
+        }
+        h1 {
+            color: #333;
+        }
+        .test-case {
+            background: #f8f9fa;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+        .input {
+            font-weight: 600;
+            color: #495057;
+            margin-bottom: 8px;
+        }
+        .output {
+            color: #28a745;
+            font-weight: 600;
+        }
+        .changed {
+            background: #d4edda;
+        }
+        .unchanged {
+            background: #fff3cd;
+        }
+    </style>
+</head>
+<body>
+    <h1>Alphabetize Helper - Shared Surname Tests</h1>
+    <div id="results"></div>
+
+    <script src="alphabetize-helper.js"></script>
+    <script>
+        const testCases = [
+            // Original mixed case examples
+            "John Smith, Jeremy Jones, Maggie Ann Smith",
+            "John Doe and Jane Doe",
+            "Robert Smith, Sarah Jones, Michael Smith, Emily Smith",
+            "ABC Corp & John Smith & Jane Smith",
+
+            // ALL CAPS examples (simulating website default)
+            "JOHN SMITH, JEREMY JONES, MAGGIE ANN SMITH",
+            "JOHN DOE AND JANE DOE",
+            "ROBERT SMITH, SARAH JONES, MICHAEL SMITH, EMILY SMITH",
+            "ABC CORP & JOHN SMITH & JANE SMITH",
+            "JOHN SMITH JR & JANE SMITH",
+            "ACME INDUSTRIES LLC & JOHN DOE",
+
+            // Order preservation tests
+            "Jane Doe & John Smith & Mary Johnson",
+            "John A Smith & John B Smith & Jane Smith",
+            "The Johnson Family Trust & Michael Johnson & Sarah Johnson",
+            "John Smith, Mary Smith, Bob Jones, Alice Jones"
+        ];
+
+        const resultsDiv = document.getElementById('results');
+
+        testCases.forEach(testCase => {
+            const result = AlphabetizeHelper.validateNamedInsured(testCase);
+
+            const div = document.createElement('div');
+            div.className = `test-case ${result.isValid ? 'unchanged' : 'changed'}`;
+            div.innerHTML = `
+                <div class="input">Input: ${testCase}</div>
+                <div class="output">Output: ${result.fixedValue}</div>
+                <div style="margin-top: 8px; font-size: 12px; color: #6c757d;">
+                    ${result.isValid ? '✓ No changes needed' : '✓ Reformatted'}
+                </div>
+            `;
+            resultsDiv.appendChild(div);
+        });
+    </script>
+</body>
+</html>

@@ -233,17 +233,206 @@
 
         /**
          * Handle shared surnames
-         * Example: "John Doe and Jane Doe" → "John & Jane Doe"
+         * Example: "John Smith & Jeremy Jones & Maggie Ann Smith" → "John & Maggie Ann Smith & Jeremy Jones"
+         * Preserves the order of first appearance
          * @private
          */
         _handleSharedSurnames(text) {
-            // Pattern: FirstName LastName & FirstName LastName (same LastName)
-            // This is complex - for now, leave as is since ampersand conversion handles most cases
-            // A full implementation would need name parsing
+            // Split by ampersands to get individual names
+            const segments = text.split(/\s*&\s*/);
 
-            // Simple pattern: "Name1 Surname & Name2 Surname" → "Name1 & Name2 Surname"
-            const sharedSurnamePattern = /\b([A-Z][a-z]+)\s+([A-Z][a-z]+)\s+&\s+([A-Z][a-z]+)\s+\2\b/g;
-            return text.replace(sharedSurnamePattern, '$1 & $3 $2');
+            // Parse each segment into name components, track original index
+            const parsedNames = segments.map((segment, index) => ({
+                ...this._parseName(segment.trim()),
+                originalIndex: index
+            }));
+
+            // Filter out non-person names (companies, etc.) - they have no surname
+            const personNames = parsedNames.filter(name => name.surname !== null);
+            const nonPersonNames = parsedNames.filter(name => name.surname === null);
+
+            if (personNames.length === 0) {
+                return text; // All companies/organizations, no change needed
+            }
+
+            // Group by surname, preserving order of first occurrence
+            const surnameGroups = new Map(); // Use Map to preserve insertion order
+            const surnameFirstIndex = {}; // Track first index of each surname
+
+            personNames.forEach(name => {
+                const surnameKey = name.surname.toUpperCase(); // Case-insensitive grouping
+
+                if (!surnameGroups.has(surnameKey)) {
+                    surnameGroups.set(surnameKey, []);
+                    surnameFirstIndex[surnameKey] = name.originalIndex;
+                }
+                surnameGroups.get(surnameKey).push(name);
+            });
+
+            // Create array of groups with their first appearance index for sorting
+            const groupsArray = Array.from(surnameGroups.entries()).map(([surnameKey, group]) => ({
+                surnameKey,
+                group,
+                firstIndex: surnameFirstIndex[surnameKey]
+            }));
+
+            // Sort groups by first appearance
+            groupsArray.sort((a, b) => a.firstIndex - b.firstIndex);
+
+            // Reconstruct grouped names
+            const groupedSegments = [];
+
+            // Process each surname group in order of first appearance
+            groupsArray.forEach(({ group }) => {
+                if (group.length === 1) {
+                    // Single person with this surname, use full name
+                    groupedSegments.push(this._reconstructName(group[0]));
+                } else {
+                    // Multiple people with same surname, combine first names in original order
+                    // Sort by original index to preserve order
+                    group.sort((a, b) => a.originalIndex - b.originalIndex);
+
+                    const firstNames = group.map(name => {
+                        const parts = [name.first];
+                        if (name.middle) parts.push(name.middle);
+                        return parts.join(' ');
+                    });
+
+                    // Use the surname from the first person (preserves original casing)
+                    const surname = group[0].surname;
+
+                    // Join first names with & and add shared surname
+                    const combined = firstNames.join(' & ') + ' ' + surname;
+
+                    // Add suffix if any person in the group has one
+                    const suffixes = group.map(n => n.suffix).filter(s => s);
+                    if (suffixes.length > 0) {
+                        groupedSegments.push(combined + ' ' + suffixes.join(' & '));
+                    } else {
+                        groupedSegments.push(combined);
+                    }
+                }
+            });
+
+            // Add back non-person names in their original positions
+            // Sort by original index to maintain relative position
+            nonPersonNames.sort((a, b) => a.originalIndex - b.originalIndex);
+
+            // Merge person groups and non-person names by original index
+            const allSegments = [];
+            let personGroupIndex = 0;
+            let nonPersonIndex = 0;
+
+            for (let i = 0; i < segments.length; i++) {
+                // Check if this position had a person name
+                if (personGroupIndex < groupsArray.length && groupsArray[personGroupIndex].firstIndex === i) {
+                    allSegments.push(groupedSegments[personGroupIndex]);
+                    // Skip indices covered by this group
+                    const groupSize = groupsArray[personGroupIndex].group.length;
+                    for (let j = 1; j < groupSize; j++) {
+                        i++; // Skip the merged names
+                    }
+                    personGroupIndex++;
+                } else if (nonPersonIndex < nonPersonNames.length && nonPersonNames[nonPersonIndex].originalIndex === i) {
+                    allSegments.push(nonPersonNames[nonPersonIndex].original);
+                    nonPersonIndex++;
+                }
+            }
+
+            return allSegments.join(' & ');
+        },
+
+        /**
+         * Parse a name segment into components (case-insensitive)
+         * @private
+         * @param {string} nameSegment - A single name (e.g., "JOHN SMITH" or "Maggie Ann Smith Jr")
+         * @returns {Object} Parsed name with first, middle, surname, suffix, and original
+         */
+        _parseName(nameSegment) {
+            const original = nameSegment;
+            const parts = nameSegment.trim().split(/\s+/);
+
+            if (parts.length === 0) {
+                return { first: '', middle: '', surname: null, suffix: '', original };
+            }
+
+            // Check if this looks like a company/organization
+            // Look for entity type indicators (case-insensitive)
+            const companyIndicators = ['LLC', 'INC', 'CORP', 'CORPORATION', 'LTD', 'LIMITED', 'LP', 'LLP', 'PC', 'PA'];
+            const hasCompanyIndicator = parts.some(part => companyIndicators.includes(part.toUpperCase()));
+
+            // If it has a company indicator, treat as company
+            if (hasCompanyIndicator) {
+                return { first: '', middle: '', surname: null, suffix: '', original };
+            }
+
+            // Common suffixes (case-insensitive)
+            const suffixes = ['JR', 'SR', 'II', 'III', 'IV', 'V', 'ESQ', 'MD', 'PHD', 'DDS'];
+
+            // Extract suffix if present
+            let suffix = '';
+            let nameParts = [...parts];
+
+            if (nameParts.length > 0) {
+                const lastPart = nameParts[nameParts.length - 1].toUpperCase().replace(/[,\.]/g, '');
+                if (suffixes.includes(lastPart)) {
+                    suffix = nameParts.pop();
+                }
+            }
+
+            if (nameParts.length === 0) {
+                return { first: '', middle: '', surname: null, suffix, original };
+            }
+
+            // Single word - treat as surname only (unusual but possible)
+            if (nameParts.length === 1) {
+                // Check for special characters that indicate it's not a person name
+                if (/[^a-zA-Z-']/.test(nameParts[0])) {
+                    return { first: '', middle: '', surname: null, suffix: '', original };
+                }
+                return { first: '', middle: '', surname: nameParts[0], suffix, original };
+            }
+
+            // Two words - first and last name
+            if (nameParts.length === 2) {
+                return {
+                    first: nameParts[0],
+                    middle: '',
+                    surname: nameParts[1],
+                    suffix,
+                    original
+                };
+            }
+
+            // Three or more words - first, middle(s), and last name
+            const first = nameParts[0];
+            const surname = nameParts[nameParts.length - 1];
+            const middle = nameParts.slice(1, -1).join(' ');
+
+            return {
+                first,
+                middle,
+                surname,
+                suffix,
+                original
+            };
+        },
+
+        /**
+         * Reconstruct a full name from parsed components
+         * @private
+         * @param {Object} parsedName - Parsed name object
+         * @returns {string} Reconstructed name
+         */
+        _reconstructName(parsedName) {
+            const parts = [];
+
+            if (parsedName.first) parts.push(parsedName.first);
+            if (parsedName.middle) parts.push(parsedName.middle);
+            if (parsedName.surname) parts.push(parsedName.surname);
+            if (parsedName.suffix) parts.push(parsedName.suffix);
+
+            return parts.join(' ');
         },
 
         /**
