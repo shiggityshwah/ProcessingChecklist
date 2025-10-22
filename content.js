@@ -3610,14 +3610,24 @@
         };
 
         // Store in browser storage for auto-fill
-        ext.storage.local.set({ pendingTransactionSearch: searchParams });
+        console.log(LOG_PREFIX, 'Storing transaction search params:', searchParams);
+        ext.storage.local.set({ pendingTransactionSearch: searchParams }, () => {
+            if (ext.runtime.lastError) {
+                console.error(LOG_PREFIX, 'Error storing params:', ext.runtime.lastError);
+                showNotification('⚠️ Failed to save search parameters', 'warning');
+                return;
+            }
 
-        // Open transaction search page (not policy search)
-        const transactionSearchUrl = 'https://rapid.slacal.com/policy/transactionSearch';
-        window.open(transactionSearchUrl, '_blank');
+            console.log(LOG_PREFIX, 'Transaction search params stored successfully');
 
-        // Show confirmation
-        showNotification('✓ Opening transaction search...', 'success');
+            // Open transaction search page (not policy search)
+            const transactionSearchUrl = 'https://rapid.slacal.com/policy/transactionSearch';
+            console.log(LOG_PREFIX, 'Opening transaction search:', transactionSearchUrl);
+            window.open(transactionSearchUrl, '_blank');
+
+            // Show confirmation
+            showNotification('✓ Opening transaction search...', 'success');
+        });
     }
 
     /**
