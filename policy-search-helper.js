@@ -15,7 +15,8 @@
 
     // Wait for page to be fully loaded and jQuery/Kendo to be available
     let waitAttempts = 0;
-    const MAX_WAIT_ATTEMPTS = 200; // 20 seconds max (increased from 10)
+    const MAX_WAIT_ATTEMPTS = 50; // 5 seconds max for initial detection
+    const QUICK_CHECK_THRESHOLD = 20; // 2 seconds - if not loaded by then, unlikely to load
 
     function waitForKendo(callback) {
         waitAttempts++;
@@ -33,14 +34,21 @@
             window.jQuery = $; // Ensure it's accessible
             callback();
         } else if (waitAttempts >= MAX_WAIT_ATTEMPTS) {
-            console.error(LOG_PREFIX, "Timeout waiting for jQuery/Kendo after 20 seconds");
+            console.log(LOG_PREFIX, "Timeout waiting for jQuery/Kendo after 5 seconds");
             console.log(LOG_PREFIX, "jQuery:", typeof $, "Kendo:", typeof kendo, "Kendo initialized:", hasKendoInitialized);
-            console.log(LOG_PREFIX, "Attempting to proceed without Kendo widgets...");
+            console.log(LOG_PREFIX, "Proceeding with direct input fallback...");
             // Still try to check storage and show notification
             autoFillSearchForm();
+        } else if (waitAttempts >= QUICK_CHECK_THRESHOLD) {
+            // After 2 seconds, if still no jQuery/Kendo, they're probably not coming
+            // Check less frequently to avoid wasting CPU
+            if (waitAttempts % 5 === 0) {
+                console.log(LOG_PREFIX, `Still waiting (slow check)... Attempt ${waitAttempts}/${MAX_WAIT_ATTEMPTS}`);
+            }
+            setTimeout(() => waitForKendo(callback), 200); // Check every 200ms instead of 100ms
         } else {
             if (waitAttempts % 10 === 0) {
-                console.log(LOG_PREFIX, `Still waiting for jQuery/Kendo... Attempt ${waitAttempts}/${MAX_WAIT_ATTEMPTS}. jQuery:`, typeof $, "Kendo:", typeof kendo, "Initialized:", hasKendoInitialized);
+                console.log(LOG_PREFIX, `Waiting for jQuery/Kendo... Attempt ${waitAttempts}/${MAX_WAIT_ATTEMPTS}`);
             }
             setTimeout(() => waitForKendo(callback), 100);
         }
