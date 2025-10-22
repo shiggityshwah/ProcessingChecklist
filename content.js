@@ -3561,28 +3561,32 @@
         let dateFrom, dateTo;
 
         if (submissionLink) {
-            const submissionText = submissionLink.textContent.trim(); // "2025-09-04/2211"
-            const datePart = submissionText.split('/')[0]; // "2025-09-04"
+            const submissionText = submissionLink.textContent.trim(); // "2025-10-14/0814"
+            const datePart = submissionText.split('/')[0]; // "2025-10-14"
             const submissionDate = new Date(datePart);
 
-            // 1 month before submission date
-            const oneMonthAgo = new Date(submissionDate);
-            oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+            // Calculate date range: (submission - 1 month) to (submission - 1 day)
+            const oneMonthBefore = new Date(submissionDate);
+            oneMonthBefore.setMonth(oneMonthBefore.getMonth() - 1);
+            oneMonthBefore.setDate(oneMonthBefore.getDate() + 1); // Start one day after month ago
 
-            // Today
-            const today = new Date();
+            const oneDayBefore = new Date(submissionDate);
+            oneDayBefore.setDate(oneDayBefore.getDate() - 1); // End one day before submission
 
             // Format as MM/DD/YYYY
-            dateFrom = formatDateMMDDYYYY(oneMonthAgo);
-            dateTo = formatDateMMDDYYYY(today);
+            dateFrom = formatDateMMDDYYYY(oneMonthBefore);
+            dateTo = formatDateMMDDYYYY(oneDayBefore);
         } else {
-            // Fallback: use last month to today
+            // Fallback: use last month to yesterday
             const today = new Date();
-            const oneMonthAgo = new Date();
+            const yesterday = new Date(today);
+            yesterday.setDate(yesterday.getDate() - 1);
+
+            const oneMonthAgo = new Date(today);
             oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
 
             dateFrom = formatDateMMDDYYYY(oneMonthAgo);
-            dateTo = formatDateMMDDYYYY(today);
+            dateTo = formatDateMMDDYYYY(yesterday);
         }
 
         // Validate required fields
@@ -3591,7 +3595,7 @@
             return;
         }
 
-        // Prepare search parameters
+        // Prepare search parameters for transaction search
         const searchParams = {
             brokerId: brokerId || '',
             insurerName: insurerName || '',
@@ -3599,25 +3603,21 @@
             slaNumber: slaNumber || '',
             naicNumber: naicNumber || '',
             insurerStatus: insurerStatus || '',
+            transactionType: 'Registered', // Always set to "Registered"
             dateFrom: dateFrom,
             dateTo: dateTo,
             timestamp: Date.now()
         };
 
         // Store in browser storage for auto-fill
-        ext.storage.local.set({ pendingPolicySearch: searchParams });
+        ext.storage.local.set({ pendingTransactionSearch: searchParams });
 
-        // Format for clipboard
-        const clipboardText = formatSearchParamsForClipboard(searchParams);
+        // Open transaction search page (not policy search)
+        const transactionSearchUrl = 'https://rapid.slacal.com/policy/transactionSearch';
+        window.open(transactionSearchUrl, '_blank');
 
-        // Copy to clipboard
-        navigator.clipboard.writeText(clipboardText).then(() => {
-            console.log(LOG_PREFIX, 'Search parameters copied to clipboard');
-            showPolicySearchNotification(searchParams);
-        }).catch(err => {
-            console.error(LOG_PREFIX, 'Failed to copy to clipboard:', err);
-            showNotification('⚠️ Failed to copy search parameters', 'warning');
-        });
+        // Show confirmation
+        showNotification('✓ Opening transaction search...', 'success');
     }
 
     /**

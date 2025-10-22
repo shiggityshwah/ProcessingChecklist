@@ -41,7 +41,9 @@
     {
       "matches": [
         "*://rapid.slacal.com/policy/search*",
-        "*://rapid.slacal.com/Policy/Search*"
+        "*://rapid.slacal.com/Policy/Search*",
+        "*://rapid.slacal.com/policy/transactionSearch*",
+        "*://rapid.slacal.com/Policy/TransactionSearch*"
       ],
       "js": ["policy-search-helper.js"],
       "run_at": "document_idle"

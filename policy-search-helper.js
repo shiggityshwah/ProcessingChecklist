@@ -245,16 +245,21 @@
      */
     function autoFillSearchForm() {
         console.log(LOG_PREFIX, "autoFillSearchForm called, checking storage...");
-        ext.storage.local.get('pendingPolicySearch', (result) => {
+
+        // Check for both policy search and transaction search parameters
+        ext.storage.local.get(['pendingPolicySearch', 'pendingTransactionSearch'], (result) => {
             console.log(LOG_PREFIX, "Storage result:", result);
 
-            if (!result.pendingPolicySearch) {
+            // Prefer transaction search if available, otherwise fall back to policy search
+            let params = result.pendingTransactionSearch || result.pendingPolicySearch;
+            let storageKey = result.pendingTransactionSearch ? 'pendingTransactionSearch' : 'pendingPolicySearch';
+
+            if (!params) {
                 console.log(LOG_PREFIX, "No pending search parameters found in storage");
                 return;
             }
 
-            const params = result.pendingPolicySearch;
-            console.log(LOG_PREFIX, "Found params:", params);
+            console.log(LOG_PREFIX, "Found params:", params, "from key:", storageKey);
 
             // Check if parameters are recent (within last 5 minutes)
             const age = Date.now() - params.timestamp;
@@ -262,7 +267,7 @@
 
             if (age > 5 * 60 * 1000) {
                 console.log(LOG_PREFIX, "Pending search parameters are too old, ignoring");
-                ext.storage.local.remove('pendingPolicySearch');
+                ext.storage.local.remove(storageKey);
                 return;
             }
 
@@ -501,6 +506,17 @@
         } else {
             console.log(LOG_PREFIX, "Date To not provided, skipping");
             results.push({ field: 'Date To', selector: '#SLASubmissionDateTo', success: false, reason: 'No value provided' });
+        }
+
+        // Fill Transaction Type (for transaction search only)
+        console.log(LOG_PREFIX, "\n--- Attempting to fill Transaction Type ---");
+        if (params.transactionType) {
+            const success = fillKendoComboBox('#TransactionTypeId', params.transactionType, true);
+            results.push({ field: 'Transaction Type', selector: '#TransactionTypeId', success });
+            if (success) successCount++;
+        } else {
+            console.log(LOG_PREFIX, "Transaction Type not provided, skipping");
+            results.push({ field: 'Transaction Type', selector: '#TransactionTypeId', success: false, reason: 'No value provided' });
         }
 
         console.log(LOG_PREFIX, "\n═══════════════════════════════════════");
