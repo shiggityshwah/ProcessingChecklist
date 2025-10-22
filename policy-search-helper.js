@@ -52,17 +52,56 @@
     function fillInputDirectly(selector, value) {
         console.log(LOG_PREFIX, `Attempting direct input fill for ${selector} with value:`, value);
 
-        const element = document.querySelector(selector);
+        // Try as CSS selector first (ID or class)
+        let element = document.querySelector(selector);
+
+        // If not found and selector looks like #id, try as name attribute
+        if (!element && selector.startsWith('#')) {
+            const nameValue = selector.substring(1);
+            console.log(LOG_PREFIX, `Trying name attribute: ${nameValue}`);
+            element = document.querySelector(`[name="${nameValue}"]`);
+        }
+
         if (!element) {
             console.warn(LOG_PREFIX, `Element not found: ${selector}`);
             return false;
         }
 
         try {
-            // Set the value directly
-            element.value = value;
+            console.log(LOG_PREFIX, `Found element:`, element);
 
-            // Trigger various events that might be needed
+            // For Kendo ComboBox, we need to fill both hidden and visible inputs
+            const isKendoComboBox = element.getAttribute('data-role') === 'combobox';
+
+            if (isKendoComboBox) {
+                console.log(LOG_PREFIX, `Detected Kendo ComboBox, filling both hidden and visible inputs`);
+
+                // Fill the hidden input (has the actual value)
+                element.value = value;
+
+                // Find and fill the visible input (what user sees)
+                const hiddenId = element.id || element.name;
+                const visibleInput = document.querySelector(`input[name="${hiddenId}_input"]`);
+
+                if (visibleInput) {
+                    console.log(LOG_PREFIX, `Found visible input:`, visibleInput);
+                    visibleInput.value = value;
+
+                    // Trigger events on visible input
+                    const events = ['input', 'change', 'blur', 'keydown'];
+                    events.forEach(eventType => {
+                        const event = new Event(eventType, { bubbles: true, cancelable: true });
+                        visibleInput.dispatchEvent(event);
+                    });
+                } else {
+                    console.warn(LOG_PREFIX, `Visible input not found for: ${hiddenId}_input`);
+                }
+            } else {
+                // Regular input - just set value
+                element.value = value;
+            }
+
+            // Trigger events on the main element
             const events = ['input', 'change', 'blur'];
             events.forEach(eventType => {
                 const event = new Event(eventType, { bubbles: true, cancelable: true });
@@ -424,15 +463,15 @@
             results.push({ field: 'Broker ID', selector: '#Broker', success: false, reason: 'No value provided' });
         }
 
-        // Fill Insurer Name (use text mode)
+        // Fill Insurer Name (use the hidden input #Insurer, which will auto-fill visible input)
         console.log(LOG_PREFIX, "\n--- Attempting to fill Insurer Name ---");
         if (params.insurerName) {
-            const success = fillKendoComboBox('#Insurer_input', params.insurerName, true);
-            results.push({ field: 'Insurer Name', selector: '#Insurer_input', success });
+            const success = fillKendoComboBox('#Insurer', params.insurerName, true);
+            results.push({ field: 'Insurer Name', selector: '#Insurer', success });
             if (success) successCount++;
         } else {
             console.log(LOG_PREFIX, "Insurer Name not provided, skipping");
-            results.push({ field: 'Insurer Name', selector: '#Insurer_input', success: false, reason: 'No value provided' });
+            results.push({ field: 'Insurer Name', selector: '#Insurer', success: false, reason: 'No value provided' });
         }
 
         // Fill Date Range
