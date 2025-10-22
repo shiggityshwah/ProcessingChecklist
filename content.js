@@ -3753,16 +3753,24 @@
                 // UNMARK: Restore previous state
                 console.log(LOG_PREFIX, 'Restoring pre-mark-checked state');
 
-                // IMPORTANT: Reset formIsComplete flag to allow tracking updates
-                // This prevents the tracking helper from blocking progress updates after unmarking
-                if (window.trackingHelper) {
-                    window.trackingHelper.formIsComplete = false;
-                    console.log(LOG_PREFIX, 'Reset formIsComplete = false to allow progress updates');
-                }
-
                 ext.storage.local.set({ [keys.checklistState]: preMarkCheckedState }, () => {
-                    // Update tracking progress
-                    updateAndBroadcast(preMarkCheckedState, result[keys.uiState], result[keys.viewMode]);
+                    // Force update tracking progress to original percentage (bypassing formIsComplete check)
+                    if (window.trackingHelper && window.trackingHelper.updateProgress) {
+                        const checkedCount = preMarkCheckedState.filter(item => item.processed).length;
+                        const total = preMarkCheckedState.length;
+                        const isReview = window.trackingHelper.isReviewMode || false;
+                        console.log(LOG_PREFIX, `Force restoring progress to ${checkedCount}/${total} via Unmark Checked button`);
+                        window.trackingHelper.updateProgress(checkedCount, total, isReview, true); // force=true
+                    }
+
+                    // IMPORTANT: Reset formIsComplete flag to allow future tracking updates
+                    if (window.trackingHelper) {
+                        window.trackingHelper.formIsComplete = false;
+                        console.log(LOG_PREFIX, 'Reset formIsComplete = false to allow progress updates');
+                    }
+
+                    // Update UI
+                    updateAndBroadcast(preMarkCheckedState, result[keys.uiState], result[keys.viewMode], true); // skipTrackingUpdate=true
 
                     // Clear saved state
                     preMarkCheckedState = null;
