@@ -109,12 +109,40 @@
             } else if (isKendoDropDownList) {
                 console.log(LOG_PREFIX, `Detected Kendo DropDownList, filling hidden input and visible span`);
 
-                // Fill the hidden input (has the actual value)
-                element.value = value;
-
-                // Find the visible span element that displays the text
                 const hiddenId = element.id || element.name;
 
+                // Find the listbox to search for matching option
+                const listbox = document.querySelector(`#${hiddenId}_listbox`);
+                let optionId = null;
+
+                if (listbox) {
+                    // Search through options to find matching text
+                    const options = listbox.querySelectorAll('li[role="option"]');
+                    console.log(LOG_PREFIX, `Found ${options.length} options in dropdown`);
+
+                    for (const option of options) {
+                        const optionText = option.textContent.trim();
+                        console.log(LOG_PREFIX, `  Checking option: "${optionText}" vs "${value}"`);
+                        if (optionText === value) {
+                            optionId = option.getAttribute('data-offset-index');
+                            console.log(LOG_PREFIX, `  ✓ Match found! Option index: ${optionId}`);
+                            break;
+                        }
+                    }
+                } else {
+                    console.warn(LOG_PREFIX, `Listbox not found: #${hiddenId}_listbox`);
+                }
+
+                // Set the value in the hidden input
+                if (optionId !== null) {
+                    element.value = optionId;
+                    console.log(LOG_PREFIX, `Set hidden input value to: ${optionId}`);
+                } else {
+                    console.warn(LOG_PREFIX, `Could not find matching option for: ${value}, trying text as value`);
+                    element.value = value;
+                }
+
+                // Find and update the visible span element that displays the text
                 // Try multiple selector strategies for finding the visible element
                 let visibleSpan = document.querySelector(`span[aria-owns="${hiddenId}_listbox"] .k-input`);
 
@@ -135,12 +163,10 @@
                 }
 
                 if (visibleSpan) {
-                    console.log(LOG_PREFIX, `Found visible span:`, visibleSpan);
+                    console.log(LOG_PREFIX, `Found visible span, setting text to: ${value}`);
                     visibleSpan.textContent = value;
                 } else {
                     console.warn(LOG_PREFIX, `Visible span not found for DropDownList: ${hiddenId}`);
-                    console.log(LOG_PREFIX, `Tried selectors: span[aria-owns="${hiddenId}_listbox"] .k-input`);
-                    console.log(LOG_PREFIX, `Element parent:`, element.parentElement);
                 }
             } else {
                 // Regular input - just set value
