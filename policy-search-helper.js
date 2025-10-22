@@ -143,6 +143,15 @@
      * Show confirmation notification for auto-fill
      */
     function showAutoFillConfirmation(params) {
+        console.log(LOG_PREFIX, "showAutoFillConfirmation called with params:", params);
+
+        // Ensure body is available
+        if (!document.body) {
+            console.warn(LOG_PREFIX, "document.body not available yet, waiting...");
+            setTimeout(() => showAutoFillConfirmation(params), 100);
+            return;
+        }
+
         const notification = document.createElement('div');
         notification.id = 'auto-fill-confirmation';
         notification.style.cssText = `
@@ -162,6 +171,7 @@
 
         // Check if we have jQuery/Kendo for auto-fill
         const hasKendo = typeof window.jQuery !== 'undefined' && typeof window.kendo !== 'undefined';
+        console.log(LOG_PREFIX, "hasKendo:", hasKendo);
 
         let html = '<div style="font-weight: bold; margin-bottom: 8px;">🔍 Search Parameters Ready!</div>';
         if (params.brokerId) html += `<div style="margin-bottom: 3px;">Broker ID: <strong>${params.brokerId}</strong></div>`;
@@ -184,7 +194,9 @@
         }
 
         notification.innerHTML = html;
+        console.log(LOG_PREFIX, "Appending notification to document.body");
         document.body.appendChild(notification);
+        console.log(LOG_PREFIX, "Notification appended successfully. Element:", notification);
 
         if (hasKendo) {
             // Yes button - perform auto-fill
