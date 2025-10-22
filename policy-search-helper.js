@@ -15,7 +15,7 @@
 
     // Wait for page to be fully loaded and jQuery/Kendo to be available
     let waitAttempts = 0;
-    const MAX_WAIT_ATTEMPTS = 100; // 10 seconds max
+    const MAX_WAIT_ATTEMPTS = 200; // 20 seconds max (increased from 10)
 
     function waitForKendo(callback) {
         waitAttempts++;
@@ -24,20 +24,56 @@
         const $ = window.jQuery || window.$ || (window.frames && window.frames.jQuery);
         const kendo = window.kendo;
 
-        if ($ && kendo) {
+        // Also check if Kendo widgets are initialized on target elements
+        const brokerElement = document.querySelector('#Broker');
+        const hasKendoInitialized = brokerElement && brokerElement.getAttribute('data-role') === 'combobox';
+
+        if ($ && kendo && hasKendoInitialized) {
             console.log(LOG_PREFIX, "jQuery and Kendo are now available, proceeding with callback");
             window.jQuery = $; // Ensure it's accessible
             callback();
         } else if (waitAttempts >= MAX_WAIT_ATTEMPTS) {
-            console.error(LOG_PREFIX, "Timeout waiting for jQuery/Kendo after 10 seconds");
+            console.error(LOG_PREFIX, "Timeout waiting for jQuery/Kendo after 20 seconds");
+            console.log(LOG_PREFIX, "jQuery:", typeof $, "Kendo:", typeof kendo, "Kendo initialized:", hasKendoInitialized);
             console.log(LOG_PREFIX, "Attempting to proceed without Kendo widgets...");
             // Still try to check storage and show notification
             autoFillSearchForm();
         } else {
             if (waitAttempts % 10 === 0) {
-                console.log(LOG_PREFIX, `Still waiting for jQuery/Kendo... Attempt ${waitAttempts}/${MAX_WAIT_ATTEMPTS}. jQuery:`, typeof $, "Kendo:", typeof kendo);
+                console.log(LOG_PREFIX, `Still waiting for jQuery/Kendo... Attempt ${waitAttempts}/${MAX_WAIT_ATTEMPTS}. jQuery:`, typeof $, "Kendo:", typeof kendo, "Initialized:", hasKendoInitialized);
             }
             setTimeout(() => waitForKendo(callback), 100);
+        }
+    }
+
+    /**
+     * Fallback: Fill input directly without Kendo
+     */
+    function fillInputDirectly(selector, value) {
+        console.log(LOG_PREFIX, `Attempting direct input fill for ${selector} with value:`, value);
+
+        const element = document.querySelector(selector);
+        if (!element) {
+            console.warn(LOG_PREFIX, `Element not found: ${selector}`);
+            return false;
+        }
+
+        try {
+            // Set the value directly
+            element.value = value;
+
+            // Trigger various events that might be needed
+            const events = ['input', 'change', 'blur'];
+            events.forEach(eventType => {
+                const event = new Event(eventType, { bubbles: true, cancelable: true });
+                element.dispatchEvent(event);
+            });
+
+            console.log(LOG_PREFIX, `✓ Directly filled ${selector} with:`, value);
+            return true;
+        } catch (error) {
+            console.error(LOG_PREFIX, `Error directly filling ${selector}:`, error);
+            return false;
         }
     }
 
@@ -47,12 +83,18 @@
     function fillKendoComboBox(selector, value, isText = false) {
         console.log(LOG_PREFIX, `fillKendoComboBox called with selector: ${selector}, value:`, value, `isText: ${isText}`);
 
+        // Check if jQuery is available
+        if (!window.jQuery) {
+            console.warn(LOG_PREFIX, `jQuery not available, trying direct input fill`);
+            return fillInputDirectly(selector, value);
+        }
+
         const element = window.jQuery(selector);
         console.log(LOG_PREFIX, `jQuery element found:`, element.length > 0, `Element:`, element);
 
         if (element.length === 0) {
             console.warn(LOG_PREFIX, `Element not found: ${selector}`);
-            return false;
+            return fillInputDirectly(selector, value);
         }
 
         const widget = element.data('kendoComboBox');
@@ -63,7 +105,9 @@
             // List all available data attributes to help debug
             const allData = element.data();
             console.log(LOG_PREFIX, `Available data attributes on element:`, allData);
-            return false;
+            // Try direct fill as fallback
+            console.log(LOG_PREFIX, `Falling back to direct input fill`);
+            return fillInputDirectly(selector, value);
         }
 
         try {
@@ -87,7 +131,9 @@
         } catch (error) {
             console.error(LOG_PREFIX, `Error filling ${selector}:`, error);
             console.error(LOG_PREFIX, `Error stack:`, error.stack);
-            return false;
+            // Try direct fill as last resort
+            console.log(LOG_PREFIX, `Attempting direct fill as last resort`);
+            return fillInputDirectly(selector, value);
         }
     }
 
@@ -97,12 +143,18 @@
     function fillKendoDatePicker(selector, dateString) {
         console.log(LOG_PREFIX, `fillKendoDatePicker called with selector: ${selector}, dateString:`, dateString);
 
+        // Check if jQuery is available
+        if (!window.jQuery) {
+            console.warn(LOG_PREFIX, `jQuery not available, trying direct input fill`);
+            return fillInputDirectly(selector, dateString);
+        }
+
         const element = window.jQuery(selector);
         console.log(LOG_PREFIX, `jQuery element found:`, element.length > 0, `Element:`, element);
 
         if (element.length === 0) {
             console.warn(LOG_PREFIX, `Element not found: ${selector}`);
-            return false;
+            return fillInputDirectly(selector, dateString);
         }
 
         const widget = element.data('kendoDatePicker');
@@ -113,7 +165,9 @@
             // List all available data attributes to help debug
             const allData = element.data();
             console.log(LOG_PREFIX, `Available data attributes on element:`, allData);
-            return false;
+            // Try direct fill as fallback
+            console.log(LOG_PREFIX, `Falling back to direct input fill`);
+            return fillInputDirectly(selector, dateString);
         }
 
         try {
@@ -133,7 +187,9 @@
         } catch (error) {
             console.error(LOG_PREFIX, `Error filling ${selector}:`, error);
             console.error(LOG_PREFIX, `Error stack:`, error.stack);
-            return false;
+            // Try direct fill as last resort
+            console.log(LOG_PREFIX, `Attempting direct fill as last resort`);
+            return fillInputDirectly(selector, dateString);
         }
     }
 
@@ -200,9 +256,12 @@
             max-width: 400px;
         `;
 
-        // Check if we have jQuery/Kendo for auto-fill
+        // Check if we have jQuery/Kendo for auto-fill (but we now have fallback anyway)
         const hasKendo = typeof window.jQuery !== 'undefined' && typeof window.kendo !== 'undefined';
         console.log(LOG_PREFIX, "hasKendo:", hasKendo);
+
+        // We'll always show the Fill Form button now since we have a direct input fallback
+        const canAutoFill = true;
 
         // Create properly formatted insurer name with all details
         // Format: [SLA#] INSURER NAME (#NAIC#) - STATUS
@@ -240,19 +299,14 @@
         html += `<span style="opacity: 0.8;">To:</span> <strong>${params.dateTo}</strong>`;
         html += `</div>`;
 
-        if (hasKendo) {
-            // Show auto-fill option
-            html += '<div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.3); display: flex; gap: 8px;">';
-            html += '<button id="autoFillYesBtn" style="flex: 1; background: white; color: #5cb85c; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: bold;">Fill Form</button>';
-            html += '<button id="autoFillNoBtn" style="flex: 1; background: rgba(255,255,255,0.2); color: white; border: 1px solid white; padding: 8px 16px; border-radius: 4px; cursor: pointer;">Dismiss</button>';
-            html += '</div>';
-        } else {
-            // Show manual instructions
-            html += '<div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.3); font-size: 13px;">';
-            html += '📋 <strong>Manual Fill Instructions:</strong><br>';
-            html += 'Enter the values above into the search form fields.';
-            html += '</div>';
-            html += '<button id="dismissBtn" style="margin-top: 10px; width: 100%; background: white; color: #5cb85c; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: bold;">Got It</button>';
+        // Always show Fill Form button with fallback support
+        html += '<div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.3); display: flex; gap: 8px;">';
+        html += '<button id="autoFillYesBtn" style="flex: 1; background: white; color: #5cb85c; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: bold;">Fill Form</button>';
+        html += '<button id="autoFillNoBtn" style="flex: 1; background: rgba(255,255,255,0.2); color: white; border: 1px solid white; padding: 8px 16px; border-radius: 4px; cursor: pointer;">Dismiss</button>';
+        html += '</div>';
+
+        if (!hasKendo) {
+            html += '<div style="margin-top: 8px; font-size: 11px; opacity: 0.8; font-style: italic;">Note: Using direct input method</div>';
         }
 
         notification.innerHTML = html;
@@ -281,33 +335,22 @@
             });
         });
 
-        if (hasKendo) {
-            // Yes button - perform auto-fill
-            const yesBtn = document.getElementById('autoFillYesBtn');
-            if (yesBtn) {
-                yesBtn.addEventListener('click', () => {
-                    notification.remove();
-                    performAutoFill(params);
-                });
-            }
+        // Yes button - perform auto-fill (works with or without Kendo via fallback)
+        const yesBtn = document.getElementById('autoFillYesBtn');
+        if (yesBtn) {
+            yesBtn.addEventListener('click', () => {
+                notification.remove();
+                performAutoFill(params);
+            });
+        }
 
-            // No button - dismiss
-            const noBtn = document.getElementById('autoFillNoBtn');
-            if (noBtn) {
-                noBtn.addEventListener('click', () => {
-                    notification.remove();
-                    ext.storage.local.remove('pendingPolicySearch');
-                });
-            }
-        } else {
-            // Dismiss button
-            const dismissBtn = document.getElementById('dismissBtn');
-            if (dismissBtn) {
-                dismissBtn.addEventListener('click', () => {
-                    notification.remove();
-                    ext.storage.local.remove('pendingPolicySearch');
-                });
-            }
+        // No button - dismiss
+        const noBtn = document.getElementById('autoFillNoBtn');
+        if (noBtn) {
+            noBtn.addEventListener('click', () => {
+                notification.remove();
+                ext.storage.local.remove('pendingPolicySearch');
+            });
         }
 
         // Notification is now persistent - user must dismiss manually
