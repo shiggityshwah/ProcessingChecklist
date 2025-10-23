@@ -197,9 +197,29 @@
     }
 
     /**
-     * Update all tracking metadata for current form
+     * Debounced metadata update timer
+     */
+    let metadataUpdateTimer = null;
+
+    /**
+     * Update all tracking metadata for current form (debounced to prevent race conditions)
      */
     function updateTrackingMetadata() {
+        // Clear any pending update
+        if (metadataUpdateTimer) {
+            clearTimeout(metadataUpdateTimer);
+        }
+
+        // Schedule update after a short delay
+        metadataUpdateTimer = setTimeout(() => {
+            performMetadataUpdate();
+        }, 100);
+    }
+
+    /**
+     * Actually perform the metadata update
+     */
+    function performMetadataUpdate() {
         const urlId = window.trackingHelper.currentUrlId;
         if (!urlId) return;
 
