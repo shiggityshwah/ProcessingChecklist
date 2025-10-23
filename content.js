@@ -1817,6 +1817,8 @@
 
     function renderOnPageUI(fieldData, state, uiState, viewMode) {
         viewMode = viewMode || 'single';
+        uiState = uiState || { visible: true };
+
         let container = document.getElementById('processing-checklist-container');
         if (!container) {
             container = document.createElement('div');

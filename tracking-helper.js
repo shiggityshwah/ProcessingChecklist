@@ -303,6 +303,9 @@
                 // PRIORITY 1: Match by resolved URL ID (most reliable)
                 // PRIORITY 2: For temp_ IDs, match by submission and policy number with type verification
                 let formIndex = availableForms.findIndex(f => {
+                    // Skip if urlId is missing
+                    if (!f.urlId) return false;
+
                     // Exact URL ID match (highest priority)
                     if (f.urlId === urlId) return true;
 
