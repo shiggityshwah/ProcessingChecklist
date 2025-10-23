@@ -212,10 +212,13 @@
 
                 // Update policy number and track changes
                 const policyNumber = extractPolicyNumber();
+                console.log(LOG_PREFIX, `[Metadata] Current policy: "${history[index].policyNumber}", Extracted: "${policyNumber}", Original: "${history[index].originalPolicyNumber || 'none'}"`);
+
                 if (policyNumber && policyNumber !== history[index].policyNumber) {
                     // First time setting the policy number after initial creation
                     if (!history[index].originalPolicyNumber && history[index].policyNumber) {
                         history[index].originalPolicyNumber = history[index].policyNumber;
+                        console.log(LOG_PREFIX, `[Metadata] Saved original policy number: ${history[index].originalPolicyNumber}`);
                     }
 
                     history[index].policyNumber = policyNumber;
