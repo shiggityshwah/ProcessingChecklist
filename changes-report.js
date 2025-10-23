@@ -280,8 +280,8 @@
             // Populate table rows
             const tbody = document.getElementById(`forms-${dateStr}`);
             forms.forEach((form, index) => {
-                const row = createFormRow(form, `${dateStr}-${index}`);
-                tbody.appendChild(row);
+                const rows = createFormRow(form, `${dateStr}-${index}`);
+                rows.forEach(r => tbody.appendChild(r));
             });
         });
     }
@@ -326,7 +326,7 @@
                 </td>
             `;
 
-            // Add click handler to expandable element (must be after row is created)
+            // Add click handler to expandable element
             const expandable = row.querySelector('.expandable');
             if (expandable) {
                 expandable.addEventListener('click', () => {
@@ -338,10 +338,10 @@
                 });
             }
 
-            row.after(detailsRow);
+            return [row, detailsRow];
         }
 
-        return row;
+        return [row];
     }
 
     /**
