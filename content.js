@@ -3501,9 +3501,9 @@
         const transactionTypeSelect = document.querySelector('#TransactionTypeId');
         let transactionType = null;
         if (transactionTypeSelect) {
-            // Get the selected option text (e.g., "New Business", "Renewal", etc.)
+            // Get the selected option value (e.g., "5" for New Business, "6" for Renewal, etc.)
             const selectedOption = transactionTypeSelect.options[transactionTypeSelect.selectedIndex];
-            transactionType = selectedOption ? selectedOption.text : null;
+            transactionType = selectedOption ? selectedOption.value : null;
         }
         console.log(LOG_PREFIX, 'Extracted transaction type:', transactionType);
 
@@ -3613,8 +3613,8 @@
             slaNumber: slaNumber || '',
             naicNumber: naicNumber || '',
             insurerStatus: insurerStatus || '',
-            transactionType: transactionType || '', // From form (New Business, Renewal, etc.)
-            transactionStatus: 'Registered', // Always set to "Registered"
+            transactionType: transactionType || '', // Transaction type ID from form (e.g., "5" for New Business)
+            transactionStatus: 'R', // "R" for Registered (the value, not the display text)
             dateFrom: dateFrom,
             dateTo: dateTo,
             timestamp: Date.now()

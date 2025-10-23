@@ -575,7 +575,7 @@
         // Fill Transaction Type (for transaction search only)
         console.log(LOG_PREFIX, "\n--- Attempting to fill Transaction Type ---");
         if (params.transactionType) {
-            const success = fillKendoComboBox('#TransactionTypeId', params.transactionType, true);
+            const success = fillKendoComboBox('#TransactionTypeId', params.transactionType, false);
             results.push({ field: 'Transaction Type', selector: '#TransactionTypeId', success });
             if (success) successCount++;
         } else {
@@ -586,7 +586,7 @@
         // Fill Transaction Status (for transaction search only)
         console.log(LOG_PREFIX, "\n--- Attempting to fill Transaction Status ---");
         if (params.transactionStatus) {
-            const success = fillKendoComboBox('#TransactionStatus', params.transactionStatus, true);
+            const success = fillKendoComboBox('#TransactionStatus', params.transactionStatus, false);
             results.push({ field: 'Transaction Status', selector: '#TransactionStatus', success });
             if (success) successCount++;
         } else {
