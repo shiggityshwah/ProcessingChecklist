@@ -210,11 +210,18 @@
             if (index !== -1) {
                 let updated = false;
 
-                // Update policy number
+                // Update policy number and track changes
                 const policyNumber = extractPolicyNumber();
                 if (policyNumber && policyNumber !== history[index].policyNumber) {
+                    // First time setting the policy number after initial creation
+                    if (!history[index].originalPolicyNumber && history[index].policyNumber) {
+                        history[index].originalPolicyNumber = history[index].policyNumber;
+                    }
+
                     history[index].policyNumber = policyNumber;
                     updated = true;
+
+                    console.log(LOG_PREFIX, `Policy number changed from ${history[index].originalPolicyNumber || 'unknown'} to ${policyNumber}`);
                 }
 
                 // Update primary insured

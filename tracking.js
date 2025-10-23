@@ -434,13 +434,18 @@
             // Simplify policy type code for display
             const displayTypeCode = getSimplifiedTypeCode(item.policyType || '');
 
+            // Check if policy number was changed
+            const policyChanged = item.originalPolicyNumber && item.originalPolicyNumber !== item.policyNumber;
+            const policyStyle = policyChanged ? ' style="color: #28a745; font-weight: 600;"' : '';
+            const policyTitle = policyChanged ? ` title="Initial value: ${escapeHtml(item.originalPolicyNumber)}"` : ` title="${escapeHtml(item.url || '')}"`;
+
             // Check if type was changed
             const typeChanged = item.originalPolicyType && item.originalPolicyType !== item.policyType;
             const typeStyle = typeChanged ? ' style="color: #28a745; font-weight: 600;"' : '';
             const typeTitle = typeChanged ? ` title="Initial value: ${getSimplifiedTypeCode(item.originalPolicyType)}"` : '';
 
             row.innerHTML = `
-                <td><a href="#" class="clickable-link" data-url-id="${escapeHtml(item.urlId)}" title="${escapeHtml(item.url || '')}">${escapeHtml(item.policyNumber || 'N/A')}</a></td>
+                <td><a href="#" class="clickable-link"${policyStyle}${policyTitle} data-url-id="${escapeHtml(item.urlId)}">${escapeHtml(item.policyNumber || 'N/A')}</a></td>
                 <td><span${typeStyle}${typeTitle}>${escapeHtml(displayTypeCode)}</span></td>
                 <td>
                     <span class="progress-badge ${checkedClass}">${checkedDisplay}</span>
