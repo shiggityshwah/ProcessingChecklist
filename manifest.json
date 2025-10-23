@@ -58,6 +58,7 @@
     "changes-report.js",
     "clipboard-manager.html",
     "style.css",
-    "checklist-config.json"
+    "checklist-config.json",
+    "favicon.svg"
   ]
 }
