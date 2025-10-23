@@ -767,6 +767,11 @@
     }
 
     function findNextStep(state) {
+        if (!state || !Array.isArray(state)) {
+            console.warn(LOG_PREFIX, "findNextStep called with invalid state:", state);
+            return -1;
+        }
+
         // First pass: find the first item that is not processed and not skipped.
         for (let i = 0; i < state.length; i++) {
             if (!state[i].processed && !state[i].skipped) {
@@ -1817,7 +1822,12 @@
 
     function renderOnPageUI(fieldData, state, uiState, viewMode) {
         viewMode = viewMode || 'single';
-        uiState = uiState || { visible: true };
+
+        // If uiState is not provided, check if container exists and preserve its visibility
+        if (!uiState) {
+            const existingContainer = document.getElementById('processing-checklist-container');
+            uiState = { visible: existingContainer ? (existingContainer.style.display !== 'none') : false };
+        }
 
         let container = document.getElementById('processing-checklist-container');
         if (!container) {
@@ -2424,7 +2434,9 @@
                         element.addEventListener(eventType, () => {
                             if (isInitializing) return;
                             const keys = getStorageKeys();
-                            ext.storage.local.get(keys.checklistState, r => updateAndBroadcast(r[keys.checklistState]));
+                            ext.storage.local.get([keys.checklistState, keys.uiState, keys.viewMode], r => {
+                                updateAndBroadcast(r[keys.checklistState], r[keys.uiState], r[keys.viewMode]);
+                            });
                         });
                     }
                 });
