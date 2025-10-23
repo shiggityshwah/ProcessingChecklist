@@ -318,6 +318,7 @@
         // Add details row if there are changes
         if (hasChanges || hasReviewChanges) {
             const detailsRow = document.createElement('tr');
+            detailsRow.className = 'details-row';
             detailsRow.innerHTML = `
                 <td colspan="5">
                     <div class="change-details" id="details-${rowId}">
@@ -331,6 +332,7 @@
             if (expandable) {
                 expandable.addEventListener('click', () => {
                     expandable.classList.toggle('expanded');
+                    detailsRow.classList.toggle('details-row-visible');
                     const details = detailsRow.querySelector('.change-details');
                     if (details) {
                         details.classList.toggle('visible');
@@ -939,6 +941,7 @@
                     `;
 
                     const detailsRow = document.createElement('tr');
+                    detailsRow.className = 'details-row';
                     detailsRow.innerHTML = `
                         <td colspan="5">
                             <div class="change-details" id="details-${rowId}">
@@ -952,6 +955,7 @@
                     if (expandable) {
                         expandable.addEventListener('click', () => {
                             expandable.classList.toggle('expanded');
+                            detailsRow.classList.toggle('details-row-visible');
                             const details = detailsRow.querySelector('.change-details');
                             if (details) {
                                 details.classList.toggle('visible');
