@@ -326,17 +326,17 @@
                 </td>
             `;
 
-            // Add click handler to expandable element
-            setTimeout(() => {
-                const expandable = row.querySelector('.expandable');
-                if (expandable) {
-                    expandable.addEventListener('click', () => {
-                        expandable.classList.toggle('expanded');
-                        const details = document.getElementById(`details-${rowId}`);
+            // Add click handler to expandable element (must be after row is created)
+            const expandable = row.querySelector('.expandable');
+            if (expandable) {
+                expandable.addEventListener('click', () => {
+                    expandable.classList.toggle('expanded');
+                    const details = detailsRow.querySelector('.change-details');
+                    if (details) {
                         details.classList.toggle('visible');
-                    });
-                }
-            }, 0);
+                    }
+                });
+            }
 
             row.after(detailsRow);
         }
@@ -948,16 +948,16 @@
                     `;
 
                     // Add click handler
-                    setTimeout(() => {
-                        const expandable = row.querySelector('.expandable');
-                        if (expandable) {
-                            expandable.addEventListener('click', () => {
-                                expandable.classList.toggle('expanded');
-                                const details = document.getElementById(`details-${rowId}`);
+                    const expandable = row.querySelector('.expandable');
+                    if (expandable) {
+                        expandable.addEventListener('click', () => {
+                            expandable.classList.toggle('expanded');
+                            const details = detailsRow.querySelector('.change-details');
+                            if (details) {
                                 details.classList.toggle('visible');
-                            });
-                        }
-                    }, 0);
+                            }
+                        });
+                    }
 
                     tbody.appendChild(row);
                     tbody.appendChild(detailsRow);
