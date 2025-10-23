@@ -275,6 +275,14 @@
             color: #22543d;
         }
 
+        .badge-sub {
+            font-size: 11px;
+            padding: 2px 6px;
+            margin-left: 4px;
+            background: #e2e8f0;
+            color: #4a5568;
+        }
+
         .expandable {
             cursor: pointer;
             user-select: none;
@@ -324,6 +332,23 @@
             font-size: 12px;
             color: #718096;
             margin-left: 16px;
+        }
+
+        .change-step-review {
+            background: #ebf8ff;
+            border-left: 3px solid #4299e1;
+            padding: 8px 12px;
+            border-radius: 4px;
+        }
+
+        .review-indicator {
+            background: #4299e1;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-size: 11px;
+            margin-right: 8px;
+            font-weight: 600;
         }
 
         .empty-state {
@@ -533,6 +558,7 @@
     <div class="tabs">
         <button class="tab active" data-tab="user-report">User Report</button>
         <button class="tab" data-tab="broker-analysis">Broker Analysis</button>
+        <button class="tab" data-tab="review-mistakes">Review Mode Mistakes</button>
     </div>
 
     <!-- User Report Tab -->
@@ -636,6 +662,36 @@
 
         <div id="broker-charts-container">
             <!-- Charts will be populated by JS -->
+        </div>
+    </div>
+
+    <!-- Review Mode Mistakes Tab -->
+    <div id="review-mistakes" class="tab-content">
+        <div class="controls">
+            <div class="controls-row">
+                <div class="control-group">
+                    <label class="control-label">Start Date</label>
+                    <input type="date" id="review-start-date" class="control-input">
+                </div>
+                <div class="control-group">
+                    <label class="control-label">End Date</label>
+                    <input type="date" id="review-end-date" class="control-input">
+                </div>
+                <div class="control-group">
+                    <button id="review-apply-btn" class="btn-primary">Apply Filters</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="review-summary" class="summary-cards">
+            <!-- Summary cards will be populated by JS -->
+        </div>
+
+        <div id="review-forms-container" class="section">
+            <div class="section-title">Forms with Review Mode Changes</div>
+            <div id="review-forms-list">
+                <!-- Forms will be populated by JS -->
+            </div>
         </div>
     </div>
 

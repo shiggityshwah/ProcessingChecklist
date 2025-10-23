@@ -49,6 +49,8 @@
                     loadUserReport();
                 } else if (tabId === 'broker-analysis') {
                     loadBrokerAnalysis();
+                } else if (tabId === 'review-mistakes') {
+                    loadReviewMistakes();
                 }
             });
         });
@@ -64,6 +66,8 @@
         document.getElementById('user-end-date').value = today;
         document.getElementById('broker-start-date').value = today;
         document.getElementById('broker-end-date').value = today;
+        document.getElementById('review-start-date').value = today;
+        document.getElementById('review-end-date').value = today;
 
         // User report filter button
         document.getElementById('user-apply-btn').addEventListener('click', () => {
@@ -78,6 +82,11 @@
             brokerFilters.startDate = document.getElementById('broker-start-date').value;
             brokerFilters.endDate = document.getElementById('broker-end-date').value;
             loadBrokerAnalysis();
+        });
+
+        // Review mistakes filter button
+        document.getElementById('review-apply-btn').addEventListener('click', () => {
+            loadReviewMistakes();
         });
 
         // Export buttons
@@ -257,7 +266,6 @@
                                 <th>Broker</th>
                                 <th>Type</th>
                                 <th>Changes</th>
-                                <th>Review Changes</th>
                                 <th>Details</th>
                             </tr>
                         </thead>
@@ -288,15 +296,15 @@
         const reviewChanges = form.reviewModeChanges || {};
         const hasChanges = (changes.totalFieldsChanged || 0) > 0;
         const hasReviewChanges = (reviewChanges.totalFieldsChanged || 0) > 0;
+        const totalChanges = (changes.totalFieldsChanged || 0) + (reviewChanges.totalFieldsChanged || 0);
 
         let changesBadge = '<span class="badge badge-clean">No Changes</span>';
-        if (hasChanges) {
-            changesBadge = `<span class="badge badge-changes">${changes.totalFieldsChanged} field${changes.totalFieldsChanged !== 1 ? 's' : ''}</span>`;
-        }
-
-        let reviewBadge = '<span class="badge badge-clean">No Changes</span>';
-        if (hasReviewChanges) {
-            reviewBadge = `<span class="badge badge-review">${reviewChanges.totalFieldsChanged} field${reviewChanges.totalFieldsChanged !== 1 ? 's' : ''}</span>`;
+        if (totalChanges > 0) {
+            changesBadge = `<span class="badge badge-changes">${totalChanges} field${totalChanges !== 1 ? 's' : ''}</span>`;
+            // Add sub-badges if both types exist
+            if (hasChanges && hasReviewChanges) {
+                changesBadge += ` <span class="badge badge-sub">${changes.totalFieldsChanged} initial</span> <span class="badge badge-sub badge-review">${reviewChanges.totalFieldsChanged} review</span>`;
+            }
         }
 
         row.innerHTML = `
@@ -304,7 +312,6 @@
             <td>${escapeHtml(form.broker || 'N/A')}</td>
             <td>${escapeHtml(form.policyType || 'N/A')}</td>
             <td>${changesBadge}</td>
-            <td>${reviewBadge}</td>
             <td>${hasChanges || hasReviewChanges ? `<span class="expandable" data-row-id="${rowId}">View Details</span>` : '-'}</td>
         `;
 
@@ -312,7 +319,7 @@
         if (hasChanges || hasReviewChanges) {
             const detailsRow = document.createElement('tr');
             detailsRow.innerHTML = `
-                <td colspan="6">
+                <td colspan="5">
                     <div class="change-details" id="details-${rowId}">
                         ${renderChangeDetails(changes, reviewChanges)}
                     </div>
@@ -344,7 +351,6 @@
         let html = '';
 
         if (changes.stepsWithChanges && changes.stepsWithChanges.length > 0) {
-            html += '<div><strong>Initial Processing Changes:</strong></div>';
             changes.stepsWithChanges.forEach(step => {
                 html += `
                     <div class="change-step">
@@ -356,12 +362,13 @@
         }
 
         if (reviewChanges.stepsWithChanges && reviewChanges.stepsWithChanges.length > 0) {
-            if (html) html += '<br>';
-            html += '<div><strong>Review Mode Changes:</strong></div>';
             reviewChanges.stepsWithChanges.forEach(step => {
                 html += `
-                    <div class="change-step">
-                        <div class="change-step-name">${escapeHtml(step.stepName)} (${step.fieldCount} field${step.fieldCount !== 1 ? 's' : ''})</div>
+                    <div class="change-step change-step-review">
+                        <div class="change-step-name">
+                            <span class="review-indicator">🔍 Review</span>
+                            ${escapeHtml(step.stepName)} (${step.fieldCount} field${step.fieldCount !== 1 ? 's' : ''})
+                        </div>
                         <div class="change-fields">Changed fields: ${step.changedFields.map(f => escapeHtml(f)).join(', ')}</div>
                     </div>
                 `;
@@ -800,6 +807,183 @@
         link.download = `changes-breakdown-${reportType}-${new Date().toISOString().split('T')[0]}.csv`;
         link.click();
         URL.revokeObjectURL(url);
+    }
+
+    /**
+     * Load and render review mode mistakes
+     */
+    function loadReviewMistakes() {
+        const summaryContainer = document.getElementById('review-summary');
+        const formsContainer = document.getElementById('review-forms-list');
+
+        summaryContainer.innerHTML = '<div class="loading"><div class="spinner"></div><div>Loading review mistakes...</div></div>';
+        formsContainer.innerHTML = '';
+
+        ext.storage.local.get('tracking_history', (result) => {
+            const history = result.tracking_history || [];
+
+            // Get date filters
+            const startDate = document.getElementById('review-start-date').value;
+            const endDate = document.getElementById('review-end-date').value;
+
+            // Filter forms with review mode changes
+            const formsWithReviewChanges = history.filter(form => {
+                if (!form.reviewModeChanges || form.reviewModeChanges.totalFieldsChanged === 0) {
+                    return false;
+                }
+
+                // Apply date filter
+                if (startDate && form.completedDate && form.completedDate < startDate) return false;
+                if (endDate && form.completedDate && form.completedDate > endDate) return false;
+
+                return true;
+            });
+
+            // Calculate summary stats
+            const totalForms = formsWithReviewChanges.length;
+            const totalMistakes = formsWithReviewChanges.reduce((sum, form) =>
+                sum + (form.reviewModeChanges.totalFieldsChanged || 0), 0);
+            const avgMistakesPerForm = totalForms > 0 ? (totalMistakes / totalForms).toFixed(1) : 0;
+
+            // Group by step
+            const mistakesByStep = {};
+            formsWithReviewChanges.forEach(form => {
+                if (form.reviewModeChanges && form.reviewModeChanges.stepsWithChanges) {
+                    form.reviewModeChanges.stepsWithChanges.forEach(step => {
+                        if (!mistakesByStep[step.stepName]) {
+                            mistakesByStep[step.stepName] = 0;
+                        }
+                        mistakesByStep[step.stepName] += step.fieldCount;
+                    });
+                }
+            });
+
+            // Render summary
+            summaryContainer.innerHTML = `
+                <div class="summary-card">
+                    <div class="summary-value">${totalForms}</div>
+                    <div class="summary-label">Forms with Mistakes</div>
+                </div>
+                <div class="summary-card">
+                    <div class="summary-value">${totalMistakes}</div>
+                    <div class="summary-label">Total Mistakes Caught</div>
+                </div>
+                <div class="summary-card">
+                    <div class="summary-value">${avgMistakesPerForm}</div>
+                    <div class="summary-label">Avg Mistakes per Form</div>
+                </div>
+            `;
+
+            // Render forms list
+            if (totalForms === 0) {
+                formsContainer.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">✅</div>
+                        <div class="empty-state-text">No mistakes found!</div>
+                        <div class="empty-state-subtext">All forms were processed correctly on the first pass.</div>
+                    </div>
+                `;
+                return;
+            }
+
+            // Group by date
+            const formsByDate = {};
+            formsWithReviewChanges.forEach(form => {
+                const date = form.completedDate || 'Unknown';
+                if (!formsByDate[date]) {
+                    formsByDate[date] = [];
+                }
+                formsByDate[date].push(form);
+            });
+
+            // Sort dates descending
+            const sortedDates = Object.keys(formsByDate).sort().reverse();
+
+            sortedDates.forEach(date => {
+                const forms = formsByDate[date];
+                const section = document.createElement('div');
+                section.className = 'date-section';
+                section.innerHTML = `
+                    <div class="date-header">${date} (${forms.length} form${forms.length !== 1 ? 's' : ''})</div>
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Policy Number</th>
+                                    <th>Broker</th>
+                                    <th>Type</th>
+                                    <th>Mistakes</th>
+                                    <th>Details</th>
+                                </tr>
+                            </thead>
+                            <tbody id="review-forms-${date.replace(/\//g, '-')}">
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+
+                formsContainer.appendChild(section);
+
+                const tbody = document.getElementById(`review-forms-${date.replace(/\//g, '-')}`);
+                forms.forEach((form, index) => {
+                    const rowId = `review-${date}-${index}`;
+                    const reviewChanges = form.reviewModeChanges || {};
+
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td><a href="${escapeHtml(form.url || '#')}" class="clickable-link" target="_blank">${escapeHtml(form.policyNumber || 'N/A')}</a></td>
+                        <td>${escapeHtml(form.broker || 'N/A')}</td>
+                        <td>${escapeHtml(form.policyType || 'N/A')}</td>
+                        <td><span class="badge badge-review">${reviewChanges.totalFieldsChanged} field${reviewChanges.totalFieldsChanged !== 1 ? 's' : ''}</span></td>
+                        <td><span class="expandable" data-row-id="${rowId}">View Details</span></td>
+                    `;
+
+                    const detailsRow = document.createElement('tr');
+                    detailsRow.innerHTML = `
+                        <td colspan="5">
+                            <div class="change-details" id="details-${rowId}">
+                                ${renderReviewMistakeDetails(reviewChanges)}
+                            </div>
+                        </td>
+                    `;
+
+                    // Add click handler
+                    setTimeout(() => {
+                        const expandable = row.querySelector('.expandable');
+                        if (expandable) {
+                            expandable.addEventListener('click', () => {
+                                expandable.classList.toggle('expanded');
+                                const details = document.getElementById(`details-${rowId}`);
+                                details.classList.toggle('visible');
+                            });
+                        }
+                    }, 0);
+
+                    tbody.appendChild(row);
+                    tbody.appendChild(detailsRow);
+                });
+            });
+        });
+    }
+
+    /**
+     * Render review mistake details
+     */
+    function renderReviewMistakeDetails(reviewChanges) {
+        let html = '';
+
+        if (reviewChanges.stepsWithChanges && reviewChanges.stepsWithChanges.length > 0) {
+            reviewChanges.stepsWithChanges.forEach(step => {
+                html += `
+                    <div class="change-step">
+                        <div class="change-step-name">${escapeHtml(step.stepName)} (${step.fieldCount} mistake${step.fieldCount !== 1 ? 's' : ''})</div>
+                        <div class="change-fields">Fields corrected: ${step.changedFields.map(f => escapeHtml(f)).join(', ')}</div>
+                    </div>
+                `;
+            });
+        }
+
+        return html || '<div>No details available</div>';
     }
 
     /**

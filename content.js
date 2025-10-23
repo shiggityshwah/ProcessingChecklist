@@ -79,14 +79,31 @@
                         rows.forEach((row, rowIndex) => {
                             const cells = row.querySelectorAll('td');
                             if (cells.length >= 3) {
+                                // Extract fee name
+                                let feeName = '';
+                                if (rowIndex === 3) {
+                                    // OTHER FEE row - check for custom name
+                                    const customNameInput = row.querySelector('#TransactionFees_3__OtherFeeType');
+                                    const customName = customNameInput ? customNameInput.value.trim() : '';
+                                    feeName = customName || 'OTHER FEE';
+                                } else {
+                                    // Regular fee rows - get static name from first cell
+                                    const firstCell = cells[0];
+                                    const textNodes = Array.from(firstCell.childNodes)
+                                        .filter(node => node.nodeType === Node.TEXT_NODE)
+                                        .map(node => node.textContent.trim())
+                                        .filter(text => text.length > 0);
+                                    feeName = textNodes[0] || `Fee ${rowIndex}`;
+                                }
+
                                 // Capture taxable checkbox
                                 const taxableCheckbox = cells[1].querySelector('input[type="checkbox"]');
-                                const taxableFieldName = `Fee ${rowIndex} Taxable`;
+                                const taxableFieldName = `${feeName} Taxable`;
                                 originalFieldValues[stepName][taxableFieldName] = taxableCheckbox ? taxableCheckbox.checked : false;
 
                                 // Capture amount
                                 const hiddenInput = cells[2].querySelector('input[id*="FeeAmount"]');
-                                const amountFieldName = `Fee ${rowIndex} Amount`;
+                                const amountFieldName = `${feeName} Amount`;
                                 originalFieldValues[stepName][amountFieldName] = hiddenInput ? hiddenInput.value : '';
                             }
                         });
@@ -165,9 +182,26 @@
                 rows.forEach((row, rowIndex) => {
                     const cells = row.querySelectorAll('td');
                     if (cells.length >= 3) {
+                        // Extract fee name (same logic as in captureOriginalValues)
+                        let feeName = '';
+                        if (rowIndex === 3) {
+                            // OTHER FEE row - check for custom name
+                            const customNameInput = row.querySelector('#TransactionFees_3__OtherFeeType');
+                            const customName = customNameInput ? customNameInput.value.trim() : '';
+                            feeName = customName || 'OTHER FEE';
+                        } else {
+                            // Regular fee rows - get static name from first cell
+                            const firstCell = cells[0];
+                            const textNodes = Array.from(firstCell.childNodes)
+                                .filter(node => node.nodeType === Node.TEXT_NODE)
+                                .map(node => node.textContent.trim())
+                                .filter(text => text.length > 0);
+                            feeName = textNodes[0] || `Fee ${rowIndex}`;
+                        }
+
                         // Check taxable checkbox
                         const taxableCheckbox = cells[1].querySelector('input[type="checkbox"]');
-                        const taxableFieldName = `Fee ${rowIndex} Taxable`;
+                        const taxableFieldName = `${feeName} Taxable`;
                         const currentTaxable = taxableCheckbox ? taxableCheckbox.checked : false;
                         const originalTaxable = originalFieldValues[stepName][taxableFieldName];
                         if (currentTaxable != originalTaxable) {
@@ -176,7 +210,7 @@
 
                         // Check amount
                         const hiddenInput = cells[2].querySelector('input[id*="FeeAmount"]');
-                        const amountFieldName = `Fee ${rowIndex} Amount`;
+                        const amountFieldName = `${feeName} Amount`;
                         const currentAmount = hiddenInput ? hiddenInput.value : '';
                         const originalAmount = originalFieldValues[stepName][amountFieldName];
                         if (currentAmount != originalAmount) {
