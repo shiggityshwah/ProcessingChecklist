@@ -6,7 +6,6 @@
  */
 
 const logger = Logger.create('Background');
-const logger = Logger.create('Background');
 const ext = (typeof browser !== 'undefined') ? browser : chrome;
 
 // Clipboard history storage
@@ -370,7 +369,7 @@ async function parseAttendancePage(url) {
 
         // If still not found in current window, search all windows (fallback)
         if (!matchingTab) {
-            logger.debug( Attendance tab not in current window, searching all windows...');
+            logger.debug('Attendance tab not in current window, searching all windows...');
             allTabs = await ext.tabs.query({});
 
             if (url) {
@@ -400,7 +399,7 @@ async function parseAttendancePage(url) {
             };
         }
 
-        logger.debug( Found existing attendance tab:', tabToUse.id);
+        logger.debug('Found existing attendance tab:', tabToUse.id);
 
         // Execute script to parse the table with timeout protection
         let results;
@@ -476,7 +475,7 @@ async function parseAttendancePage(url) {
                 )
             ]);
         } catch (timeoutError) {
-            logger.error( executeScript timeout or error:', timeoutError);
+            logger.error('executeScript timeout or error:', timeoutError);
             return {
                 success: false,
                 error: timeoutError.message || 'Failed to execute script on attendance page'
@@ -520,7 +519,7 @@ async function parseWorkQueue() {
             };
         }
 
-        logger.debug( Found work queue tab:', matchingTab.id);
+        logger.debug('Found work queue tab:', matchingTab.id);
 
         // Execute script to parse the work queue grid
         const results = await ext.tabs.executeScript(matchingTab.id, {
@@ -655,7 +654,7 @@ async function addToClipboardHistory(text) {
         // Save updated history
         await ext.storage.local.set({ [CLIPBOARD_HISTORY_KEY]: history });
     } catch (error) {
-        logger.error( Failed to add to clipboard history:', error);
+        logger.error('Failed to add to clipboard history:', error);
         throw error;
     }
 }
