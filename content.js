@@ -604,6 +604,7 @@
                         injectMarkCheckedButton();
                         injectFindSimilarPoliciesButton();
                         injectInsurerQuickFillButton();
+                        injectFeeSwapHandles();
                         attachListenersToPageElements();
                         initializeTableWatchers();
                         updateAndBroadcast(storedState, uiState, viewMode);
@@ -631,6 +632,7 @@
                 injectMarkCheckedButton();
                 injectFindSimilarPoliciesButton();
                 injectInsurerQuickFillButton();
+                injectFeeSwapHandles();
                 attachListenersToPageElements();
                 initializeTableWatchers();
                 updateAndBroadcast(storedState, uiState, viewMode);
@@ -3871,6 +3873,223 @@
             console.error(LOG_PREFIX, "Visible input not found - cannot fill");
             showNotification('⚠️ Could not find Insurer Search field', 'warning');
             return false;
+        }
+    }
+
+    /**
+     * Inject drag handles next to fee amount fields for swapping fees
+     */
+    function injectFeeSwapHandles() {
+        console.log(LOG_PREFIX, "Injecting fee swap drag handles...");
+
+        // Find all fee amount cells in the fees table
+        // Pattern: TransactionFees_0__FeeAmount through TransactionFees_3__FeeAmount
+        const feeIndices = [0, 1, 2, 3]; // POLICY, INSPECTION, BROKER, OTHER
+
+        feeIndices.forEach(index => {
+            // Find the hidden input (actual value)
+            const hiddenInput = document.querySelector(`#TransactionFees_${index}__FeeAmount`);
+            if (!hiddenInput) {
+                console.warn(LOG_PREFIX, `Fee input not found for index ${index}`);
+                return;
+            }
+
+            // Find the visible Kendo widget container
+            const kendoContainer = hiddenInput.closest('.k-widget.k-numerictextbox');
+            if (!kendoContainer) {
+                console.warn(LOG_PREFIX, `Kendo container not found for fee index ${index}`);
+                return;
+            }
+
+            // Check if drag handle already exists
+            if (kendoContainer.querySelector('.fee-drag-handle')) {
+                return;
+            }
+
+            // Create drag handle
+            const dragHandle = document.createElement('span');
+            dragHandle.className = 'fee-drag-handle';
+            dragHandle.innerHTML = '⇅';
+            dragHandle.draggable = true;
+            dragHandle.setAttribute('data-fee-index', index);
+            dragHandle.title = 'Drag to swap with another fee';
+
+            // Insert before the Kendo widget
+            kendoContainer.parentElement.insertBefore(dragHandle, kendoContainer);
+
+            console.log(LOG_PREFIX, `Drag handle injected for fee index ${index}`);
+        });
+
+        // Set up drag event handlers
+        setupFeeDragHandlers();
+    }
+
+    /**
+     * Set up drag-and-drop event handlers for fee handles
+     */
+    function setupFeeDragHandlers() {
+        const dragHandles = document.querySelectorAll('.fee-drag-handle');
+        let dragSourceIndex = null;
+
+        dragHandles.forEach(handle => {
+            // dragstart - user starts dragging
+            handle.addEventListener('dragstart', (e) => {
+                dragSourceIndex = parseInt(handle.getAttribute('data-fee-index'));
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', dragSourceIndex);
+
+                handle.classList.add('dragging');
+                console.log(LOG_PREFIX, `Drag started from fee index ${dragSourceIndex}`);
+            });
+
+            // dragend - cleanup after drag completes or is cancelled
+            handle.addEventListener('dragend', (e) => {
+                handle.classList.remove('dragging');
+
+                // Remove drop target highlighting from all rows
+                document.querySelectorAll('.fee-drop-target').forEach(row => {
+                    row.classList.remove('fee-drop-target');
+                });
+
+                dragSourceIndex = null;
+                console.log(LOG_PREFIX, "Drag ended");
+            });
+        });
+
+        // Set up drop zones on the fee table rows
+        const feeRows = document.querySelectorAll('tbody tr');
+        feeRows.forEach((row, rowIndex) => {
+            // Check if this row has a fee amount input
+            const feeInput = row.querySelector('input[id*="TransactionFees_"][id*="__FeeAmount"]');
+            if (!feeInput) return;
+
+            // Extract fee index from input ID (e.g., "TransactionFees_2__FeeAmount" -> 2)
+            const match = feeInput.id.match(/TransactionFees_(\d+)__FeeAmount/);
+            if (!match) return;
+
+            const targetIndex = parseInt(match[1]);
+
+            // dragover - allow drop on valid targets
+            row.addEventListener('dragover', (e) => {
+                if (dragSourceIndex === null || dragSourceIndex === targetIndex) {
+                    return; // Can't drop on same row
+                }
+
+                e.preventDefault(); // Allow drop
+                e.dataTransfer.dropEffect = 'move';
+            });
+
+            // dragenter - highlight drop zone
+            row.addEventListener('dragenter', (e) => {
+                if (dragSourceIndex === null || dragSourceIndex === targetIndex) {
+                    return;
+                }
+
+                row.classList.add('fee-drop-target');
+            });
+
+            // dragleave - remove highlight when leaving
+            row.addEventListener('dragleave', (e) => {
+                // Only remove if we're actually leaving the row (not entering a child)
+                if (e.target === row || !row.contains(e.relatedTarget)) {
+                    row.classList.remove('fee-drop-target');
+                }
+            });
+
+            // drop - execute the swap
+            row.addEventListener('drop', (e) => {
+                e.preventDefault();
+
+                if (dragSourceIndex === null || dragSourceIndex === targetIndex) {
+                    return;
+                }
+
+                row.classList.remove('fee-drop-target');
+
+                console.log(LOG_PREFIX, `Dropping fee ${dragSourceIndex} onto fee ${targetIndex}`);
+                swapFeeValues(dragSourceIndex, targetIndex);
+            });
+        });
+
+        console.log(LOG_PREFIX, `Fee drag handlers set up for ${dragHandles.length} handles`);
+    }
+
+    /**
+     * Swap fee values and taxable checkboxes between two fee rows
+     */
+    function swapFeeValues(sourceIndex, targetIndex) {
+        console.log(LOG_PREFIX, `Swapping fees: ${sourceIndex} <-> ${targetIndex}`);
+
+        // Check if jQuery is available (needed for Kendo widgets)
+        if (!window.jQuery || typeof window.kendo === 'undefined') {
+            console.error(LOG_PREFIX, "jQuery or Kendo not available - cannot swap fees");
+            showNotification('⚠️ Cannot swap fees - required libraries not loaded', 'warning');
+            return;
+        }
+
+        try {
+            // Get Kendo NumericTextBox widgets
+            const sourceWidget = window.jQuery(`#TransactionFees_${sourceIndex}__FeeAmount`).data('kendoNumericTextBox');
+            const targetWidget = window.jQuery(`#TransactionFees_${targetIndex}__FeeAmount`).data('kendoNumericTextBox');
+
+            if (!sourceWidget || !targetWidget) {
+                console.error(LOG_PREFIX, "Kendo widgets not found for fee amounts");
+                showNotification('⚠️ Fee widgets not found', 'warning');
+                return;
+            }
+
+            // Get current values
+            const sourceAmount = sourceWidget.value();
+            const targetAmount = targetWidget.value();
+
+            console.log(LOG_PREFIX, `Source amount: ${sourceAmount}, Target amount: ${targetAmount}`);
+
+            // Get taxable checkboxes
+            const sourceCheckbox = document.querySelector(`#TransactionFees_${sourceIndex}__IsTaxable`);
+            const targetCheckbox = document.querySelector(`#TransactionFees_${targetIndex}__IsTaxable`);
+
+            if (!sourceCheckbox || !targetCheckbox) {
+                console.error(LOG_PREFIX, "Taxable checkboxes not found");
+                showNotification('⚠️ Taxable checkboxes not found', 'warning');
+                return;
+            }
+
+            const sourceTaxable = sourceCheckbox.checked;
+            const targetTaxable = targetCheckbox.checked;
+
+            console.log(LOG_PREFIX, `Source taxable: ${sourceTaxable}, Target taxable: ${targetTaxable}`);
+
+            // Perform the swap
+            sourceWidget.value(targetAmount);
+            targetWidget.value(sourceAmount);
+
+            sourceCheckbox.checked = targetTaxable;
+            targetCheckbox.checked = sourceTaxable;
+
+            // Trigger change events for form validation
+            sourceWidget.trigger('change');
+            targetWidget.trigger('change');
+
+            // Visual feedback - highlight both rows briefly
+            const sourceRow = document.querySelector(`#TransactionFees_${sourceIndex}__FeeAmount`).closest('tr');
+            const targetRow = document.querySelector(`#TransactionFees_${targetIndex}__FeeAmount`).closest('tr');
+
+            if (sourceRow && targetRow) {
+                sourceRow.classList.add('fee-swapped');
+                targetRow.classList.add('fee-swapped');
+
+                setTimeout(() => {
+                    sourceRow.classList.remove('fee-swapped');
+                    targetRow.classList.remove('fee-swapped');
+                }, 300);
+            }
+
+            console.log(LOG_PREFIX, "Fee swap completed successfully");
+            showNotification('✓ Fees swapped', 'success');
+
+        } catch (error) {
+            console.error(LOG_PREFIX, "Error swapping fees:", error);
+            showNotification('⚠️ Error swapping fees', 'warning');
         }
     }
 
