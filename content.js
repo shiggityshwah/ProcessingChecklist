@@ -3925,14 +3925,14 @@
 
             // Wrap both handle and kendo widget in a flex container for inline display
             const wrapper = document.createElement('div');
-            wrapper.style.cssText = 'display: flex; align-items: center; gap: 4px;';
+            wrapper.style.cssText = 'display: flex; align-items: center; gap: 0px;';
 
             // Insert wrapper before kendo container
             parentDiv.insertBefore(wrapper, kendoContainer);
 
-            // Move kendo container into wrapper and add handle
-            wrapper.appendChild(dragHandle);
+            // Move kendo container into wrapper and add handle (handle on the RIGHT)
             wrapper.appendChild(kendoContainer);
+            wrapper.appendChild(dragHandle);
 
             console.log(LOG_PREFIX, `Drag handle injected for fee index ${index}`);
         });

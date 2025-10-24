@@ -967,12 +967,13 @@ div.form-horizontal:nth-child(14) > div:nth-child(1) > div:nth-child(1) > div:nt
 
 /* Fee Drag-and-Swap Styles */
 .fee-drag-handle {
-    margin-right: 6px;
+    margin-left: 0px;
     padding: 0px 4px 2px 4px;
     font-size: 14px;
     background-color: #5bc0de;
     border: 1px solid #46b8da;
-    border-radius: 3px;
+    border-radius: 0px 3px 3px 0px; /* Rounded on right only, flat on left to attach to input */
+    border-left: none; /* Remove left border to make it look attached */
     color: white;
     cursor: grab;
     display: inline-block;
