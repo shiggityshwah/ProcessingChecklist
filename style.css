@@ -980,6 +980,7 @@ div.form-horizontal:nth-child(14) > div:nth-child(1) > div:nth-child(1) > div:nt
     line-height: 1;
     transition: background-color 0.2s;
     user-select: none;
+    letter-spacing: -2px; /* Bring grippy dots closer together */
 }
 
 .fee-drag-handle:hover {

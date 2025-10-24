@@ -3887,6 +3887,13 @@
         const feeIndices = [0, 1, 2, 3]; // POLICY, INSPECTION, BROKER, OTHER
 
         feeIndices.forEach(index => {
+            // Check if drag handle already exists for this index
+            const existingHandle = document.querySelector(`.fee-drag-handle[data-fee-index="${index}"]`);
+            if (existingHandle) {
+                console.log(LOG_PREFIX, `Drag handle already exists for fee index ${index}`);
+                return;
+            }
+
             // Find the hidden input (actual value)
             const hiddenInput = document.querySelector(`#TransactionFees_${index}__FeeAmount`);
             if (!hiddenInput) {
@@ -3901,26 +3908,36 @@
                 return;
             }
 
-            // Check if drag handle already exists
-            if (kendoContainer.querySelector('.fee-drag-handle')) {
+            // Get the parent div (policyFee, inspectionFee, etc.)
+            const parentDiv = kendoContainer.parentElement;
+            if (!parentDiv) {
+                console.warn(LOG_PREFIX, `Parent div not found for fee index ${index}`);
                 return;
             }
 
             // Create drag handle
             const dragHandle = document.createElement('span');
             dragHandle.className = 'fee-drag-handle';
-            dragHandle.innerHTML = '⇅';
+            dragHandle.innerHTML = '⋮⋮'; // Grippy dots
             dragHandle.draggable = true;
             dragHandle.setAttribute('data-fee-index', index);
             dragHandle.title = 'Drag to swap with another fee';
 
-            // Insert before the Kendo widget
-            kendoContainer.parentElement.insertBefore(dragHandle, kendoContainer);
+            // Wrap both handle and kendo widget in a flex container for inline display
+            const wrapper = document.createElement('div');
+            wrapper.style.cssText = 'display: flex; align-items: center; gap: 4px;';
+
+            // Insert wrapper before kendo container
+            parentDiv.insertBefore(wrapper, kendoContainer);
+
+            // Move kendo container into wrapper and add handle
+            wrapper.appendChild(dragHandle);
+            wrapper.appendChild(kendoContainer);
 
             console.log(LOG_PREFIX, `Drag handle injected for fee index ${index}`);
         });
 
-        // Set up drag event handlers
+        // Set up drag event handlers only once
         setupFeeDragHandlers();
     }
 
@@ -3932,6 +3949,12 @@
         let dragSourceIndex = null;
 
         dragHandles.forEach(handle => {
+            // Skip if handlers already attached
+            if (handle.hasAttribute('data-handlers-attached')) {
+                return;
+            }
+            handle.setAttribute('data-handlers-attached', 'true');
+
             // dragstart - user starts dragging
             handle.addEventListener('dragstart', (e) => {
                 dragSourceIndex = parseInt(handle.getAttribute('data-fee-index'));
@@ -3968,6 +3991,12 @@
             if (!match) return;
 
             const targetIndex = parseInt(match[1]);
+
+            // Skip if handlers already attached
+            if (row.hasAttribute('data-fee-drop-handlers')) {
+                return;
+            }
+            row.setAttribute('data-fee-drop-handlers', 'true');
 
             // dragover - allow drop on valid targets
             row.addEventListener('dragover', (e) => {
