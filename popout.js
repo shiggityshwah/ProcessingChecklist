@@ -3,6 +3,7 @@
 /*************************************************************************************************/
 (function() {
     "use strict";
+    const logger = Logger.create('Popout');
     const ext = (typeof browser !== 'undefined') ? browser : chrome;
     let port = null;
     let currentIndex = -1;
@@ -803,7 +804,7 @@
                 const finalHeight = Math.round(Math.min(Math.max(calculatedHeight, 180), 850));
                 const finalWidth = isTable ? 450 : 350; // Wider for tables, min 330 for back button
 
-                console.log('[Popout Resize]', {
+                logger.debug(, {
                     contentHeight,
                     scrollHeight,
                     displayRectHeight: displayRect.height,

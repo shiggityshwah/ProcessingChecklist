@@ -9,7 +9,7 @@
     "use strict";
 
     const ext = (typeof browser !== 'undefined') ? browser : chrome;
-    const LOG_PREFIX = "[ProcessingChecklist-Tracking]";
+    const logger = Logger.create('Tracking');
 
     // Storage limits
     const MAX_HISTORY_ITEMS = 500; // Maximum items to keep in history
@@ -232,19 +232,19 @@
 
                 // Update policy number and track changes
                 const policyNumber = extractPolicyNumber();
-                console.log(LOG_PREFIX, `[Metadata] Current policy: "${history[index].policyNumber}", Extracted: "${policyNumber}", Original: "${history[index].originalPolicyNumber || 'none'}"`);
+                logger.debug(`[Metadata] Current policy: "${history[index].policyNumber}", Extracted: "${policyNumber}", Original: "${history[index].originalPolicyNumber || 'none'}"`);
 
                 if (policyNumber && policyNumber !== history[index].policyNumber) {
                     // First time setting the policy number after initial creation
                     if (!history[index].originalPolicyNumber && history[index].policyNumber) {
                         history[index].originalPolicyNumber = history[index].policyNumber;
-                        console.log(LOG_PREFIX, `[Metadata] Saved original policy number: ${history[index].originalPolicyNumber}`);
+                        logger.debug(`[Metadata] Saved original policy number: ${history[index].originalPolicyNumber}`);
                     }
 
                     history[index].policyNumber = policyNumber;
                     updated = true;
 
-                    console.log(LOG_PREFIX, `Policy number changed from ${history[index].originalPolicyNumber || 'unknown'} to ${policyNumber}`);
+                    logger.debug(`Policy number changed from ${history[index].originalPolicyNumber || 'unknown'} to ${policyNumber}`);
                 }
 
                 // Update primary insured
@@ -279,13 +279,13 @@
                         history[index].policyType = currentTypeCode;
                         updated = true;
 
-                        console.log(LOG_PREFIX, `Transaction type changed from ${originalTypeCode} to ${currentTypeCode}`);
+                        logger.debug(`Transaction type changed from ${originalTypeCode} to ${currentTypeCode}`);
                     }
                 }
 
                 if (updated) {
                     ext.storage.local.set({ tracking_history: history });
-                    console.log(LOG_PREFIX, "Metadata updated for form:", urlId);
+                    logger.debug("Metadata updated for form:", urlId);
                 }
             }
         });
@@ -297,7 +297,7 @@
     window.trackingHelper.detectAndRegisterForm = function() {
         // Skip detection if this is a background download tab (has doc=open)
         if (window.location.href.includes('doc=open')) {
-            console.log(LOG_PREFIX, "Skipping form detection - this is a background download tab");
+            logger.debug("Skipping form detection - this is a background download tab");
             return;
         }
 
@@ -372,7 +372,7 @@
 
                     // Update URL ID if this was a temp ID
                     if (form.urlId.startsWith('temp_')) {
-                        console.log(LOG_PREFIX, `Updating temp ID ${form.urlId} to real ID ${urlId}`);
+                        logger.debug(`Updating temp ID ${form.urlId} to real ID ${urlId}`);
                         form.urlId = urlId;
                         // Preserve doc=open flag by reconstructing URL with current location base
                         const currentUrl = new URL(window.location.href);
@@ -424,9 +424,9 @@
 
                     // New form is not complete
                     window.trackingHelper.formIsComplete = false;
-                    console.log(LOG_PREFIX, "[DEBUG] Set formIsComplete = false (new form added to history)");
+                    logger.debug("[DEBUG] Set formIsComplete = false (new form added to history)");
 
-                    console.log(LOG_PREFIX, "Form detected and moved to history:", urlId);
+                    logger.debug("Form detected and moved to history:", urlId);
                 } else if (existingHistoryIndex !== -1) {
                     // Already in history - check if completed to determine if we should update progress
                     const existingForm = history[existingHistoryIndex];
@@ -449,13 +449,13 @@
                     ext.storage.local.set({ tracking_history: history });
 
                     if (isComplete) {
-                        console.log(LOG_PREFIX, "Reconnected to completed form - checkedProgress will remain frozen:", urlId);
-                        console.log(LOG_PREFIX, "[DEBUG] Set formIsComplete = true (existing form is complete)");
+                        logger.debug("Reconnected to completed form - checkedProgress will remain frozen:", urlId);
+                        logger.debug("[DEBUG] Set formIsComplete = true (existing form is complete)");
                         // Set flag to prevent updateProgress from modifying checkedProgress
                         window.trackingHelper.formIsComplete = true;
                     } else {
-                        console.log(LOG_PREFIX, "Reconnected to incomplete form - checkedProgress can be updated:", urlId);
-                        console.log(LOG_PREFIX, "[DEBUG] Set formIsComplete = false (existing form is incomplete)");
+                        logger.debug("Reconnected to incomplete form - checkedProgress can be updated:", urlId);
+                        logger.debug("[DEBUG] Set formIsComplete = false (existing form is incomplete)");
                         window.trackingHelper.formIsComplete = false;
                     }
                 } else {
@@ -468,7 +468,7 @@
 
                     // Always add forms with Edit URL, even if policy number hasn't loaded yet
                     // Policy number will be updated via updateTrackingMetadata
-                    console.log(LOG_PREFIX, "Form not in queue/history - auto-adding to history. Policy:", policyNumber || "(pending)");
+                    logger.debug("Form not in queue/history - auto-adding to history. Policy:", policyNumber || "(pending)");
 
                     // Add doc=open to the URL if not already present
                     let formUrl = window.location.href;
@@ -505,9 +505,9 @@
 
                     // New form is not complete
                     window.trackingHelper.formIsComplete = false;
-                    console.log(LOG_PREFIX, "[DEBUG] Set formIsComplete = false (new form auto-added)");
+                    logger.debug("[DEBUG] Set formIsComplete = false (new form auto-added)");
 
-                    console.log(LOG_PREFIX, "New form auto-added to history:", urlId, "Policy:", policyNumber || "(pending)", "Type:", typeCode);
+                    logger.debug("New form auto-added to history:", urlId, "Policy:", policyNumber || "(pending)", "Type:", typeCode);
                 }
             });
         }, 500);
@@ -518,32 +518,32 @@
      */
     window.trackingHelper.updateProgress = function(checkedCurrent, checkedTotal, isReview = false, force = false) {
         const urlId = window.trackingHelper.currentUrlId;
-        console.log(LOG_PREFIX, `[DEBUG] updateProgress called: urlId=${urlId}, checked=${checkedCurrent}/${checkedTotal}, isReview=${isReview}, formIsComplete=${window.trackingHelper.formIsComplete}, force=${force}`);
+        logger.debug(`[DEBUG] updateProgress called: urlId=${urlId}, checked=${checkedCurrent}/${checkedTotal}, isReview=${isReview}, formIsComplete=${window.trackingHelper.formIsComplete}, force=${force}`);
 
         if (!urlId) {
-            console.log(LOG_PREFIX, `updateProgress skipped - no urlId`);
+            logger.debug(`updateProgress skipped - no urlId`);
             return;
         }
 
         const percentage = checkedTotal > 0 ? Math.round((checkedCurrent / checkedTotal) * 100) : 0;
-        console.log(LOG_PREFIX, `[DEBUG] Calculated percentage: ${percentage}%`);
+        logger.debug(`[DEBUG] Calculated percentage: ${percentage}%`);
 
         ext.storage.local.get('tracking_history', (result) => {
             let history = result.tracking_history || [];
             const index = history.findIndex(h => h.urlId === urlId);
-            console.log(LOG_PREFIX, `[DEBUG] Found form in history at index: ${index}, total history items: ${history.length}`);
+            logger.debug(`[DEBUG] Found form in history at index: ${index}, total history items: ${history.length}`);
 
             if (index === -1) {
-                console.log(LOG_PREFIX, `updateProgress skipped - form not found in history (urlId: ${urlId})`);
+                logger.debug(`updateProgress skipped - form not found in history (urlId: ${urlId})`);
                 return;
             }
 
-            console.log(LOG_PREFIX, `[DEBUG] Current progress in history:`, history[index].checkedProgress);
+            logger.debug(`[DEBUG] Current progress in history:`, history[index].checkedProgress);
 
             let updated = false;
 
             if (isReview) {
-                console.log(LOG_PREFIX, `[DEBUG] Review mode - updating reviewedProgress`);
+                logger.debug(`[DEBUG] Review mode - updating reviewedProgress`);
                 // Always allow reviewedProgress updates
                 history[index].reviewedProgress = {
                     current: checkedCurrent,
@@ -551,15 +551,15 @@
                     percentage: percentage
                 };
                 updated = true;
-                console.log(LOG_PREFIX, `Review progress updated: ${checkedCurrent}/${checkedTotal} (${percentage}%)`);
+                logger.debug(`Review progress updated: ${checkedCurrent}/${checkedTotal} (${percentage}%)`);
             } else {
-                console.log(LOG_PREFIX, `[DEBUG] Normal mode - formIsComplete=${window.trackingHelper.formIsComplete}, force=${force}`);
+                logger.debug(`[DEBUG] Normal mode - formIsComplete=${window.trackingHelper.formIsComplete}, force=${force}`);
                 // Only update checkedProgress if form is not already complete OR if force flag is set
                 if (!window.trackingHelper.formIsComplete || force) {
                     if (force) {
-                        console.log(LOG_PREFIX, `[DEBUG] FORCE UPDATE - bypassing formIsComplete check`);
+                        logger.debug(`[DEBUG] FORCE UPDATE - bypassing formIsComplete check`);
                     } else {
-                        console.log(LOG_PREFIX, `[DEBUG] Form not complete, updating checkedProgress`);
+                        logger.debug(`[DEBUG] Form not complete, updating checkedProgress`);
                     }
 
                     history[index].checkedProgress = {
@@ -574,27 +574,27 @@
                     }
 
                     updated = true;
-                    console.log(LOG_PREFIX, `Progress updated: ${checkedCurrent}/${checkedTotal} (${percentage}%)`);
+                    logger.debug(`Progress updated: ${checkedCurrent}/${checkedTotal} (${percentage}%)`);
                 } else {
-                    console.log(LOG_PREFIX, `Skipping checkedProgress update - form is complete (frozen at ${history[index].checkedProgress?.percentage || 0}%)`);
+                    logger.debug(`Skipping checkedProgress update - form is complete (frozen at ${history[index].checkedProgress?.percentage || 0}%)`);
                 }
             }
 
-            console.log(LOG_PREFIX, `[DEBUG] updated flag = ${updated}`);
+            logger.debug(`[DEBUG] updated flag = ${updated}`);
 
             // Save to storage if anything was updated
             if (updated) {
-                console.log(LOG_PREFIX, `Saving progress to storage for urlId ${urlId}, index ${index}`);
-                console.log(LOG_PREFIX, `Data to save:`, history[index].checkedProgress);
+                logger.debug(`Saving progress to storage for urlId ${urlId}, index ${index}`);
+                logger.debug(`Data to save:`, history[index].checkedProgress);
                 ext.storage.local.set({ tracking_history: history }, () => {
                     if (ext.runtime.lastError) {
-                        console.error(LOG_PREFIX, `Error saving progress:`, ext.runtime.lastError);
+                        logger.error(`Error saving progress:`, ext.runtime.lastError);
                     } else {
-                        console.log(LOG_PREFIX, `Progress successfully saved to storage`);
+                        logger.debug(`Progress successfully saved to storage`);
                     }
                 });
             } else {
-                console.log(LOG_PREFIX, `[DEBUG] NOT saving to storage - updated=${updated}`);
+                logger.debug(`[DEBUG] NOT saving to storage - updated=${updated}`);
             }
         });
     };
@@ -613,7 +613,7 @@
             if (index !== -1) {
                 history[index].policyNumber = policyNumber;
                 ext.storage.local.set({ tracking_history: history });
-                console.log(LOG_PREFIX, "Policy number updated:", policyNumber);
+                logger.debug("Policy number updated:", policyNumber);
             }
         });
     };
@@ -632,7 +632,7 @@
             if (index !== -1) {
                 history[index].primaryNamedInsured = primaryInsured;
                 ext.storage.local.set({ tracking_history: history });
-                console.log(LOG_PREFIX, "Primary insured updated:", primaryInsured);
+                logger.debug("Primary insured updated:", primaryInsured);
             }
         });
     };
@@ -651,7 +651,7 @@
             if (index !== -1) {
                 history[index].totalTaxablePremium = premium;
                 ext.storage.local.set({ tracking_history: history });
-                console.log(LOG_PREFIX, "Premium updated:", premium);
+                logger.debug("Premium updated:", premium);
             }
         });
     };
@@ -683,7 +683,7 @@
         `;
         document.body.appendChild(indicator);
 
-        console.log(LOG_PREFIX, "Entered review mode");
+        logger.debug("Entered review mode");
     };
 
     /**
@@ -771,7 +771,7 @@
             const originalCount = history.length;
 
             if (originalCount === 0) {
-                console.log(LOG_PREFIX, "No history to prune");
+                logger.debug("No history to prune");
                 return;
             }
 
@@ -808,7 +808,7 @@
 
             if (prunedCount > 0) {
                 ext.storage.local.set({ tracking_history: history }, () => {
-                    console.log(LOG_PREFIX, `Pruned ${prunedCount} items from history (${originalCount} → ${history.length})`);
+                    logger.debug(`Pruned ${prunedCount} items from history (${originalCount} → ${history.length})`);
 
                     // Show notification to user
                     if (typeof window !== 'undefined' && document.body) {
@@ -816,7 +816,7 @@
                     }
                 });
             } else {
-                console.log(LOG_PREFIX, `No pruning needed (${originalCount} items within limits)`);
+                logger.debug(`No pruning needed (${originalCount} items within limits)`);
             }
         });
     }
@@ -829,7 +829,7 @@
             const history = result.tracking_history || [];
 
             if (history.length === 0) {
-                console.log(LOG_PREFIX, "No history to export");
+                logger.debug("No history to export");
                 return;
             }
 
@@ -851,7 +851,7 @@
                 filename: filename,
                 saveAs: true
             }, (downloadId) => {
-                console.log(LOG_PREFIX, `History exported: ${filename} (${history.length} items)`);
+                logger.debug(`History exported: ${filename} (${history.length} items)`);
 
                 // Clean up blob URL after download starts
                 setTimeout(() => URL.revokeObjectURL(url), 1000);
@@ -918,7 +918,7 @@
 
             // Check if pruning is needed
             if (history.length > MAX_HISTORY_ITEMS) {
-                console.log(LOG_PREFIX, `Auto-pruning triggered (${history.length} items)`);
+                logger.debug(`Auto-pruning triggered (${history.length} items)`);
                 pruneHistory();
             }
         });
@@ -934,7 +934,7 @@
     window.trackingHelper.storeOriginalValues = function(originalValues) {
         const urlId = window.trackingHelper.currentUrlId;
         if (!urlId) {
-            console.log(LOG_PREFIX, "[ChangeTracking] No urlId, skipping storeOriginalValues");
+            logger.debug("[ChangeTracking] No urlId, skipping storeOriginalValues");
             return;
         }
 
@@ -947,9 +947,9 @@
                 if (!history[index].originalFieldValues) {
                     history[index].originalFieldValues = originalValues;
                     ext.storage.local.set({ tracking_history: history });
-                    console.log(LOG_PREFIX, "[ChangeTracking] Original values stored for", urlId);
+                    logger.debug("[ChangeTracking] Original values stored for", urlId);
                 } else {
-                    console.log(LOG_PREFIX, "[ChangeTracking] Original values already exist for", urlId);
+                    logger.debug("[ChangeTracking] Original values already exist for", urlId);
                 }
             }
         });
@@ -962,7 +962,7 @@
     window.trackingHelper.storeChanges = function(changeData) {
         const urlId = window.trackingHelper.currentUrlId;
         if (!urlId) {
-            console.log(LOG_PREFIX, "[ChangeTracking] No urlId, skipping storeChanges");
+            logger.debug("[ChangeTracking] No urlId, skipping storeChanges");
             return;
         }
 
@@ -997,10 +997,10 @@
                 };
 
                 ext.storage.local.set({ tracking_history: history });
-                console.log(LOG_PREFIX, `[ChangeTracking] Changes stored for ${urlId} (reviewMode=${changeData.isReviewMode}):`, changeData);
+                logger.debug(`[ChangeTracking] Changes stored for ${urlId} (reviewMode=${changeData.isReviewMode}):`, changeData);
             }
         });
     };
 
-    console.log(LOG_PREFIX, "Tracking helper loaded");
+    logger.debug("Tracking helper loaded");
 })();

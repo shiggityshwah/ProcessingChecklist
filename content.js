@@ -3,7 +3,7 @@
 /*************************************************************************************************/
 (function() {
     "use strict";
-    const LOG_PREFIX = "[ProcessingChecklist]";
+    const logger = Logger.create('Content');
     const ext = (typeof browser !== 'undefined') ? browser : chrome;
     let port = null;
     let currentIndex = -1;
@@ -35,11 +35,11 @@
      */
     function captureOriginalFieldValues() {
         if (originalValuesCaptured) {
-            console.log(LOG_PREFIX, "[ChangeTracking] Original values already captured, skipping");
+            logger.debug("[ChangeTracking] Original values already captured, skipping");
             return;
         }
 
-        console.log(LOG_PREFIX, "[ChangeTracking] Capturing original field values");
+        logger.debug("[ChangeTracking] Capturing original field values");
         originalFieldValues = {};
 
         checklist.forEach((step, index) => {
@@ -124,7 +124,7 @@
         });
 
         originalValuesCaptured = true;
-        console.log(LOG_PREFIX, "[ChangeTracking] Original values captured:", originalFieldValues);
+        logger.debug("[ChangeTracking] Original values captured:", originalFieldValues);
 
         // Store original values in tracking helper for persistence
         if (window.trackingHelper && window.trackingHelper.storeOriginalValues) {
@@ -249,7 +249,7 @@
      */
     function detectAllChanges(isReviewMode = false) {
         if (!originalValuesCaptured) {
-            console.log(LOG_PREFIX, "[ChangeTracking] Original values not captured yet, skipping change detection");
+            logger.debug("[ChangeTracking] Original values not captured yet, skipping change detection");
             return null;
         }
 
@@ -275,7 +275,7 @@
             isReviewMode
         };
 
-        console.log(LOG_PREFIX, `[ChangeTracking] Detected changes (reviewMode=${isReviewMode}):`, result);
+        logger.debug(`[ChangeTracking] Detected changes (reviewMode=${isReviewMode}):`, result);
 
         // Store changes in tracking helper
         if (window.trackingHelper && window.trackingHelper.storeChanges) {
@@ -292,7 +292,7 @@
             port.onDisconnect.addListener(handleDisconnect);
             isConnected = true;
         } catch (e) {
-            console.error(LOG_PREFIX, "Connection failed:", e);
+            logger.error("Connection failed:", e);
             handleDisconnect();
         }
     }
@@ -306,7 +306,7 @@
     function handleDisconnect() {
         isConnected = false;
         port = null;
-        console.log(LOG_PREFIX, "Port disconnected - attempting to reconnect");
+        logger.info("Port disconnected - attempting to reconnect");
 
         // Attempt to reconnect after a delay
         if (reconnectTimer) {
@@ -319,14 +319,14 @@
 
         function attemptReconnect() {
             reconnectAttempt++;
-            console.log(LOG_PREFIX, `Reconnection attempt ${reconnectAttempt}/${maxAttempts}`);
+            logger.info(`Reconnection attempt ${reconnectAttempt}/${maxAttempts}`);
 
             try {
                 connect();
 
                 // If reconnected successfully, stop trying
                 if (isConnected) {
-                    console.log(LOG_PREFIX, "Reconnection successful");
+                    logger.info("Reconnection successful");
                     // Broadcast current state if we have a tab ID
                     if (myTabId) {
                         const keys = getStorageKeys();
@@ -339,7 +339,7 @@
                     return;
                 }
             } catch (e) {
-                console.warn(LOG_PREFIX, `Reconnection attempt ${reconnectAttempt} failed:`, e);
+                logger.warn(`Reconnection attempt ${reconnectAttempt} failed:`, e);
             }
 
             // If not connected and haven't exceeded max attempts, try again
@@ -348,7 +348,7 @@
                 const delay = Math.min(500 * Math.pow(2, reconnectAttempt - 1), 8000);
                 reconnectTimer = setTimeout(attemptReconnect, delay);
             } else if (reconnectAttempt >= maxAttempts) {
-                console.error(LOG_PREFIX, "Max reconnection attempts reached - giving up");
+                logger.error("Max reconnection attempts reached - giving up");
             }
         }
 
@@ -377,7 +377,7 @@
 
             checklist = config.checklist;
             configLoaded = true;
-            console.log(LOG_PREFIX, "Configuration loaded successfully:", config.metadata);
+            logger.info("Configuration loaded successfully:", config.metadata);
 
             // Set up tracking helper function to get checklist total
             if (window.trackingHelper) {
@@ -387,9 +387,9 @@
             // Log table items for debugging
             const tableItems = checklist.filter(item => item.type === 'table');
             if (tableItems.length > 0) {
-                console.log(LOG_PREFIX, `[Table] Found ${tableItems.length} table item(s) in config:`);
+                logger.debug(`[Table] Found ${tableItems.length} table item(s) in config:`);
                 tableItems.forEach((item, idx) => {
-                    console.log(LOG_PREFIX, `[Table] ${idx + 1}. "${item.name}"`, {
+                    logger.debug(`[Table] ${idx + 1}. "${item.name}"`, {
                         table_selector: item.table_selector,
                         row_selector: item.row_selector,
                         dynamic: item.dynamic,
@@ -400,7 +400,7 @@
 
             return true;
         } catch (error) {
-            console.error(LOG_PREFIX, "Failed to load configuration:", error);
+            logger.error("Failed to load configuration:", error);
             showConfigError({
                 type: 'LOAD_FAILED',
                 message: 'Failed to load configuration',
@@ -445,13 +445,13 @@
         // Load configuration first
         const loaded = await loadConfiguration();
         if (!loaded) {
-            console.error(LOG_PREFIX, "Cannot initialize without valid configuration");
+            logger.error("Cannot initialize without valid configuration");
             return;
         }
 
         // Check if current page matches URL pattern
         if (!isMatchingPage()) {
-            console.log(LOG_PREFIX, "Page does not match URL pattern - extension will not initialize");
+            logger.info("Page does not match URL pattern - extension will not initialize");
             return;
         }
 
@@ -464,7 +464,7 @@
         const urlPattern = config?.metadata?.url_pattern;
 
         if (!urlPattern) {
-            console.warn(LOG_PREFIX, "No URL pattern defined in config - allowing all pages");
+            logger.warn("No URL pattern defined in config - allowing all pages");
             return true;
         }
 
@@ -487,13 +487,13 @@
     function initializeAfterReconnection() {
         const keys = getStorageKeys();
         ext.storage.local.get([keys.checklistState, keys.uiState, keys.viewMode], (result) => {
-            console.log(LOG_PREFIX, "Restoring after reconnection...");
+            logger.debug("Restoring after reconnection...");
 
             const storedState = result[keys.checklistState];
 
             if (storedState) {
                 // Force complete restoration
-                console.log(LOG_PREFIX, "Clearing zone tracking and reinjecting all checkboxes");
+                logger.debug("Clearing zone tracking and reinjecting all checkboxes");
                 zoneCheckboxes.clear();
                 highlightZones.clear();
 
@@ -514,7 +514,7 @@
                     isInitializing = false;
                     startPositionObserver();
                     startPeriodicRecoveryCheck();
-                    console.log(LOG_PREFIX, "Reconnection restoration complete");
+                    logger.debug("Reconnection restoration complete");
                 }, 100);
             }
         });
@@ -530,7 +530,7 @@
                         // OPTIMIZATION: Skip full update if this was triggered by our own updateState
                         // Visual updates were already applied immediately
                         if (isOwnStorageUpdate) {
-                            console.log(LOG_PREFIX, 'Skipping redundant updateAndBroadcast - already handled in updateState');
+                            logger.debug('Skipping redundant updateAndBroadcast - already handled in updateState');
                             return;
                         }
 
@@ -563,7 +563,7 @@
             if (historyItem && historyItem.checkedProgress) {
                 // Convert progress back to checklist state format
                 // We need to map which items were checked
-                console.log(LOG_PREFIX, "Restoring state from tracking history for:", urlId);
+                logger.debug("Restoring state from tracking history for:", urlId);
 
                 // For now, we can't restore individual item state since we only track totals
                 // Just return null to use fresh state
@@ -664,7 +664,7 @@
                     const changedKey = changes[keys.checklistState] ? keys.checklistState : keys.reviewState;
                     const isReviewChange = changedKey === keys.reviewState;
 
-                    console.log(LOG_PREFIX, `Storage changed: ${isReviewChange ? 'reviewState' : 'checklistState'}`, changes[changedKey]?.newValue);
+                    logger.debug(`Storage changed: ${isReviewChange ? 'reviewState' : 'checklistState'}`, changes[changedKey]?.newValue);
 
                     if (changes[changedKey].newValue) {
                         // Skip if we're in the middle of a reset
@@ -759,7 +759,7 @@
                 canGoBack: hasBackStep
             });
         } catch (e) {
-            console.error(LOG_PREFIX, "Failed to broadcast update:", e);
+            logger.error("Failed to broadcast update:", e);
             handleDisconnect();
         }
     }
@@ -772,7 +772,7 @@
 
     function findNextStep(state) {
         if (!state || !Array.isArray(state)) {
-            console.warn(LOG_PREFIX, "findNextStep called with invalid state:", state);
+            logger.warn("findNextStep called with invalid state:", state);
             return -1;
         }
 
@@ -845,7 +845,7 @@
             console.debug(LOG_PREFIX, `[Table] extractCellValue: column "${column.name}" (${column.type}) = "${value}"`);
             return value;
         } catch (e) {
-            console.warn(LOG_PREFIX, `[Table] Error extracting cell value for column ${column.name}:`, e);
+            logger.warn(`[Table] Error extracting cell value for column ${column.name}:`, e);
             return '';
         }
     }
@@ -869,31 +869,31 @@
      * @returns {Object} Table data with rows array and row count
      */
     function getTableData(itemConfig) {
-        console.log(LOG_PREFIX, `[Table] getTableData called for "${itemConfig.name}"`);
-        console.log(LOG_PREFIX, `[Table] Table selector: "${itemConfig.table_selector}"`);
-        console.log(LOG_PREFIX, `[Table] Row selector: "${itemConfig.row_selector}"`);
-        console.log(LOG_PREFIX, `[Table] Columns:`, itemConfig.columns);
+        logger.debug(`[Table] getTableData called for "${itemConfig.name}"`);
+        logger.debug(`[Table] Table selector: "${itemConfig.table_selector}"`);
+        logger.debug(`[Table] Row selector: "${itemConfig.row_selector}"`);
+        logger.debug(`[Table] Columns:`, itemConfig.columns);
 
         const table = document.querySelector(itemConfig.table_selector);
         if (!table) {
-            console.warn(LOG_PREFIX, `[Table] Table element NOT FOUND with selector: ${itemConfig.table_selector}`);
-            console.log(LOG_PREFIX, `[Table] Available tables on page:`, document.querySelectorAll('table'));
+            logger.warn(`[Table] Table element NOT FOUND with selector: ${itemConfig.table_selector}`);
+            logger.debug(`[Table] Available tables on page:`, document.querySelectorAll('table'));
             return { rows: [], rowCount: 0 };
         }
 
-        console.log(LOG_PREFIX, `[Table] Table element found:`, table);
+        logger.debug(`[Table] Table element found:`, table);
 
         const rows = table.querySelectorAll(itemConfig.row_selector);
-        console.log(LOG_PREFIX, `[Table] Found ${rows.length} rows with selector "${itemConfig.row_selector}"`);
+        logger.debug(`[Table] Found ${rows.length} rows with selector "${itemConfig.row_selector}"`);
 
         const data = [];
 
         rows.forEach((row, rowIndex) => {
-            console.log(LOG_PREFIX, `[Table] Processing row ${rowIndex}:`, row);
+            logger.debug(`[Table] Processing row ${rowIndex}:`, row);
             const rowData = {};
 
             itemConfig.columns.forEach((col, colIndex) => {
-                console.log(LOG_PREFIX, `[Table] Processing column ${colIndex} "${col.name}" with selector "${col.selector}"`);
+                logger.debug(`[Table] Processing column ${colIndex} "${col.name}" with selector "${col.selector}"`);
 
                 // Try to find the cell element
                 let cell = null;
@@ -901,50 +901,50 @@
                 // First, try querySelector on the row for the column selector
                 const element = row.querySelector(col.selector);
                 if (element) {
-                    console.log(LOG_PREFIX, `[Table] Found element directly in row for column "${col.name}":`, element);
+                    logger.debug(`[Table] Found element directly in row for column "${col.name}":`, element);
                     // For direct element matches
                     rowData[`col${colIndex}`] = extractCellValue(row, col);
                 } else {
-                    console.log(LOG_PREFIX, `[Table] Element not found directly, trying cell-based approach for column "${col.name}"`);
+                    logger.debug(`[Table] Element not found directly, trying cell-based approach for column "${col.name}"`);
                     // For cell-based selectors like td:nth-child(1)
                     const cells = row.querySelectorAll('td');
-                    console.log(LOG_PREFIX, `[Table] Found ${cells.length} td cells in row ${rowIndex}`);
+                    logger.debug(`[Table] Found ${cells.length} td cells in row ${rowIndex}`);
 
                     if (cells[colIndex]) {
                         cell = cells[colIndex];
-                        console.log(LOG_PREFIX, `[Table] Using cell at index ${colIndex}:`, cell);
+                        logger.debug(`[Table] Using cell at index ${colIndex}:`, cell);
                         const cellElement = cell.querySelector(col.selector) || cell;
-                        console.log(LOG_PREFIX, `[Table] Cell element for extraction:`, cellElement);
+                        logger.debug(`[Table] Cell element for extraction:`, cellElement);
 
                         if (col.type === 'label') {
                             rowData[`col${colIndex}`] = col.extract === 'text'
                                 ? cellElement.textContent?.trim() || ''
                                 : cellElement.innerHTML || '';
-                            console.log(LOG_PREFIX, `[Table] Extracted label value: "${rowData[`col${colIndex}`]}"`);
+                            logger.debug(`[Table] Extracted label value: "${rowData[`col${colIndex}`]}"`);
                         } else if (col.type === 'checkbox') {
                             const checkbox = cell.querySelector('input[type="checkbox"]');
                             rowData[`col${colIndex}`] = checkbox ? checkbox.checked : false;
-                            console.log(LOG_PREFIX, `[Table] Extracted checkbox value: ${rowData[`col${colIndex}`]}`);
+                            logger.debug(`[Table] Extracted checkbox value: ${rowData[`col${colIndex}`]}`);
                         } else {
                             rowData[`col${colIndex}`] = cellElement.value || cellElement.textContent?.trim() || '';
-                            console.log(LOG_PREFIX, `[Table] Extracted text value: "${rowData[`col${colIndex}`]}"`);
+                            logger.debug(`[Table] Extracted text value: "${rowData[`col${colIndex}`]}"`);
                         }
                     } else {
-                        console.log(LOG_PREFIX, `[Table] No cell found at index ${colIndex} for column "${col.name}"`);
+                        logger.debug(`[Table] No cell found at index ${colIndex} for column "${col.name}"`);
                         rowData[`col${colIndex}`] = '';
                     }
                 }
             });
 
-            console.log(LOG_PREFIX, `[Table] Row ${rowIndex} data:`, rowData);
-            console.log(LOG_PREFIX, `[Table] Row ${rowIndex} is filled:`, isRowFilled(rowData));
+            logger.debug(`[Table] Row ${rowIndex} data:`, rowData);
+            logger.debug(`[Table] Row ${rowIndex} is filled:`, isRowFilled(rowData));
 
             // Always include all rows (even empty ones) to show table structure
             data.push(rowData);
-            console.log(LOG_PREFIX, `[Table] Row ${rowIndex} ADDED to data (filled: ${isRowFilled(rowData)})`);
+            logger.debug(`[Table] Row ${rowIndex} ADDED to data (filled: ${isRowFilled(rowData)})`);
         });
 
-        console.log(LOG_PREFIX, `[Table] Final table data for "${itemConfig.name}":`, { rows: data, rowCount: data.length });
+        logger.debug(`[Table] Final table data for "${itemConfig.name}":`, { rows: data, rowCount: data.length });
         return { rows: data, rowCount: data.length };
     }
 
@@ -958,7 +958,7 @@
 
         const table = document.querySelector(itemConfig.table_selector);
         if (!table) {
-            console.warn(LOG_PREFIX, `Cannot watch table - not found: ${itemConfig.table_selector}`);
+            logger.warn(`Cannot watch table - not found: ${itemConfig.table_selector}`);
             return;
         }
 
@@ -969,7 +969,7 @@
             const hasStructureChange = mutations.some(m => m.type === 'childList' && m.addedNodes.length > 0);
 
             if (hasStructureChange) {
-                console.log(LOG_PREFIX, `[Table] Structure change detected in "${itemConfig.name}" - reattaching listeners`);
+                logger.debug(`[Table] Structure change detected in "${itemConfig.name}" - reattaching listeners`);
                 // Reattach listeners to new rows
                 attachTableInputListeners(itemConfig, itemIndex);
             }
@@ -985,7 +985,7 @@
             attributeFilter: ['value', 'checked']
         });
 
-        console.log(LOG_PREFIX, `Table watcher initialized for: ${itemConfig.name}`);
+        logger.debug(`Table watcher initialized for: ${itemConfig.name}`);
     }
 
     /**
@@ -1011,11 +1011,11 @@
         const step = checklist[itemIndex];
         if (step.type !== 'table') return;
 
-        console.log(LOG_PREFIX, `[Table] Attaching UI cell input listeners for "${step.name}"`);
+        logger.debug(`[Table] Attaching UI cell input listeners for "${step.name}"`);
 
         const table = document.querySelector(step.table_selector);
         if (!table) {
-            console.warn(LOG_PREFIX, `[Table] Cannot find table for syncing: ${step.table_selector}`);
+            logger.warn(`[Table] Cannot find table for syncing: ${step.table_selector}`);
             return;
         }
 
@@ -1033,7 +1033,7 @@
             const formElement = row.querySelector(col.selector);
 
             if (!formElement) {
-                console.warn(LOG_PREFIX, `[Table] Form element not found for row ${rowIndex}, col ${colIndex}`);
+                logger.warn(`[Table] Form element not found for row ${rowIndex}, col ${colIndex}`);
                 return;
             }
 
@@ -1044,7 +1044,7 @@
                 if (isInitializing) return;
 
                 const newValue = input.type === 'checkbox' ? input.checked : input.value;
-                console.log(LOG_PREFIX, `[Table] UI input changed - syncing to form: row ${rowIndex}, col "${col.name}" = "${newValue}"`);
+                logger.debug(`[Table] UI input changed - syncing to form: row ${rowIndex}, col "${col.name}" = "${newValue}"`);
 
                 // Update the actual form element
                 if (formElement.type === 'checkbox') {
@@ -1069,7 +1069,7 @@
             });
         });
 
-        console.log(LOG_PREFIX, `[Table] Attached ${cellInputs.length} UI cell input listeners`);
+        logger.debug(`[Table] Attached ${cellInputs.length} UI cell input listeners`);
     }
 
     /**
@@ -1078,16 +1078,16 @@
      * @param {number} itemIndex - Index of the item in checklist
      */
     function attachTableInputListeners(itemConfig, itemIndex) {
-        console.log(LOG_PREFIX, `[Table] Attaching input listeners for "${itemConfig.name}"`);
+        logger.debug(`[Table] Attaching input listeners for "${itemConfig.name}"`);
 
         const table = document.querySelector(itemConfig.table_selector);
         if (!table) {
-            console.warn(LOG_PREFIX, `[Table] Cannot attach listeners - table not found: ${itemConfig.table_selector}`);
+            logger.warn(`[Table] Cannot attach listeners - table not found: ${itemConfig.table_selector}`);
             return;
         }
 
         const rows = table.querySelectorAll(itemConfig.row_selector);
-        console.log(LOG_PREFIX, `[Table] Attaching listeners to ${rows.length} rows`);
+        logger.debug(`[Table] Attaching listeners to ${rows.length} rows`);
 
         rows.forEach((row, rowIndex) => {
             itemConfig.columns.forEach((col, colIndex) => {
@@ -1099,7 +1099,7 @@
                 element.addEventListener(eventType, () => {
                     if (isInitializing) return;
 
-                    console.log(LOG_PREFIX, `[Table] Input changed in "${itemConfig.name}" row ${rowIndex}, column "${col.name}"`);
+                    logger.debug(`[Table] Input changed in "${itemConfig.name}" row ${rowIndex}, column "${col.name}"`);
 
                     // Re-extract table data and update state
                     const tableData = getTableData(itemConfig);
@@ -1120,7 +1120,7 @@
             });
         });
 
-        console.log(LOG_PREFIX, `[Table] Input listeners attached for "${itemConfig.name}"`);
+        logger.debug(`[Table] Input listeners attached for "${itemConfig.name}"`);
     }
 
     /**
@@ -1138,12 +1138,12 @@
             const currentStateStr = JSON.stringify(currentState);
 
             if (newStateStr !== currentStateStr) {
-                console.log(LOG_PREFIX, `[Table] updateTableState: Table data changed for item ${itemIndex}`);
+                logger.debug(`[Table] updateTableState: Table data changed for item ${itemIndex}`);
 
                 ext.storage.local.set({ [tableStateKey]: tableData }, () => {
                     // Trigger UI update if this table is currently displayed
                     if (currentIndex === itemIndex) {
-                        console.log(LOG_PREFIX, `[Table] updateTableState: Updating UI for currently displayed table`);
+                        logger.debug(`[Table] updateTableState: Updating UI for currently displayed table`);
                         const fieldData = getFieldData(itemIndex);
                         updateOnPageUIValues(fieldData);
                         broadcastUpdate(result[keys.checklistState]);
@@ -1210,12 +1210,12 @@
         } else if (step.type === 'virtual') {
             fieldData.name = step.name;
         } else if (step.type === 'table') {
-            console.log(LOG_PREFIX, `[Table] getFieldData: Processing table type for "${step.name}"`);
+            logger.debug(`[Table] getFieldData: Processing table type for "${step.name}"`);
             // Get table data from storage or extract fresh
             const tableStateKey = `tableState_${myTabId}_${index}`;
             const tableData = getTableData(step);
 
-            console.log(LOG_PREFIX, `[Table] getFieldData: Extracted table data:`, tableData);
+            logger.debug(`[Table] getFieldData: Extracted table data:`, tableData);
 
             // Store in storage for future use
             ext.storage.local.set({ [tableStateKey]: tableData });
@@ -1224,7 +1224,7 @@
             fieldData.columns = step.columns;
             fieldData.dynamic = step.dynamic || false;
 
-            console.log(LOG_PREFIX, `[Table] getFieldData: Final fieldData for table:`, fieldData);
+            logger.debug(`[Table] getFieldData: Final fieldData for table:`, fieldData);
         } else if (step.type === 'custom') {
             try {
                 // Handle fees table specifically
@@ -1330,7 +1330,7 @@
                     }
                 }
             } catch (e) {
-                console.error(LOG_PREFIX, `Error parsing custom table ${step.table_id}:`, e);
+                logger.error(`Error parsing custom table ${step.table_id}:`, e);
                 fieldData.fields = fieldData.fields || [];
                 fieldData.fields.push({ name: `Error parsing ${step.name}`, type: 'error', value: '' });
             }
@@ -1377,7 +1377,7 @@
 
         // Handle table type - update values without re-rendering to preserve focus
         if (fieldData.type === 'table') {
-            console.log(LOG_PREFIX, `[Table] updateOnPageUIValues: Updating table values for "${fieldData.name}"`);
+            logger.debug(`[Table] updateOnPageUIValues: Updating table values for "${fieldData.name}"`);
 
             // Update existing input values without re-rendering
             const cellInputs = document.querySelectorAll('.table-cell-input');
@@ -1437,7 +1437,7 @@
         const elementsToObserve = [totalFeesEl, taxablePremiumEl, caStateTaxEl, estimatedStampingFeeEl, highPremiumWarningEl].filter(el => el);
 
         if (elementsToObserve.length === 0) {
-            console.warn(LOG_PREFIX, '[Fees] No summary elements found to observe');
+            logger.warn('[Fees] No summary elements found to observe');
             return;
         }
 
@@ -1457,7 +1457,7 @@
             });
         });
 
-        console.log(LOG_PREFIX, `[Fees] Started observing ${elementsToObserve.length} summary elements`);
+        logger.debug(`[Fees] Started observing ${elementsToObserve.length} summary elements`);
     }
 
     /**
@@ -1506,13 +1506,13 @@
      * @param {number} itemIndex - Index of the fees table item
      */
     function attachFeesTableListeners(itemIndex) {
-        console.log(LOG_PREFIX, `[Fees] Attaching listeners for fees table`);
+        logger.debug(`[Fees] Attaching listeners for fees table`);
 
         const tableSelector = 'div.col-md-7:nth-child(2) > div:nth-child(1) > table:nth-child(1)';
         const formTable = document.querySelector(tableSelector);
 
         if (!formTable) {
-            console.warn(LOG_PREFIX, '[Fees] Form table not found');
+            logger.warn('[Fees] Form table not found');
             return;
         }
 
@@ -1525,14 +1525,14 @@
             const formCheckbox = document.querySelector(`#${checkboxId}`);
 
             if (!formCheckbox) {
-                console.warn(LOG_PREFIX, `[Fees] Form checkbox not found: ${checkboxId}`);
+                logger.warn(`[Fees] Form checkbox not found: ${checkboxId}`);
                 return;
             }
 
             // Sync from UI to form
             input.addEventListener('change', () => {
                 if (isInitializing || isProgrammaticUpdate) return;
-                console.log(LOG_PREFIX, `[Fees] UI taxable checkbox changed: ${checkboxId} = ${input.checked}`);
+                logger.debug(`[Fees] UI taxable checkbox changed: ${checkboxId} = ${input.checked}`);
                 formCheckbox.checked = input.checked;
                 formCheckbox.dispatchEvent(new Event('change', { bubbles: true }));
             });
@@ -1540,7 +1540,7 @@
             // Sync from form to UI
             formCheckbox.addEventListener('change', () => {
                 if (isInitializing || isProgrammaticUpdate) return;
-                console.log(LOG_PREFIX, `[Fees] Form taxable checkbox changed: ${checkboxId} = ${formCheckbox.checked}`);
+                logger.debug(`[Fees] Form taxable checkbox changed: ${checkboxId} = ${formCheckbox.checked}`);
                 if (input.checked !== formCheckbox.checked) {
                     input.checked = formCheckbox.checked;
                 }
@@ -1552,14 +1552,14 @@
             const formInput = document.querySelector(`#${amountInputId}`);
 
             if (!formInput) {
-                console.warn(LOG_PREFIX, `[Fees] Form amount input not found: ${amountInputId}`);
+                logger.warn(`[Fees] Form amount input not found: ${amountInputId}`);
                 return;
             }
 
             // Sync from UI to form (on blur and Enter key)
             const syncUIToForm = () => {
                 if (isInitializing || isProgrammaticUpdate) return;
-                console.log(LOG_PREFIX, `[Fees] UI amount input changed: ${amountInputId} = ${input.value}`);
+                logger.debug(`[Fees] UI amount input changed: ${amountInputId} = ${input.value}`);
 
                 // Parse value and update hidden input
                 let numericValue = input.value.replace(/[$,]/g, '');
@@ -1578,7 +1578,7 @@
                             let kendoWidget = $(formInput).data('kendoNumericTextBox');
 
                             if (kendoWidget) {
-                                console.log(LOG_PREFIX, `[Fees] Updating Kendo widget (method 1) to: ${parsedValue}`);
+                                logger.debug(`[Fees] Updating Kendo widget (method 1) to: ${parsedValue}`);
                                 kendoWidget.value(parsedValue);
                             } else {
                                 // Method 2: Try to find the wrapper and get widget from it
@@ -1586,17 +1586,17 @@
                                 if (kendoWrapper) {
                                     kendoWidget = $(kendoWrapper).data('kendoNumericTextBox');
                                     if (kendoWidget) {
-                                        console.log(LOG_PREFIX, `[Fees] Updating Kendo widget (method 2) to: ${parsedValue}`);
+                                        logger.debug(`[Fees] Updating Kendo widget (method 2) to: ${parsedValue}`);
                                         kendoWidget.value(parsedValue);
                                     }
                                 }
                             }
 
                             if (!kendoWidget) {
-                                console.warn(LOG_PREFIX, `[Fees] Kendo widget not found for ${amountInputId}, updating hidden input only`);
+                                logger.warn(`[Fees] Kendo widget not found for ${amountInputId}, updating hidden input only`);
                             }
                         } else {
-                            console.warn(LOG_PREFIX, `[Fees] jQuery or Kendo not available (jQuery: ${typeof window.jQuery}, Kendo: ${typeof window.kendo})`);
+                            logger.warn(`[Fees] jQuery or Kendo not available (jQuery: ${typeof window.jQuery}, Kendo: ${typeof window.kendo})`);
                         }
                     }
                 } else {
@@ -1627,7 +1627,7 @@
                         if (isInitializing || isProgrammaticUpdate) return;
                         const newValue = kendoInput.value || kendoInput.textContent?.trim() || '$0.00';
                         if (input !== document.activeElement && input.value !== newValue) {
-                            console.log(LOG_PREFIX, `[Fees] Form Kendo value changed: ${amountInputId} = ${newValue}`);
+                            logger.debug(`[Fees] Form Kendo value changed: ${amountInputId} = ${newValue}`);
                             input.value = newValue;
                         }
                     });
@@ -1648,7 +1648,7 @@
                     if (input !== document.activeElement && newRawValue) {
                         const formattedValue = `$${parseFloat(newRawValue).toFixed(2)}`;
                         if (input.value !== formattedValue) {
-                            console.log(LOG_PREFIX, `[Fees] Form hidden input changed: ${amountInputId} = ${formattedValue}`);
+                            logger.debug(`[Fees] Form hidden input changed: ${amountInputId} = ${formattedValue}`);
                             input.value = formattedValue;
                         }
                     }
@@ -1666,7 +1666,7 @@
                     if (input !== document.activeElement && newRawValue) {
                         const formattedValue = `$${parseFloat(newRawValue).toFixed(2)}`;
                         if (input.value !== formattedValue) {
-                            console.log(LOG_PREFIX, `[Fees] Form hidden input event: ${amountInputId} = ${formattedValue}`);
+                            logger.debug(`[Fees] Form hidden input event: ${amountInputId} = ${formattedValue}`);
                             input.value = formattedValue;
                         }
                     }
@@ -1674,7 +1674,7 @@
             }
         });
 
-        console.log(LOG_PREFIX, `[Fees] Attached listeners to ${uiTaxableInputs.length} taxable checkboxes and ${uiAmountInputs.length} amount inputs`);
+        logger.debug(`[Fees] Attached listeners to ${uiTaxableInputs.length} taxable checkboxes and ${uiAmountInputs.length} amount inputs`);
     }
 
     /**
@@ -1767,19 +1767,19 @@
      * @returns {string} HTML string for table display
      */
     function renderTableUI(tableData, itemConfig) {
-        console.log(LOG_PREFIX, `[Table] renderTableUI: called with tableData:`, tableData);
-        console.log(LOG_PREFIX, `[Table] renderTableUI: itemConfig:`, itemConfig);
+        logger.debug(`[Table] renderTableUI: called with tableData:`, tableData);
+        logger.debug(`[Table] renderTableUI: itemConfig:`, itemConfig);
 
         if (!tableData || !tableData.rows) {
-            console.log(LOG_PREFIX, `[Table] renderTableUI: No data - returning empty message`);
+            logger.debug(`[Table] renderTableUI: No data - returning empty message`);
             return '<div class="table-empty">No data</div>';
         }
 
         const { rows, rowCount } = tableData;
-        console.log(LOG_PREFIX, `[Table] renderTableUI: rowCount = ${rowCount}`);
+        logger.debug(`[Table] renderTableUI: rowCount = ${rowCount}`);
 
         if (rowCount === 0) {
-            console.log(LOG_PREFIX, `[Table] renderTableUI: Empty table - returning empty message`);
+            logger.debug(`[Table] renderTableUI: Empty table - returning empty message`);
             return '<div class="table-empty">Empty table</div>';
         }
 
@@ -1863,12 +1863,12 @@
 
         // Handle table type
         if (fieldData.type === 'table') {
-            console.log(LOG_PREFIX, `[Table] renderOnPageUI: Rendering table type "${fieldData.name}"`);
-            console.log(LOG_PREFIX, `[Table] renderOnPageUI: Table data:`, fieldData.tableData);
-            console.log(LOG_PREFIX, `[Table] renderOnPageUI: Columns:`, fieldData.columns);
+            logger.debug(`[Table] renderOnPageUI: Rendering table type "${fieldData.name}"`);
+            logger.debug(`[Table] renderOnPageUI: Table data:`, fieldData.tableData);
+            logger.debug(`[Table] renderOnPageUI: Columns:`, fieldData.columns);
 
             const tableHtml = renderTableUI(fieldData.tableData, { columns: fieldData.columns, dynamic: fieldData.dynamic });
-            console.log(LOG_PREFIX, `[Table] renderOnPageUI: Generated HTML length:`, tableHtml.length);
+            logger.debug(`[Table] renderOnPageUI: Generated HTML length:`, tableHtml.length);
 
             const hasBackStep = canGoBack(state);
             container.innerHTML = `
@@ -1893,7 +1893,7 @@
 
         // Handle custom type (fees table)
         if (fieldData.type === 'custom' && fieldData.feeRows) {
-            console.log(LOG_PREFIX, `[Custom] renderOnPageUI: Rendering fees table "${fieldData.name}"`);
+            logger.debug(`[Custom] renderOnPageUI: Rendering fees table "${fieldData.name}"`);
 
             const feesTableHtml = renderFeesTableUI(fieldData);
             const hasBackStep = canGoBack(state);
@@ -1982,14 +1982,14 @@
 
             // Check if KendoWidgetUtils is available
             if (typeof KendoWidgetUtils === 'undefined') {
-                console.warn(LOG_PREFIX, "KendoWidgetUtils not loaded - falling back to basic input");
+                logger.warn("KendoWidgetUtils not loaded - falling back to basic input");
                 placeholder.innerHTML = `<input type="text" class="on-page-input" data-field-index="${fieldIndex}" value="${field.value || ''}" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">`;
                 return;
             }
 
             // Check if Kendo is available
             if (!KendoWidgetUtils.isKendoAvailable()) {
-                console.log(LOG_PREFIX, `Kendo UI not available - using fallback for field "${field.name}"`);
+                logger.debug(`Kendo UI not available - using fallback for field "${field.name}"`);
                 placeholder.innerHTML = KendoWidgetUtils.createFallbackInput(field, field.value);
                 const input = placeholder.querySelector('input');
                 if (input) {
@@ -2002,13 +2002,13 @@
             const widgetType = KendoWidgetUtils.detectWidgetType(document.querySelector(selector));
 
             if (!widgetType) {
-                console.log(LOG_PREFIX, `No Kendo widget detected for "${field.name}" - using read-only display`);
+                logger.debug(`No Kendo widget detected for "${field.name}" - using read-only display`);
                 placeholder.innerHTML = KendoWidgetUtils.createReadOnlyDisplay(field, field.value);
                 KendoWidgetUtils.setupFocusButtons(placeholder);
                 return;
             }
 
-            console.log(LOG_PREFIX, `Detected ${widgetType} widget for field "${field.name}"`);
+            logger.debug(`Detected ${widgetType} widget for field "${field.name}"`);
 
             // For now, use fallback with sync (widget cloning will be added in future iteration)
             placeholder.innerHTML = KendoWidgetUtils.createFallbackInput(field, field.value);
@@ -2085,14 +2085,14 @@
         switch (message.action) {
             case 'init':
                 myTabId = message.tabId;
-                console.log(LOG_PREFIX, `Received tab ID: ${myTabId}`);
+                logger.debug(`Received tab ID: ${myTabId}`);
 
                 // Check if this is a reconnection (UI elements might already exist in DOM)
                 const floatingUI = document.getElementById('processing-checklist-floating-ui');
                 const isReconnection = floatingUI !== null;
 
                 if (isReconnection) {
-                    console.log(LOG_PREFIX, "Detected reconnection - checking for missing UI elements");
+                    logger.debug("Detected reconnection - checking for missing UI elements");
                     // This is a reconnection after script reload - restore missing elements
                     initializeAfterReconnection();
                 } else {
@@ -2142,12 +2142,12 @@
                             // Since we don't store which specific items were reviewed, start fresh
                             // The reviewedProgress tracks overall count, not individual items
                             reviewState = checklist.map(() => ({ processed: false, skipped: false }));
-                            console.log(LOG_PREFIX, "Review mode activated - starting fresh (reviewedProgress: " +
+                            logger.debug("Review mode activated - starting fresh (reviewedProgress: " +
                                        formInHistory.reviewedProgress.current + "/" + formInHistory.reviewedProgress.total + ")");
                         } else {
                             // No previous review progress - start with all unchecked
                             reviewState = checklist.map(() => ({ processed: false, skipped: false }));
-                            console.log(LOG_PREFIX, "Review mode activated - no previous review progress, starting fresh");
+                            logger.debug("Review mode activated - no previous review progress, starting fresh");
                         }
 
                         ext.storage.local.set({ [keys.reviewState]: reviewState }, () => {
@@ -2194,7 +2194,7 @@
     }
 
     function handleUpdateFeeTaxable({ checkboxId, value }) {
-        console.log(LOG_PREFIX, `[Fees] Popout updating taxable: ${checkboxId} = ${value}`);
+        logger.debug(`[Fees] Popout updating taxable: ${checkboxId} = ${value}`);
         const checkbox = document.querySelector(`#${checkboxId}`);
         if (checkbox) {
             checkbox.checked = value;
@@ -2203,7 +2203,7 @@
     }
 
     function handleUpdateFeeAmount({ amountInputId, value }) {
-        console.log(LOG_PREFIX, `[Fees] Popout updating amount: ${amountInputId} = ${value}`);
+        logger.debug(`[Fees] Popout updating amount: ${amountInputId} = ${value}`);
         const formInput = document.querySelector(`#${amountInputId}`);
         if (formInput) {
             // Parse value and update hidden input
@@ -2218,14 +2218,14 @@
                     let kendoWidget = $(formInput).data('kendoNumericTextBox');
 
                     if (kendoWidget) {
-                        console.log(LOG_PREFIX, `[Fees] Updating Kendo widget from popout: ${parsedValue}`);
+                        logger.debug(`[Fees] Updating Kendo widget from popout: ${parsedValue}`);
                         kendoWidget.value(parsedValue);
                     } else {
                         const kendoWrapper = formInput.closest('.k-numerictextbox');
                         if (kendoWrapper) {
                             kendoWidget = $(kendoWrapper).data('kendoNumericTextBox');
                             if (kendoWidget) {
-                                console.log(LOG_PREFIX, `[Fees] Updating Kendo widget from popout (method 2): ${parsedValue}`);
+                                logger.debug(`[Fees] Updating Kendo widget from popout (method 2): ${parsedValue}`);
                                 kendoWidget.value(parsedValue);
                             }
                         }
@@ -2243,7 +2243,7 @@
 
     function handleGetPolicyNumber() {
         const policyNumber = getPolicyNumber();
-        console.log(LOG_PREFIX, `[Policy Number] Sending to popout: ${policyNumber}`);
+        logger.debug(`[Policy Number] Sending to popout: ${policyNumber}`);
         port.postMessage({
             action: 'updatePolicyNumber',
             policyNumber: policyNumber
@@ -2299,11 +2299,11 @@
             }
 
             if (previousIndex === -1) {
-                console.log(LOG_PREFIX, '[Back] No previous processed step to go back to');
+                logger.debug('[Back] No previous processed step to go back to');
                 return;
             }
 
-            console.log(LOG_PREFIX, `[Back] Going back to step ${previousIndex}`);
+            logger.debug(`[Back] Going back to step ${previousIndex}`);
 
             // Uncheck the previous step
             const newState = [...state];
@@ -2345,7 +2345,7 @@
         const isReview = window.trackingHelper && window.trackingHelper.isReviewMode;
         const stateKey = isReview ? keys.reviewState : keys.checklistState;
 
-        console.log(LOG_PREFIX, `updateState called: index=${index}, processed=${processed}, skipped=${skipped}, isReview=${isReview}, stateKey=${stateKey}`);
+        logger.debug(`updateState called: index=${index}, processed=${processed}, skipped=${skipped}, isReview=${isReview}, stateKey=${stateKey}`);
 
         // OPTIMIZATION: Apply immediate visual feedback before storage round-trip
         // This makes checkboxes feel instantly responsive
@@ -2360,17 +2360,17 @@
         ext.storage.local.get([stateKey, keys.uiState, keys.viewMode], (result) => {
             let currentState = result[stateKey];
 
-            console.log(LOG_PREFIX, `Current state from storage:`, currentState);
+            logger.debug(`Current state from storage:`, currentState);
 
             // If review state doesn't exist yet, initialize it
             if (!currentState && isReview) {
-                console.warn(LOG_PREFIX, "Review state not found, initializing...");
+                logger.warn("Review state not found, initializing...");
                 currentState = checklist.map(() => ({ processed: false, skipped: false }));
             }
 
             // If state still doesn't exist, log error and return
             if (!currentState) {
-                console.error(LOG_PREFIX, `State ${stateKey} not found and could not be initialized`);
+                logger.error(`State ${stateKey} not found and could not be initialized`);
                 return;
             }
 
@@ -2380,7 +2380,7 @@
             // Cache the state for immediate visual updates
             window.currentChecklistState = newState;
 
-            console.log(LOG_PREFIX, `Saving new state to ${stateKey}:`, newState);
+            logger.debug(`Saving new state to ${stateKey}:`, newState);
 
             // Update tracking progress BEFORE saving to storage
             // This ensures the correct value is saved and prevents race conditions
@@ -2388,7 +2388,7 @@
                 const checkedCount = newState.filter(item => item.processed).length;
                 const total = newState.length;
                 const isReview = window.trackingHelper.isReviewMode || false;
-                console.log(LOG_PREFIX, `Calling updateProgress from updateState: ${checkedCount}/${total}, isReview=${isReview}`);
+                logger.debug(`Calling updateProgress from updateState: ${checkedCount}/${total}, isReview=${isReview}`);
                 window.trackingHelper.updateProgress(checkedCount, total, isReview);
             }
 
@@ -2465,25 +2465,25 @@
      * Inject validation UI (warning icons and auto-fix buttons) for fields that need alphabetizing validation
      */
     function injectValidationUI() {
-        console.log(LOG_PREFIX, '[AlphabetizeUI] Starting validation UI injection');
-        console.log(LOG_PREFIX, '[AlphabetizeUI] AlphabetizeHelper available:', !!window.AlphabetizeHelper);
-        console.log(LOG_PREFIX, '[AlphabetizeUI] Config available:', !!config);
+        logger.debug('[AlphabetizeUI] Starting validation UI injection');
+        logger.debug('[AlphabetizeUI] AlphabetizeHelper available:', !!window.AlphabetizeHelper);
+        logger.debug('[AlphabetizeUI] Config available:', !!config);
 
         if (!window.AlphabetizeHelper || !config) {
-            console.warn(LOG_PREFIX, '[AlphabetizeUI] Cannot inject - missing helper or config');
+            logger.warn('[AlphabetizeUI] Cannot inject - missing helper or config');
             return;
         }
 
         const validatableFields = window.AlphabetizeHelper.getValidatableFields(config);
-        console.log(LOG_PREFIX, '[AlphabetizeUI] Found validatable fields:', validatableFields);
+        logger.debug('[AlphabetizeUI] Found validatable fields:', validatableFields);
 
         validatableFields.forEach(fieldInfo => {
-            console.log(LOG_PREFIX, '[AlphabetizeUI] Processing field:', fieldInfo);
+            logger.debug('[AlphabetizeUI] Processing field:', fieldInfo);
             const inputElement = document.querySelector(fieldInfo.selector);
-            console.log(LOG_PREFIX, '[AlphabetizeUI] Input element found:', !!inputElement, fieldInfo.selector);
+            logger.debug('[AlphabetizeUI] Input element found:', !!inputElement, fieldInfo.selector);
 
             if (!inputElement) {
-                console.warn(LOG_PREFIX, '[AlphabetizeUI] Input element not found for selector:', fieldInfo.selector);
+                logger.warn('[AlphabetizeUI] Input element not found for selector:', fieldInfo.selector);
                 return;
             }
 
@@ -2494,7 +2494,7 @@
             // Check if validation UI already exists
             const existingContainer = document.getElementById(containerId);
             if (existingContainer) {
-                console.log(LOG_PREFIX, '[AlphabetizeUI] Validation UI already exists for:', fieldInfo.selector);
+                logger.debug('[AlphabetizeUI] Validation UI already exists for:', fieldInfo.selector);
                 return;
             }
 
@@ -2566,7 +2566,7 @@
             // Validation function
             const validateField = () => {
                 const value = inputElement.value;
-                console.log(LOG_PREFIX, '[AlphabetizeUI] Validating field:', fieldInfo.selector, 'value:', value);
+                logger.debug('[AlphabetizeUI] Validating field:', fieldInfo.selector, 'value:', value);
                 let result;
 
                 if (fieldInfo.type === 'policyNumber') {
@@ -2575,20 +2575,20 @@
                     result = window.AlphabetizeHelper.validateNamedInsured(value);
                 }
 
-                console.log(LOG_PREFIX, '[AlphabetizeUI] Validation result:', result);
+                logger.debug('[AlphabetizeUI] Validation result:', result);
 
                 if (!result.isValid && value.trim() !== '') {
-                    console.log(LOG_PREFIX, '[AlphabetizeUI] Showing validation UI for:', fieldInfo.selector);
+                    logger.debug('[AlphabetizeUI] Showing validation UI for:', fieldInfo.selector);
                     validationContainer.style.display = 'flex';
                     warningIcon.title = result.message || 'This field can be improved';
                     fixButton.title = `Click to auto-fix: "${result.fixedValue}"`;
                 } else {
-                    console.log(LOG_PREFIX, '[AlphabetizeUI] Hiding validation UI for:', fieldInfo.selector);
+                    logger.debug('[AlphabetizeUI] Hiding validation UI for:', fieldInfo.selector);
                     validationContainer.style.display = 'none';
                 }
             };
 
-            console.log(LOG_PREFIX, '[AlphabetizeUI] Validation UI created for:', fieldInfo.selector);
+            logger.debug('[AlphabetizeUI] Validation UI created for:', fieldInfo.selector);
 
             // Auto-fix handler
             fixButton.addEventListener('click', (e) => {
@@ -2621,7 +2621,7 @@
                     }, 1000);
 
                     // Log the correction
-                    console.log(LOG_PREFIX, `Alphabetizing rule applied: "${oldValue}" → "${result.fixedValue}"`);
+                    logger.debug(`Alphabetizing rule applied: "${oldValue}" → "${result.fixedValue}"`);
 
                     // Re-validate to hide the UI
                     validateField();
@@ -2665,7 +2665,7 @@
                 const zoneSuccess = injectZoneCheckboxes(index, state);
 
                 if (zoneSuccess) {
-                    console.log(LOG_PREFIX, `Using zone checkboxes for item "${step.name}"`);
+                    logger.debug(`Using zone checkboxes for item "${step.name}"`);
                     return; // Zone checkboxes succeeded, don't inject traditional checkbox
                 } else {
                     console.warn(LOG_PREFIX,
@@ -2754,7 +2754,7 @@
                     checkboxes.push({ checkbox, zoneIndex });
                 }
             } catch (error) {
-                console.error(LOG_PREFIX, `Failed to inject zone checkbox for item ${index}, zone ${zoneIndex}:`, error);
+                logger.error(`Failed to inject zone checkbox for item ${index}, zone ${zoneIndex}:`, error);
             }
         });
 
@@ -2838,7 +2838,7 @@
         const isReviewMode = window.trackingHelper && window.trackingHelper.isReviewMode;
 
         // Commented out to reduce console spam
-        // console.log(LOG_PREFIX, `updateItemVisuals called, isReviewMode=${isReviewMode}, state=`, state);
+        // logger.debug(`updateItemVisuals called, isReviewMode=${isReviewMode}, state=`, state);
 
         state.forEach((itemState, index) => {
             const step = checklist[index];
@@ -2981,7 +2981,7 @@
             document.body.appendChild(checkbox);
             return checkbox;
         } catch (error) {
-            console.error(LOG_PREFIX, `Failed to create zone checkbox for item ${itemIndex}, zone ${zoneIndex}:`, error);
+            logger.error(`Failed to create zone checkbox for item ${itemIndex}, zone ${zoneIndex}:`, error);
             return null;
         }
     }
@@ -3075,7 +3075,7 @@
                 document.body.appendChild(zoneDiv);
                 zoneDivs.push(zoneDiv);
             } catch (error) {
-                console.warn(LOG_PREFIX, `Failed to create zone ${zoneIndex} for item "${step.name}":`, error);
+                logger.warn(`Failed to create zone ${zoneIndex} for item "${step.name}":`, error);
             }
         });
 
@@ -3222,7 +3222,7 @@
                     checkbox.style.top = `${position.top + window.scrollY}px`;
                     checkbox.style.left = `${position.left + window.scrollX}px`;
                 } catch (error) {
-                    console.warn(LOG_PREFIX, `Failed to recalculate checkbox position for item ${index}, zone ${zoneIndex}:`, error);
+                    logger.warn(`Failed to recalculate checkbox position for item ${index}, zone ${zoneIndex}:`, error);
                 }
             });
         });
@@ -3291,7 +3291,7 @@
             subtree: true
         });
 
-        console.log(LOG_PREFIX, "Position observer started - will reposition elements on DOM changes");
+        logger.debug("Position observer started - will reposition elements on DOM changes");
     }
 
     function stopPositionObserver() {
@@ -3299,7 +3299,7 @@
             positionObserver.disconnect();
             positionObserver = null;
             clearTimeout(observerTimeout);
-            console.log(LOG_PREFIX, "Position observer stopped");
+            logger.debug("Position observer stopped");
         }
     }
 
@@ -3329,7 +3329,7 @@
             });
 
             if (missingCount > 0) {
-                console.log(LOG_PREFIX, `Found ${missingCount} items with missing checkboxes - reinjecting`);
+                logger.debug(`Found ${missingCount} items with missing checkboxes - reinjecting`);
 
                 // Clear existing zone tracking to force recreation
                 zoneCheckboxes.clear();
@@ -3360,7 +3360,7 @@
         // Don't start multiple intervals
         if (periodicRecoveryInterval) return;
 
-        console.log(LOG_PREFIX, "Starting periodic recovery check (every 2 seconds)");
+        logger.debug("Starting periodic recovery check (every 2 seconds)");
 
         periodicRecoveryInterval = setInterval(() => {
             if (!configLoaded || !myTabId) return;
@@ -3370,7 +3370,7 @@
             const hasZoneCheckbox = zoneCheckboxes.size > 0;
 
             if (!firstCheckbox && !hasZoneCheckbox) {
-                console.log(LOG_PREFIX, "Periodic check detected missing checkboxes - attempting recovery");
+                logger.debug("Periodic check detected missing checkboxes - attempting recovery");
                 restoreUIElements();
             }
         }, 2000); // Check every 2 seconds
@@ -3380,7 +3380,7 @@
         if (periodicRecoveryInterval) {
             clearInterval(periodicRecoveryInterval);
             periodicRecoveryInterval = null;
-            console.log(LOG_PREFIX, "Periodic recovery check stopped");
+            logger.debug("Periodic recovery check stopped");
         }
     }
 
@@ -3394,11 +3394,11 @@
         if (!document.hidden && configLoaded && myTabId) {
             // Don't run recovery during review mode - it interferes with review state
             if (window.trackingHelper && window.trackingHelper.isReviewMode) {
-                console.log(LOG_PREFIX, "Skipping recovery - in review mode");
+                logger.debug("Skipping recovery - in review mode");
                 return;
             }
 
-            console.log(LOG_PREFIX, "Page became visible - starting recovery process");
+            logger.debug("Page became visible - starting recovery process");
 
             // Clear any existing recovery interval
             if (visibilityRecoveryInterval) {
@@ -3414,14 +3414,14 @@
             let attemptCount = 0;
             visibilityRecoveryInterval = setInterval(() => {
                 attemptCount++;
-                console.log(LOG_PREFIX, `Recovery attempt ${attemptCount}/10`);
+                logger.debug(`Recovery attempt ${attemptCount}/10`);
                 restoreUIElements();
 
                 // Stop after 10 attempts (10 seconds)
                 if (attemptCount >= 10) {
                     clearInterval(visibilityRecoveryInterval);
                     visibilityRecoveryInterval = null;
-                    console.log(LOG_PREFIX, "Recovery process completed");
+                    logger.debug("Recovery process completed");
                 }
             }, 1000);
         } else if (document.hidden) {
@@ -3429,7 +3429,7 @@
             if (visibilityRecoveryInterval) {
                 clearInterval(visibilityRecoveryInterval);
                 visibilityRecoveryInterval = null;
-                console.log(LOG_PREFIX, "Page hidden - stopping recovery process");
+                logger.debug("Page hidden - stopping recovery process");
             }
         }
     });
@@ -3456,7 +3456,7 @@
             targetButton = document.getElementById(buttonId);
             if (targetButton) {
                 buttonName = buttonId === 'btnMarkForReview' ? 'Mark for Review' : 'Register';
-                console.log(LOG_PREFIX, `Found ${buttonName} button (${buttonId})`);
+                logger.debug(`Found ${buttonName} button (${buttonId})`);
                 break;
             }
         }
@@ -3471,14 +3471,14 @@
                     targetButton = rightColumn.querySelector('button.btn.btn-primary[type="submit"]');
                     if (targetButton) {
                         buttonName = targetButton.textContent.trim();
-                        console.log(LOG_PREFIX, `Found form action button: "${buttonName}"`);
+                        logger.debug(`Found form action button: "${buttonName}"`);
                     }
                 }
             }
         }
 
         if (!targetButton) {
-            console.log(LOG_PREFIX, "No suitable target button found (tried: btnMarkForReview, btnRegister, and form primary button) - cannot inject Mark Checked button");
+            logger.debug("No suitable target button found (tried: btnMarkForReview, btnRegister, and form primary button) - cannot inject Mark Checked button");
             return;
         }
 
@@ -3502,7 +3502,7 @@
         // Insert before the target button (or its wrapper span)
         insertionPoint.insertAdjacentElement('beforebegin', markCheckedBtn);
 
-        console.log(LOG_PREFIX, `Mark Checked button injected next to "${buttonName}" button`);
+        logger.debug(`Mark Checked button injected next to "${buttonName}" button`);
     }
 
     /**
@@ -3517,7 +3517,7 @@
         // Find the Mark Checked button to insert before it
         const markCheckedBtn = document.getElementById('btnMarkChecked');
         if (!markCheckedBtn) {
-            console.log(LOG_PREFIX, "Mark Checked button not found - cannot inject Find Similar Policies button");
+            logger.debug("Mark Checked button not found - cannot inject Find Similar Policies button");
             return;
         }
 
@@ -3538,7 +3538,7 @@
         // Insert before Mark Checked button
         markCheckedBtn.insertAdjacentElement('beforebegin', similarPoliciesBtn);
 
-        console.log(LOG_PREFIX, "Find Similar Policies button injected");
+        logger.debug("Find Similar Policies button injected");
     }
 
     /**
@@ -3557,7 +3557,7 @@
             const selectedOption = transactionTypeSelect.options[transactionTypeSelect.selectedIndex];
             transactionType = selectedOption ? selectedOption.value : null;
         }
-        console.log(LOG_PREFIX, 'Extracted transaction type:', transactionType);
+        logger.debug('Extracted transaction type:', transactionType);
 
         // Extract insurer data from the structured display elements
         // Format: [SLA#] INSURER NAME (#NAIC#) - STATUS
@@ -3582,7 +3582,7 @@
         naicNumber = document.querySelector('#selectedNAICNumber')?.textContent.trim();
         insurerStatus = document.querySelector('#selectedInsurerStatus')?.textContent.trim();
 
-        console.log(LOG_PREFIX, 'Insurer extraction results:', {
+        logger.debug('Insurer extraction results:', {
             insurerName,
             insurerId,
             slaNumber,
@@ -3673,19 +3673,19 @@
         };
 
         // Store in browser storage for auto-fill
-        console.log(LOG_PREFIX, 'Storing transaction search params:', searchParams);
+        logger.debug('Storing transaction search params:', searchParams);
         ext.storage.local.set({ pendingTransactionSearch: searchParams }, () => {
             if (ext.runtime.lastError) {
-                console.error(LOG_PREFIX, 'Error storing params:', ext.runtime.lastError);
+                logger.error('Error storing params:', ext.runtime.lastError);
                 showNotification('⚠️ Failed to save search parameters', 'warning');
                 return;
             }
 
-            console.log(LOG_PREFIX, 'Transaction search params stored successfully');
+            logger.debug('Transaction search params stored successfully');
 
             // Open transaction search page (not policy search)
             const transactionSearchUrl = 'https://rapid.slacal.com/policy/transactionSearch';
-            console.log(LOG_PREFIX, 'Opening transaction search:', transactionSearchUrl);
+            logger.debug('Opening transaction search:', transactionSearchUrl);
             window.open(transactionSearchUrl, '_blank');
 
             // Show confirmation
@@ -3727,20 +3727,20 @@
 
         // Only inject button if SLA, NAIC, and Status are missing but Insurer Name exists
         if ((!slaNumber || !naicNumber || !insurerStatus) && insurerName) {
-            console.log(LOG_PREFIX, "Incomplete insurer details detected - injecting Quick Fill button");
-            console.log(LOG_PREFIX, `  SLA: "${slaNumber}", NAIC: "${naicNumber}", Status: "${insurerStatus}", Name: "${insurerName}"`);
+            logger.debug("Incomplete insurer details detected - injecting Quick Fill button");
+            logger.debug(`  SLA: "${slaNumber}", NAIC: "${naicNumber}", Status: "${insurerStatus}", Name: "${insurerName}"`);
 
             // Find the Insurer Name label (in the display row, not the search row)
             // The label is in the same parent div as #singleSelectedInsurerName
             const insurerNameColumn = insurerNameSpan?.closest('.col-md-4');
             if (!insurerNameColumn) {
-                console.log(LOG_PREFIX, "Insurer Name column not found - cannot inject Quick Fill button");
+                logger.debug("Insurer Name column not found - cannot inject Quick Fill button");
                 return;
             }
 
             const insurerLabel = insurerNameColumn.querySelector('label');
             if (!insurerLabel) {
-                console.log(LOG_PREFIX, "Insurer Name label not found - cannot inject Quick Fill button");
+                logger.debug("Insurer Name label not found - cannot inject Quick Fill button");
                 return;
             }
 
@@ -3782,9 +3782,9 @@
             // Insert button right after the label text
             insurerLabel.appendChild(quickFillBtn);
 
-            console.log(LOG_PREFIX, "Quick Fill Insurer arrow button injected next to Insurer Name label");
+            logger.debug("Quick Fill Insurer arrow button injected next to Insurer Name label");
         } else {
-            console.log(LOG_PREFIX, "Insurer details are complete or missing name - no Quick Fill button needed");
+            logger.debug("Insurer details are complete or missing name - no Quick Fill button needed");
         }
     }
 
@@ -3792,12 +3792,12 @@
      * Handle Quick Fill Insurer button click
      */
     function handleInsurerQuickFill(insurerName) {
-        console.log(LOG_PREFIX, "handleInsurerQuickFill called with:", insurerName);
+        logger.debug("handleInsurerQuickFill called with:", insurerName);
 
         // Extract first two words from insurer name
         const words = insurerName.trim().split(/\s+/);
         const searchText = words.slice(0, 2).join(' ');
-        console.log(LOG_PREFIX, `Extracted search text: "${searchText}" from "${insurerName}"`);
+        logger.debug(`Extracted search text: "${searchText}" from "${insurerName}"`);
 
         // Show notification
         showNotification(`🔍 Filling Insurer Search with "${searchText}"...`, 'info');
@@ -3810,18 +3810,18 @@
      * Fill the Insurer Search field (Kendo ComboBox)
      */
     function fillInsurerSearchField(searchText) {
-        console.log(LOG_PREFIX, `fillInsurerSearchField called with: "${searchText}"`);
+        logger.debug(`fillInsurerSearchField called with: "${searchText}"`);
 
         // Try jQuery/Kendo method first
         if (window.jQuery && typeof window.kendo !== 'undefined') {
-            console.log(LOG_PREFIX, "jQuery and Kendo available - using widget method");
+            logger.debug("jQuery and Kendo available - using widget method");
 
             const element = window.jQuery('#SingleSelectedInsurerId');
             if (element.length > 0) {
                 const widget = element.data('kendoComboBox');
 
                 if (widget) {
-                    console.log(LOG_PREFIX, "Kendo ComboBox widget found");
+                    logger.debug("Kendo ComboBox widget found");
                     try {
                         // Set the text in the search field
                         widget.text(searchText);
@@ -3834,26 +3834,26 @@
                             visibleInput.focus();
                         }
 
-                        console.log(LOG_PREFIX, `✓ Successfully filled Insurer Search with: "${searchText}"`);
+                        logger.debug(`✓ Successfully filled Insurer Search with: "${searchText}"`);
                         showNotification(`✓ Filled with "${searchText}" - please select from dropdown`, 'success');
                         return true;
                     } catch (error) {
-                        console.error(LOG_PREFIX, "Error using Kendo widget:", error);
+                        logger.error("Error using Kendo widget:", error);
                     }
                 } else {
-                    console.warn(LOG_PREFIX, "Kendo ComboBox widget not found");
+                    logger.warn("Kendo ComboBox widget not found");
                 }
             } else {
-                console.warn(LOG_PREFIX, "Element #SingleSelectedInsurerId not found");
+                logger.warn("Element #SingleSelectedInsurerId not found");
             }
         }
 
         // Fallback: Direct input manipulation
-        console.log(LOG_PREFIX, "Using direct input fallback");
+        logger.debug("Using direct input fallback");
         const visibleInput = document.querySelector('input[name="SingleSelectedInsurerId_input"]');
 
         if (visibleInput) {
-            console.log(LOG_PREFIX, "Found visible input, setting value");
+            logger.debug("Found visible input, setting value");
             visibleInput.value = searchText;
 
             // Trigger events to activate Kendo search
@@ -3866,11 +3866,11 @@
             // Focus the input
             visibleInput.focus();
 
-            console.log(LOG_PREFIX, `✓ Directly filled Insurer Search with: "${searchText}"`);
+            logger.debug(`✓ Directly filled Insurer Search with: "${searchText}"`);
             showNotification(`✓ Filled with "${searchText}" - please select from dropdown`, 'success');
             return true;
         } else {
-            console.error(LOG_PREFIX, "Visible input not found - cannot fill");
+            logger.error("Visible input not found - cannot fill");
             showNotification('⚠️ Could not find Insurer Search field', 'warning');
             return false;
         }
@@ -3880,7 +3880,7 @@
      * Inject drag handles next to fee amount fields for swapping fees
      */
     function injectFeeSwapHandles() {
-        console.log(LOG_PREFIX, "Injecting fee swap drag handles...");
+        logger.debug("Injecting fee swap drag handles...");
 
         // Find all fee amount cells in the fees table
         // Pattern: TransactionFees_0__FeeAmount through TransactionFees_3__FeeAmount
@@ -3890,28 +3890,28 @@
             // Check if drag handle already exists for this index
             const existingHandle = document.querySelector(`.fee-drag-handle[data-fee-index="${index}"]`);
             if (existingHandle) {
-                console.log(LOG_PREFIX, `Drag handle already exists for fee index ${index}`);
+                logger.debug(`Drag handle already exists for fee index ${index}`);
                 return;
             }
 
             // Find the hidden input (actual value)
             const hiddenInput = document.querySelector(`#TransactionFees_${index}__FeeAmount`);
             if (!hiddenInput) {
-                console.warn(LOG_PREFIX, `Fee input not found for index ${index}`);
+                logger.warn(`Fee input not found for index ${index}`);
                 return;
             }
 
             // Find the visible Kendo widget container
             const kendoContainer = hiddenInput.closest('.k-widget.k-numerictextbox');
             if (!kendoContainer) {
-                console.warn(LOG_PREFIX, `Kendo container not found for fee index ${index}`);
+                logger.warn(`Kendo container not found for fee index ${index}`);
                 return;
             }
 
             // Get the parent div (policyFee, inspectionFee, etc.)
             const parentDiv = kendoContainer.parentElement;
             if (!parentDiv) {
-                console.warn(LOG_PREFIX, `Parent div not found for fee index ${index}`);
+                logger.warn(`Parent div not found for fee index ${index}`);
                 return;
             }
 
@@ -3934,7 +3934,7 @@
             wrapper.appendChild(kendoContainer);
             wrapper.appendChild(dragHandle);
 
-            console.log(LOG_PREFIX, `Drag handle injected for fee index ${index}`);
+            logger.debug(`Drag handle injected for fee index ${index}`);
         });
 
         // Set up drag event handlers only once
@@ -3962,7 +3962,7 @@
                 e.dataTransfer.setData('text/plain', dragSourceIndex);
 
                 handle.classList.add('dragging');
-                console.log(LOG_PREFIX, `Drag started from fee index ${dragSourceIndex}`);
+                logger.debug(`Drag started from fee index ${dragSourceIndex}`);
             });
 
             // dragend - cleanup after drag completes or is cancelled
@@ -3975,7 +3975,7 @@
                 });
 
                 dragSourceIndex = null;
-                console.log(LOG_PREFIX, "Drag ended");
+                logger.debug("Drag ended");
             });
         });
 
@@ -4035,19 +4035,19 @@
 
                 row.classList.remove('fee-drop-target');
 
-                console.log(LOG_PREFIX, `Dropping fee ${dragSourceIndex} onto fee ${targetIndex}`);
+                logger.debug(`Dropping fee ${dragSourceIndex} onto fee ${targetIndex}`);
                 swapFeeValues(dragSourceIndex, targetIndex);
             });
         });
 
-        console.log(LOG_PREFIX, `Fee drag handlers set up for ${dragHandles.length} handles`);
+        logger.debug(`Fee drag handlers set up for ${dragHandles.length} handles`);
     }
 
     /**
      * Swap fee values and taxable checkboxes between two fee rows
      */
     function swapFeeValues(sourceIndex, targetIndex) {
-        console.log(LOG_PREFIX, `Swapping fees: ${sourceIndex} <-> ${targetIndex}`);
+        logger.debug(`Swapping fees: ${sourceIndex} <-> ${targetIndex}`);
 
         // Access page context jQuery/Kendo (content scripts run in isolated environment)
         const pageWindow = window.wrappedJSObject || window;
@@ -4056,7 +4056,7 @@
 
         // Check if jQuery is available (needed for Kendo widgets)
         if (!jQuery || typeof kendo === 'undefined') {
-            console.error(LOG_PREFIX, "jQuery or Kendo not available - cannot swap fees");
+            logger.error("jQuery or Kendo not available - cannot swap fees");
             showNotification('⚠️ Cannot swap fees - required libraries not loaded', 'warning');
             return;
         }
@@ -4067,7 +4067,7 @@
             const targetWidget = jQuery(`#TransactionFees_${targetIndex}__FeeAmount`).data('kendoNumericTextBox');
 
             if (!sourceWidget || !targetWidget) {
-                console.error(LOG_PREFIX, "Kendo widgets not found for fee amounts");
+                logger.error("Kendo widgets not found for fee amounts");
                 showNotification('⚠️ Fee widgets not found', 'warning');
                 return;
             }
@@ -4076,14 +4076,14 @@
             const sourceAmount = sourceWidget.value();
             const targetAmount = targetWidget.value();
 
-            console.log(LOG_PREFIX, `Source amount: ${sourceAmount}, Target amount: ${targetAmount}`);
+            logger.debug(`Source amount: ${sourceAmount}, Target amount: ${targetAmount}`);
 
             // Get taxable checkboxes
             const sourceCheckbox = document.querySelector(`#TransactionFees_${sourceIndex}__IsTaxable`);
             const targetCheckbox = document.querySelector(`#TransactionFees_${targetIndex}__IsTaxable`);
 
             if (!sourceCheckbox || !targetCheckbox) {
-                console.error(LOG_PREFIX, "Taxable checkboxes not found");
+                logger.error("Taxable checkboxes not found");
                 showNotification('⚠️ Taxable checkboxes not found', 'warning');
                 return;
             }
@@ -4091,7 +4091,7 @@
             const sourceTaxable = sourceCheckbox.checked;
             const targetTaxable = targetCheckbox.checked;
 
-            console.log(LOG_PREFIX, `Source taxable: ${sourceTaxable}, Target taxable: ${targetTaxable}`);
+            logger.debug(`Source taxable: ${sourceTaxable}, Target taxable: ${targetTaxable}`);
 
             // Perform the swap
             sourceWidget.value(targetAmount);
@@ -4118,11 +4118,11 @@
                 }, 300);
             }
 
-            console.log(LOG_PREFIX, "Fee swap completed successfully");
+            logger.debug("Fee swap completed successfully");
             showNotification('✓ Fees swapped', 'success');
 
         } catch (error) {
-            console.error(LOG_PREFIX, "Error swapping fees:", error);
+            logger.error("Error swapping fees:", error);
             showNotification('⚠️ Error swapping fees', 'warning');
         }
     }
@@ -4248,7 +4248,7 @@
             // Check if we're in "marked" mode (have a saved state to restore)
             if (preMarkCheckedState !== null) {
                 // UNMARK: Restore previous state
-                console.log(LOG_PREFIX, 'Restoring pre-mark-checked state');
+                logger.debug('Restoring pre-mark-checked state');
 
                 ext.storage.local.set({ [keys.checklistState]: preMarkCheckedState }, () => {
                     // Force update tracking progress to original percentage (bypassing formIsComplete check)
@@ -4256,14 +4256,14 @@
                         const checkedCount = preMarkCheckedState.filter(item => item.processed).length;
                         const total = preMarkCheckedState.length;
                         const isReview = window.trackingHelper.isReviewMode || false;
-                        console.log(LOG_PREFIX, `Force restoring progress to ${checkedCount}/${total} via Unmark Checked button`);
+                        logger.debug(`Force restoring progress to ${checkedCount}/${total} via Unmark Checked button`);
                         window.trackingHelper.updateProgress(checkedCount, total, isReview, true); // force=true
                     }
 
                     // IMPORTANT: Reset formIsComplete flag to allow future tracking updates
                     if (window.trackingHelper) {
                         window.trackingHelper.formIsComplete = false;
-                        console.log(LOG_PREFIX, 'Reset formIsComplete = false to allow progress updates');
+                        logger.debug('Reset formIsComplete = false to allow progress updates');
                     }
 
                     // Update UI
@@ -4279,11 +4279,11 @@
                         btn.className = 'btn btn-success';
                     }
 
-                    console.log(LOG_PREFIX, 'State restored successfully');
+                    logger.debug('State restored successfully');
                 });
             } else {
                 // MARK: Save current state and mark all items
-                console.log(LOG_PREFIX, 'Saving state and marking all unchecked items');
+                logger.debug('Saving state and marking all unchecked items');
 
                 // Deep clone the current state before modifying
                 preMarkCheckedState = JSON.parse(JSON.stringify(state));
@@ -4298,21 +4298,21 @@
 
                 if (markedCount > 0) {
                     ext.storage.local.set({ [keys.checklistState]: state }, () => {
-                        console.log(LOG_PREFIX, `Marked ${markedCount} items as checked`);
+                        logger.debug(`Marked ${markedCount} items as checked`);
 
                         // Force update tracking progress to 100% (bypassing formIsComplete check)
                         if (window.trackingHelper && window.trackingHelper.updateProgress) {
                             const checkedCount = state.filter(item => item.processed).length;
                             const total = state.length;
                             const isReview = window.trackingHelper.isReviewMode || false;
-                            console.log(LOG_PREFIX, 'Force updating progress to 100% via Mark Checked button');
+                            logger.debug('Force updating progress to 100% via Mark Checked button');
                             window.trackingHelper.updateProgress(checkedCount, total, isReview, true); // force=true
                         }
 
                         // Set formIsComplete = true to prevent subsequent automatic updates
                         if (window.trackingHelper) {
                             window.trackingHelper.formIsComplete = true;
-                            console.log(LOG_PREFIX, 'Set formIsComplete = true to lock progress at 100%');
+                            logger.debug('Set formIsComplete = true to lock progress at 100%');
                         }
 
                         // Update UI
@@ -4326,7 +4326,7 @@
                         }
                     });
                 } else {
-                    console.log(LOG_PREFIX, "All items already checked");
+                    logger.debug("All items already checked");
                     // Clear the saved state since nothing changed
                     preMarkCheckedState = null;
                 }
@@ -4348,10 +4348,10 @@
 
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', () => {
-            init().catch(err => console.error(LOG_PREFIX, "Initialization failed:", err));
+            init().catch(err => logger.error("Initialization failed:", err));
         });
     } else {
-        init().catch(err => console.error(LOG_PREFIX, "Initialization failed:", err));
+        init().catch(err => logger.error("Initialization failed:", err));
     }
 
 })();

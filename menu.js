@@ -3,7 +3,7 @@
 
     const DEBUG = false;
     function dbg(...args) { if (DEBUG && console && console.debug) console.debug("[ProcessingChecklist-Menu]", ...args); }
-    const LOG_PREFIX = "[ProcessingChecklist-Menu]";
+    const logger = Logger.create('Menu');
     let port = null;
     const ext = (typeof browser !== 'undefined') ? browser : chrome;
     let currentTabId = null;
@@ -42,13 +42,13 @@
     }
 
     function init() {
-        console.info(LOG_PREFIX, "Menu script loaded.");
+        logger.info("Menu script loaded.");
         try {
             port = ext.runtime.connect({ name: "menu-port" });
-            console.info(LOG_PREFIX, "Successfully connected to background script.");
+            logger.info("Successfully connected to background script.");
 
             port.onDisconnect.addListener(() => {
-                console.warn(LOG_PREFIX, "Disconnected from background");
+                logger.warn("Disconnected from background");
                 port = null;
             });
 
@@ -155,7 +155,7 @@
             document.getElementById('set-as-default-button').addEventListener('click', handleSetAsDefaultClick);
 
         } catch (error) {
-            console.error(LOG_PREFIX, "Failed to connect to background script:", error);
+            logger.error("Failed to connect to background script:", error);
         }
     }
 

@@ -4,6 +4,7 @@
  *************************************************************************************************/
 (function() {
     "use strict";
+    const logger = Logger.create('Alphabetize');
 
     const AlphabetizeHelper = {
         /**

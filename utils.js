@@ -169,5 +169,6 @@
     // Expose utilities globally for extension use
     window.ProcessingChecklistUtils = Utils;
 
-    console.log('[ProcessingChecklist-Utils] Utility functions loaded');
+    const logger = Logger.create('Utils');
+    logger.info('Utility functions loaded');
 })();

@@ -3,7 +3,7 @@
 
     const DEBUG = false;
     function dbg(...args) { if (DEBUG && console && console.debug) console.debug("[ProcessingChecklist-Tracking]", ...args); }
-    const LOG_PREFIX = "[ProcessingChecklist-Tracking]";
+    const logger = Logger.create('Tracking');
 
     const ext = (typeof browser !== 'undefined') ? browser : chrome;
     let port = null;
@@ -35,7 +35,7 @@
 
     // Initialize
     function init() {
-        console.info(LOG_PREFIX, "Tracking window initialized");
+        logger.info("Tracking window initialized");
 
         // Load settings
         loadSettings();
@@ -43,15 +43,15 @@
         // Connect to background
         try {
             port = ext.runtime.connect({ name: "tracking" });
-            console.info(LOG_PREFIX, "Connected to background script");
+            logger.info("Connected to background script");
 
             port.onMessage.addListener(handleMessage);
             port.onDisconnect.addListener(() => {
-                console.warn(LOG_PREFIX, "Disconnected from background");
+                logger.warn("Disconnected from background");
                 port = null;
             });
         } catch (error) {
-            console.error(LOG_PREFIX, "Failed to connect to background:", error);
+            logger.error("Failed to connect to background:", error);
         }
 
         // Setup UI event listeners
@@ -153,7 +153,7 @@
         settings.urlResolution.limit = limit;
 
         ext.storage.local.set({ tracking_settings: settings }, () => {
-            console.log(LOG_PREFIX, "Settings saved:", settings);
+            logger.debug("Settings saved:", settings);
             closeSettingsModal();
         });
     }
@@ -198,15 +198,15 @@
 
         // Check if tracking data changed
         if (changes.tracking_availableForms || changes.tracking_history) {
-            console.log(LOG_PREFIX, "Tracking data changed, refreshing display");
+            logger.debug("Tracking data changed, refreshing display");
 
             // Log what changed
             if (changes.tracking_history) {
-                console.log(LOG_PREFIX, "[DEBUG] tracking_history changed");
+                logger.debug("[DEBUG] tracking_history changed");
                 if (changes.tracking_history.newValue) {
-                    console.log(LOG_PREFIX, "[DEBUG] New history data length:", changes.tracking_history.newValue.length);
+                    logger.debug("[DEBUG] New history data length:", changes.tracking_history.newValue.length);
                     changes.tracking_history.newValue.forEach((item, idx) => {
-                        console.log(LOG_PREFIX, `  [${idx}] urlId=${item.urlId}, policy=${item.policyNumber}, progress=${item.checkedProgress?.current || 0}/${item.checkedProgress?.total || 0} (${item.checkedProgress?.percentage || 0}%)`);
+                        logger.debug(`  [${idx}] urlId=${item.urlId}, policy=${item.policyNumber}, progress=${item.checkedProgress?.current || 0}/${item.checkedProgress?.total || 0} (${item.checkedProgress?.percentage || 0}%)`);
                     });
                 }
             }
@@ -263,7 +263,7 @@
     function renderQueue(freshData = null) {
         // Use fresh data if provided, otherwise fetch from storage
         if (freshData !== null) {
-            console.log(LOG_PREFIX, "[DEBUG] renderQueue using fresh data from storage event");
+            logger.debug("[DEBUG] renderQueue using fresh data from storage event");
             renderQueueWithData(freshData);
         } else {
             ext.storage.local.get('tracking_availableForms', (result) => {
@@ -333,7 +333,7 @@
     function renderHistory(freshHistoryData = null, freshAvailableFormsData = null) {
         // Use fresh data if provided, otherwise fetch from storage
         if (freshHistoryData !== null || freshAvailableFormsData !== null) {
-            console.log(LOG_PREFIX, "[DEBUG] renderHistory using fresh data from storage event");
+            logger.debug("[DEBUG] renderHistory using fresh data from storage event");
             // Fetch missing data from storage if needed
             if (freshHistoryData !== null && freshAvailableFormsData !== null) {
                 renderHistoryWithData(freshHistoryData, freshAvailableFormsData);
@@ -348,18 +348,18 @@
             ext.storage.local.get(['tracking_history', 'tracking_availableForms'], (result) => {
                 const history = result.tracking_history || [];
                 const availableForms = result.tracking_availableForms || [];
-                console.log(LOG_PREFIX, "[DEBUG] renderHistory - fetched history from storage:", history);
+                logger.debug("[DEBUG] renderHistory - fetched history from storage:", history);
                 renderHistoryWithData(history, availableForms);
             });
         }
     }
 
     function renderHistoryWithData(history, availableForms) {
-        console.log(LOG_PREFIX, "[DEBUG] renderHistoryWithData called with history length:", history.length);
+        logger.debug("[DEBUG] renderHistoryWithData called with history length:", history.length);
         if (history.length > 0) {
-            console.log(LOG_PREFIX, "[DEBUG] History items (urlId: policyNumber):");
+            logger.debug("[DEBUG] History items (urlId: policyNumber):");
             history.forEach((item, idx) => {
-                console.log(LOG_PREFIX, `  [${idx}] urlId=${item.urlId}, policy=${item.policyNumber}, progress=${item.checkedProgress?.current || 0}/${item.checkedProgress?.total || 0} (${item.checkedProgress?.percentage || 0}%)`);
+                logger.debug(`  [${idx}] urlId=${item.urlId}, policy=${item.policyNumber}, progress=${item.checkedProgress?.current || 0}/${item.checkedProgress?.total || 0} (${item.checkedProgress?.percentage || 0}%)`);
             });
         }
         const tbody = document.querySelector('#history-table tbody');
@@ -413,7 +413,7 @@
 
             // Calculate progress display
             const checkedProgress = item.checkedProgress || { current: 0, total: 0, percentage: 0 };
-            console.log(LOG_PREFIX, `[DEBUG] Rendering item ${item.policyNumber}, checkedProgress:`, checkedProgress);
+            logger.debug(`[DEBUG] Rendering item ${item.policyNumber}, checkedProgress:`, checkedProgress);
 
             let checkedDisplay = `${checkedProgress.current}/${checkedProgress.total} (${checkedProgress.percentage}%)`;
             let checkedClass = 'progress-incomplete';
@@ -799,11 +799,11 @@
 
             // If original URL had doc=open, handle download in background
             if (form.url !== cleanUrl) {
-                console.log(LOG_PREFIX, "Opening background tab for document download:", form.url);
+                logger.debug("Opening background tab for document download:", form.url);
 
                 // Open background tab with doc=open for download
                 ext.tabs.create({ url: form.url, active: false }, (downloadTab) => {
-                    console.log(LOG_PREFIX, "Background download tab opened with ID:", downloadTab.id);
+                    logger.debug("Background download tab opened with ID:", downloadTab.id);
 
                     let tabClosed = false;
 
@@ -811,17 +811,17 @@
                         if (tabClosed) return;
                         tabClosed = true;
                         ext.tabs.remove(downloadTab.id).then(() => {
-                            console.log(LOG_PREFIX, "Background download tab closed successfully");
+                            logger.debug("Background download tab closed successfully");
                         }).catch((err) => {
-                            console.warn(LOG_PREFIX, "Tab already closed or error:", err);
+                            logger.warn("Tab already closed or error:", err);
                         });
                     };
 
                     // Monitor tab for download completion before closing
                     const downloadListener = (downloadItem) => {
-                        console.log(LOG_PREFIX, "Download detected:", downloadItem.url);
+                        logger.debug("Download detected:", downloadItem.url);
                         if (downloadItem.url === form.url || downloadItem.url.startsWith(form.url.split('?')[0])) {
-                            console.log(LOG_PREFIX, "Download matches form URL, closing tab in 2 seconds");
+                            logger.debug("Download matches form URL, closing tab in 2 seconds");
                             setTimeout(closeTab, 2000);
                             ext.downloads.onCreated.removeListener(downloadListener);
                         }
@@ -831,7 +831,7 @@
 
                     // Fallback: close tab after 10 seconds regardless
                     setTimeout(() => {
-                        console.log(LOG_PREFIX, "Timeout reached, closing background tab");
+                        logger.debug("Timeout reached, closing background tab");
                         closeTab();
                         ext.downloads.onCreated.removeListener(downloadListener);
                     }, 10000);
@@ -849,9 +849,9 @@
         // Remove doc=open flag from URL for main tab
         const cleanUrl = item.url.replace(/[?&]doc=open/gi, '');
 
-        console.log(LOG_PREFIX, "Reopening form - original URL:", item.url);
-        console.log(LOG_PREFIX, "Reopening form - clean URL:", cleanUrl);
-        console.log(LOG_PREFIX, "URLs are different:", item.url !== cleanUrl);
+        logger.debug("Reopening form - original URL:", item.url);
+        logger.debug("Reopening form - clean URL:", cleanUrl);
+        logger.debug("URLs are different:", item.url !== cleanUrl);
 
         if (isComplete) {
             // Send message to start review mode
@@ -866,15 +866,15 @@
 
         // Open the tab without doc=open
         ext.tabs.create({ url: cleanUrl, active: true }, (mainTab) => {
-            console.log(LOG_PREFIX, "Main tab opened with ID:", mainTab.id);
+            logger.debug("Main tab opened with ID:", mainTab.id);
 
             // If original URL had doc=open, handle download in background (even in review mode)
             if (item.url !== cleanUrl) {
-                console.log(LOG_PREFIX, "Opening background tab for document download:", item.url);
+                logger.debug("Opening background tab for document download:", item.url);
 
                 // Open background tab with doc=open for download
                 ext.tabs.create({ url: item.url, active: false }, (downloadTab) => {
-                    console.log(LOG_PREFIX, "Background download tab opened with ID:", downloadTab.id);
+                    logger.debug("Background download tab opened with ID:", downloadTab.id);
 
                     let tabClosed = false;
 
@@ -882,17 +882,17 @@
                         if (tabClosed) return;
                         tabClosed = true;
                         ext.tabs.remove(downloadTab.id).then(() => {
-                            console.log(LOG_PREFIX, "Background download tab closed successfully");
+                            logger.debug("Background download tab closed successfully");
                         }).catch((err) => {
-                            console.warn(LOG_PREFIX, "Tab already closed or error:", err);
+                            logger.warn("Tab already closed or error:", err);
                         });
                     };
 
                     // Monitor tab for download completion before closing
                     const downloadListener = (downloadItem) => {
-                        console.log(LOG_PREFIX, "Download detected:", downloadItem.url);
+                        logger.debug("Download detected:", downloadItem.url);
                         if (downloadItem.url === item.url || downloadItem.url.startsWith(item.url.split('?')[0])) {
-                            console.log(LOG_PREFIX, "Download matches form URL, closing tab in 2 seconds");
+                            logger.debug("Download matches form URL, closing tab in 2 seconds");
                             setTimeout(closeTab, 2000);
                             ext.downloads.onCreated.removeListener(downloadListener);
                         }
@@ -902,7 +902,7 @@
 
                     // Fallback: close tab after 10 seconds regardless
                     setTimeout(() => {
-                        console.log(LOG_PREFIX, "Timeout reached, closing background tab");
+                        logger.debug("Timeout reached, closing background tab");
                         closeTab();
                         ext.downloads.onCreated.removeListener(downloadListener);
                     }, 10000);
@@ -945,7 +945,7 @@
             });
             return response.url;
         } catch (error) {
-            console.warn(LOG_PREFIX, `Failed to resolve URL: ${url}`, error);
+            logger.warn(`Failed to resolve URL: ${url}`, error);
             return url; // Return original URL on error
         }
     }
@@ -953,7 +953,7 @@
     async function resolveBeginProcessingUrls(forms) {
         // Check if URL resolution is enabled
         if (!settings.urlResolution.enabled) {
-            console.log(LOG_PREFIX, "URL resolution is disabled in settings");
+            logger.debug("URL resolution is disabled in settings");
             return forms;
         }
 
@@ -1005,10 +1005,10 @@
                     // Update form with resolved data
                     forms[index].url = resolvedUrl;
                     forms[index].urlId = trackingId;
-                    console.log(LOG_PREFIX, `Resolved: temp_${form.urlId.replace('temp_', '')} -> ${trackingId}`);
+                    logger.debug(`Resolved: temp_${form.urlId.replace('temp_', '')} -> ${trackingId}`);
                 }
             } catch (error) {
-                console.warn(LOG_PREFIX, `Failed to process form at index ${index}:`, error);
+                logger.warn(`Failed to process form at index ${index}:`, error);
                 // Continue with next form
             }
         }
@@ -1049,7 +1049,7 @@
             return; // All top X items are already resolved
         }
 
-        console.log(LOG_PREFIX, `Auto-resolving ${unresolvedInTopX.length} items in top ${limit} of queue`);
+        logger.debug(`Auto-resolving ${unresolvedInTopX.length} items in top ${limit} of queue`);
 
         // Resolve them
         for (const { form, index } of unresolvedInTopX) {
@@ -1060,10 +1060,10 @@
                 if (trackingId) {
                     forms[index].url = resolvedUrl;
                     forms[index].urlId = trackingId;
-                    console.log(LOG_PREFIX, `Auto-resolved: temp_${form.urlId.replace('temp_', '')} -> ${trackingId}`);
+                    logger.debug(`Auto-resolved: temp_${form.urlId.replace('temp_', '')} -> ${trackingId}`);
                 }
             } catch (error) {
-                console.warn(LOG_PREFIX, `Failed to auto-resolve form at index ${index}:`, error);
+                logger.warn(`Failed to auto-resolve form at index ${index}:`, error);
             }
         }
 

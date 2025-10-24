@@ -5,6 +5,8 @@
  * Also handles clipboard history management.
  */
 
+const logger = Logger.create('Background');
+const logger = Logger.create('Background');
 const ext = (typeof browser !== 'undefined') ? browser : chrome;
 
 // Clipboard history storage
@@ -62,7 +64,7 @@ ext.runtime.onConnect.addListener((port) => {
                     pingTimers.delete(portId);
                 }
             } catch (e) {
-                console.warn(`[ProcessingChecklist-Background] Ping failed for ${portId}, cleaning up:`, e);
+                logger.warn(` Ping failed for ${portId}, cleaning up:`, e);
                 clearInterval(pingInterval);
                 pingTimers.delete(portId);
                 popoutPorts.delete(portId);
@@ -110,7 +112,7 @@ ext.runtime.onConnect.addListener((port) => {
             // Remove port from tracking
             popoutPorts.delete(portId);
 
-            console.log(`[ProcessingChecklist-Background] Popout port ${portId} disconnected and cleaned up`);
+            logger.debug(` Popout port ${portId} disconnected and cleaned up`);
         });
     } else if (port.name === "tracking") {
         const trackingPortId = `tracking-${trackingPortIdCounter++}`;
@@ -126,7 +128,7 @@ ext.runtime.onConnect.addListener((port) => {
                     pingTimers.delete(trackingPortId);
                 }
             } catch (e) {
-                console.warn(`[ProcessingChecklist-Background] Tracking ping failed for ${trackingPortId}, cleaning up:`, e);
+                logger.warn(` Tracking ping failed for ${trackingPortId}, cleaning up:`, e);
                 clearInterval(pingInterval);
                 pingTimers.delete(trackingPortId);
                 trackingPorts.delete(trackingPortId);
@@ -281,7 +283,7 @@ ext.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
                 // Reload the popout tab
                 ext.tabs.reload(popoutTabId).catch((error) => {
                     // Popout might have been closed manually
-                    console.warn(`[ProcessingChecklist-Background] Failed to reload popout tab ${popoutTabId}:`, error);
+                    logger.warn(` Failed to reload popout tab ${popoutTabId}:`, error);
 
                     // Clean up tracking for this popout since it's no longer valid
                     popoutPorts.forEach((info, portId) => {
@@ -293,7 +295,7 @@ ext.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
             }
         }).catch((error) => {
             // Window might have been closed
-            console.warn(`[ProcessingChecklist-Background] Failed to query tabs for window ${windowId}:`, error);
+            logger.warn(` Failed to query tabs for window ${windowId}:`, error);
 
             // Clean up tracking for this popout
             popoutPorts.forEach((info, portId) => {
@@ -368,7 +370,7 @@ async function parseAttendancePage(url) {
 
         // If still not found in current window, search all windows (fallback)
         if (!matchingTab) {
-            console.log('[ProcessingChecklist] Attendance tab not in current window, searching all windows...');
+            logger.debug( Attendance tab not in current window, searching all windows...');
             allTabs = await ext.tabs.query({});
 
             if (url) {
@@ -398,7 +400,7 @@ async function parseAttendancePage(url) {
             };
         }
 
-        console.log('[ProcessingChecklist] Found existing attendance tab:', tabToUse.id);
+        logger.debug( Found existing attendance tab:', tabToUse.id);
 
         // Execute script to parse the table with timeout protection
         let results;
@@ -474,7 +476,7 @@ async function parseAttendancePage(url) {
                 )
             ]);
         } catch (timeoutError) {
-            console.error('[ProcessingChecklist] executeScript timeout or error:', timeoutError);
+            logger.error( executeScript timeout or error:', timeoutError);
             return {
                 success: false,
                 error: timeoutError.message || 'Failed to execute script on attendance page'
@@ -518,7 +520,7 @@ async function parseWorkQueue() {
             };
         }
 
-        console.log('[ProcessingChecklist] Found work queue tab:', matchingTab.id);
+        logger.debug( Found work queue tab:', matchingTab.id);
 
         // Execute script to parse the work queue grid
         const results = await ext.tabs.executeScript(matchingTab.id, {
@@ -653,7 +655,7 @@ async function addToClipboardHistory(text) {
         // Save updated history
         await ext.storage.local.set({ [CLIPBOARD_HISTORY_KEY]: history });
     } catch (error) {
-        console.error('[ProcessingChecklist-Background] Failed to add to clipboard history:', error);
+        logger.error( Failed to add to clipboard history:', error);
         throw error;
     }
 }
