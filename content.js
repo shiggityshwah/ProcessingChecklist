@@ -4049,8 +4049,13 @@
     function swapFeeValues(sourceIndex, targetIndex) {
         console.log(LOG_PREFIX, `Swapping fees: ${sourceIndex} <-> ${targetIndex}`);
 
+        // Access page context jQuery/Kendo (content scripts run in isolated environment)
+        const pageWindow = window.wrappedJSObject || window;
+        const jQuery = pageWindow.jQuery;
+        const kendo = pageWindow.kendo;
+
         // Check if jQuery is available (needed for Kendo widgets)
-        if (!window.jQuery || typeof window.kendo === 'undefined') {
+        if (!jQuery || typeof kendo === 'undefined') {
             console.error(LOG_PREFIX, "jQuery or Kendo not available - cannot swap fees");
             showNotification('⚠️ Cannot swap fees - required libraries not loaded', 'warning');
             return;
@@ -4058,8 +4063,8 @@
 
         try {
             // Get Kendo NumericTextBox widgets
-            const sourceWidget = window.jQuery(`#TransactionFees_${sourceIndex}__FeeAmount`).data('kendoNumericTextBox');
-            const targetWidget = window.jQuery(`#TransactionFees_${targetIndex}__FeeAmount`).data('kendoNumericTextBox');
+            const sourceWidget = jQuery(`#TransactionFees_${sourceIndex}__FeeAmount`).data('kendoNumericTextBox');
+            const targetWidget = jQuery(`#TransactionFees_${targetIndex}__FeeAmount`).data('kendoNumericTextBox');
 
             if (!sourceWidget || !targetWidget) {
                 console.error(LOG_PREFIX, "Kendo widgets not found for fee amounts");
