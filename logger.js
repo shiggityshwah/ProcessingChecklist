@@ -108,15 +108,27 @@
         static _initDebugMode() {
             Logger._initialized = true;
 
-            // Try to load from browser storage
+            // Try to load from browser storage (async, non-blocking)
             const ext = (typeof browser !== 'undefined') ? browser : chrome;
             if (ext && ext.storage && ext.storage.local) {
-                ext.storage.local.get(STORAGE_KEY, (result) => {
-                    if (result && result[STORAGE_KEY] !== undefined) {
-                        Logger._debugMode = result[STORAGE_KEY];
-                        console.log(GLOBAL_PREFIX, `Debug mode: ${Logger._debugMode ? 'ENABLED' : 'DISABLED'}`);
-                    }
-                });
+                // Use try-catch to prevent crashes if storage unavailable
+                try {
+                    ext.storage.local.get(STORAGE_KEY, (result) => {
+                        if (ext.runtime.lastError) {
+                            // Ignore errors silently - debug mode stays disabled
+                            return;
+                        }
+                        if (result && result[STORAGE_KEY] !== undefined) {
+                            Logger._debugMode = result[STORAGE_KEY];
+                            // Only log if actually enabled to reduce noise
+                            if (Logger._debugMode) {
+                                console.log(GLOBAL_PREFIX, 'Debug mode: ENABLED');
+                            }
+                        }
+                    });
+                } catch (error) {
+                    // Silently fail - debug mode stays disabled
+                }
             }
         }
 
