@@ -3751,10 +3751,10 @@
             quickFillBtn.id = 'btnQuickFillInsurer';
             quickFillBtn.style.cssText = `
                 margin-left: 6px;
-                padding: 2px 6px;
+                padding: 0px 4px 2px 4px;
                 font-size: 12px;
-                background-color: #f0ad4e;
-                border: 1px solid #eea236;
+                background-color: #5bc0de;
+                border: 1px solid #46b8da;
                 border-radius: 3px;
                 color: white;
                 cursor: pointer;
@@ -3766,10 +3766,10 @@
 
             // Hover effects
             quickFillBtn.addEventListener('mouseenter', () => {
-                quickFillBtn.style.backgroundColor = '#ec971f';
+                quickFillBtn.style.backgroundColor = '#31b0d5';
             });
             quickFillBtn.addEventListener('mouseleave', () => {
-                quickFillBtn.style.backgroundColor = '#f0ad4e';
+                quickFillBtn.style.backgroundColor = '#5bc0de';
             });
 
             // Add click handler
