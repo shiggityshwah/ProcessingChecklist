@@ -603,6 +603,7 @@
                         injectConfirmationCheckboxes(storedState);
                         injectMarkCheckedButton();
                         injectFindSimilarPoliciesButton();
+                        injectInsurerQuickFillButton();
                         attachListenersToPageElements();
                         initializeTableWatchers();
                         updateAndBroadcast(storedState, uiState, viewMode);
@@ -629,6 +630,7 @@
                 injectConfirmationCheckboxes(storedState);
                 injectMarkCheckedButton();
                 injectFindSimilarPoliciesButton();
+                injectInsurerQuickFillButton();
                 attachListenersToPageElements();
                 initializeTableWatchers();
                 updateAndBroadcast(storedState, uiState, viewMode);
@@ -3697,6 +3699,167 @@
         const day = String(date.getDate()).padStart(2, '0');
         const year = date.getFullYear();
         return `${month}/${day}/${year}`;
+    }
+
+    /**
+     * Inject "Quick Fill Insurer" button if insurer details are incomplete
+     */
+    function injectInsurerQuickFillButton() {
+        // Check if button already exists
+        if (document.getElementById('btnQuickFillInsurer')) {
+            return;
+        }
+
+        // Check for missing insurer details
+        const slaNumber = document.querySelector('#selectedSlaNumber')?.textContent.trim();
+        const naicNumber = document.querySelector('#selectedNAICNumber')?.textContent.trim();
+        const insurerStatus = document.querySelector('#selectedInsurerStatus')?.textContent.trim();
+
+        // Check if insurer name exists (try multiple sources)
+        let insurerName = null;
+        const insurerNameSpan = document.querySelector('#singleSelectedInsurerName');
+        if (insurerNameSpan) {
+            const insurerLink = insurerNameSpan.querySelector('a');
+            insurerName = insurerLink ? insurerLink.textContent.trim() : insurerNameSpan.textContent.trim();
+        }
+
+        // Only inject button if SLA, NAIC, and Status are missing but Insurer Name exists
+        if ((!slaNumber || !naicNumber || !insurerStatus) && insurerName) {
+            console.log(LOG_PREFIX, "Incomplete insurer details detected - injecting Quick Fill button");
+            console.log(LOG_PREFIX, `  SLA: "${slaNumber}", NAIC: "${naicNumber}", Status: "${insurerStatus}", Name: "${insurerName}"`);
+
+            // Find the insurer search container
+            const insurerContainer = document.querySelector('#selectedInsurerContainer');
+            if (!insurerContainer) {
+                console.log(LOG_PREFIX, "Insurer container not found - cannot inject Quick Fill button");
+                return;
+            }
+
+            // Find the row with the Insurer Search field
+            const searchRow = insurerContainer.querySelector('.row.row-buffer');
+            if (!searchRow) {
+                console.log(LOG_PREFIX, "Search row not found - cannot inject Quick Fill button");
+                return;
+            }
+
+            // Create a help text and button container
+            const buttonContainer = document.createElement('div');
+            buttonContainer.style.cssText = 'margin-top: 8px; margin-bottom: 8px;';
+
+            const helpText = document.createElement('div');
+            helpText.style.cssText = 'font-size: 12px; color: #856404; background-color: #fff3cd; border: 1px solid #ffeeba; border-radius: 4px; padding: 8px; margin-bottom: 6px;';
+            helpText.innerHTML = `<strong>⚠️ Incomplete Insurer Details:</strong> SLA Number, NAIC Number, or Status is missing. Click below to auto-fill the Insurer Search with "${insurerName.split(' ').slice(0, 2).join(' ')}"`;
+
+            const quickFillBtn = document.createElement('button');
+            quickFillBtn.type = 'button';
+            quickFillBtn.id = 'btnQuickFillInsurer';
+            quickFillBtn.className = 'btn btn-warning btn-sm';
+            quickFillBtn.textContent = '🔍 Quick Fill Insurer Search';
+            quickFillBtn.title = 'Automatically fill the Insurer Search with the first two words of the insurer name';
+
+            // Add click handler
+            quickFillBtn.addEventListener('click', () => {
+                handleInsurerQuickFill(insurerName);
+            });
+
+            buttonContainer.appendChild(helpText);
+            buttonContainer.appendChild(quickFillBtn);
+
+            // Insert after the search row
+            searchRow.insertAdjacentElement('afterend', buttonContainer);
+
+            console.log(LOG_PREFIX, "Quick Fill Insurer button injected");
+        } else {
+            console.log(LOG_PREFIX, "Insurer details are complete or missing name - no Quick Fill button needed");
+        }
+    }
+
+    /**
+     * Handle Quick Fill Insurer button click
+     */
+    function handleInsurerQuickFill(insurerName) {
+        console.log(LOG_PREFIX, "handleInsurerQuickFill called with:", insurerName);
+
+        // Extract first two words from insurer name
+        const words = insurerName.trim().split(/\s+/);
+        const searchText = words.slice(0, 2).join(' ');
+        console.log(LOG_PREFIX, `Extracted search text: "${searchText}" from "${insurerName}"`);
+
+        // Show notification
+        showNotification(`🔍 Filling Insurer Search with "${searchText}"...`, 'info');
+
+        // Try to fill using Kendo widget first, then fallback to direct input
+        fillInsurerSearchField(searchText);
+    }
+
+    /**
+     * Fill the Insurer Search field (Kendo ComboBox)
+     */
+    function fillInsurerSearchField(searchText) {
+        console.log(LOG_PREFIX, `fillInsurerSearchField called with: "${searchText}"`);
+
+        // Try jQuery/Kendo method first
+        if (window.jQuery && typeof window.kendo !== 'undefined') {
+            console.log(LOG_PREFIX, "jQuery and Kendo available - using widget method");
+
+            const element = window.jQuery('#SingleSelectedInsurerId');
+            if (element.length > 0) {
+                const widget = element.data('kendoComboBox');
+
+                if (widget) {
+                    console.log(LOG_PREFIX, "Kendo ComboBox widget found");
+                    try {
+                        // Set the text in the search field
+                        widget.text(searchText);
+                        widget.search(searchText);
+
+                        // Focus and trigger change to activate the dropdown
+                        widget.trigger('change');
+                        const visibleInput = document.querySelector('input[name="SingleSelectedInsurerId_input"]');
+                        if (visibleInput) {
+                            visibleInput.focus();
+                        }
+
+                        console.log(LOG_PREFIX, `✓ Successfully filled Insurer Search with: "${searchText}"`);
+                        showNotification(`✓ Filled with "${searchText}" - please select from dropdown`, 'success');
+                        return true;
+                    } catch (error) {
+                        console.error(LOG_PREFIX, "Error using Kendo widget:", error);
+                    }
+                } else {
+                    console.warn(LOG_PREFIX, "Kendo ComboBox widget not found");
+                }
+            } else {
+                console.warn(LOG_PREFIX, "Element #SingleSelectedInsurerId not found");
+            }
+        }
+
+        // Fallback: Direct input manipulation
+        console.log(LOG_PREFIX, "Using direct input fallback");
+        const visibleInput = document.querySelector('input[name="SingleSelectedInsurerId_input"]');
+
+        if (visibleInput) {
+            console.log(LOG_PREFIX, "Found visible input, setting value");
+            visibleInput.value = searchText;
+
+            // Trigger events to activate Kendo search
+            const events = ['input', 'change', 'focus', 'keydown'];
+            events.forEach(eventType => {
+                const event = new Event(eventType, { bubbles: true, cancelable: true });
+                visibleInput.dispatchEvent(event);
+            });
+
+            // Focus the input
+            visibleInput.focus();
+
+            console.log(LOG_PREFIX, `✓ Directly filled Insurer Search with: "${searchText}"`);
+            showNotification(`✓ Filled with "${searchText}" - please select from dropdown`, 'success');
+            return true;
+        } else {
+            console.error(LOG_PREFIX, "Visible input not found - cannot fill");
+            showNotification('⚠️ Could not find Insurer Search field', 'warning');
+            return false;
+        }
     }
 
     /**
