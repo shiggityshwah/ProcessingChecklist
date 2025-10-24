@@ -200,6 +200,47 @@ window.addEventListener('DOMContentLoaded', () => {
         TestRunner.assertEqual(result.fixedValue, expected);
     });
 
+    // ===== Shared Surname Tests =====
+    TestRunner.test('Shared surname - should combine with shared surname', () => {
+        const input = 'John Smith and Jane Smith';
+        const result = Helper.validateNamedInsured(input);
+        // Expected: Combine first names with shared surname
+        const expected = 'John & Jane Smith';
+        TestRunner.assertEqual(result.fixedValue, expected);
+    });
+
+    TestRunner.test('Shared surname - should handle trustee suffix on individual', () => {
+        const input = 'Bob Smith Trustee';
+        const result = Helper.validateNamedInsured(input);
+        // Expected: Trustee should be treated as suffix
+        const expected = 'Bob Smith Trustee';
+        TestRunner.assertEqual(result.fixedValue, expected);
+    });
+
+    TestRunner.test('Shared surname - should handle trustees suffix on group', () => {
+        const input = 'Bob Smith and Maggie Ann Smith Trustees';
+        const result = Helper.validateNamedInsured(input);
+        // Expected: Combine first names, shared surname, then trustees suffix
+        const expected = 'Bob & Maggie Ann Smith Trustees';
+        TestRunner.assertEqual(result.fixedValue, expected);
+    });
+
+    TestRunner.test('Shared surname - should handle trustees with middle names', () => {
+        const input = 'John William Smith and Mary Elizabeth Smith Trustees';
+        const result = Helper.validateNamedInsured(input);
+        // Expected: Combine with middle names preserved
+        const expected = 'John William & Mary Elizabeth Smith Trustees';
+        TestRunner.assertEqual(result.fixedValue, expected);
+    });
+
+    TestRunner.test('Shared surname - should handle three people with trustees', () => {
+        const input = 'Bob Smith and Maggie Ann Smith and Charlie Smith Trustees';
+        const result = Helper.validateNamedInsured(input);
+        // Expected: Combine all three with shared surname and trustees suffix
+        const expected = 'Bob & Maggie Ann & Charlie Smith Trustees';
+        TestRunner.assertEqual(result.fixedValue, expected);
+    });
+
     // Run all tests
     TestRunner.run().then(success => {
         if (success) {

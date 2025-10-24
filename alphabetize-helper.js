@@ -367,7 +367,7 @@
             }
 
             // Common suffixes (case-insensitive)
-            const suffixes = ['JR', 'SR', 'II', 'III', 'IV', 'V', 'ESQ', 'MD', 'PHD', 'DDS'];
+            const suffixes = ['JR', 'SR', 'II', 'III', 'IV', 'V', 'ESQ', 'MD', 'PHD', 'DDS', 'TRUSTEE', 'TRUSTEES'];
 
             // Extract suffix if present
             let suffix = '';
