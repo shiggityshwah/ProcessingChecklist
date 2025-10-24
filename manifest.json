@@ -59,6 +59,13 @@
     }
   ],
   "web_accessible_resources": [
+    "logger.js",
+    "kendo-widget-utils.js",
+    "popout.js",
+    "tracking.js",
+    "calculator.js",
+    "extended-history.js",
+    "clipboard-manager.js",
     "popout.html",
     "tracking.html",
     "extended-history.html",
