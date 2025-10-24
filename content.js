@@ -799,7 +799,7 @@
      */
     function extractCellValue(cell, column) {
         if (!cell) {
-            console.debug(LOG_PREFIX, `[Table] extractCellValue: cell is null for column "${column.name}"`);
+            logger.debug(`[Table] extractCellValue: cell is null for column "${column.name}"`);
             return '';
         }
 
@@ -807,7 +807,7 @@
             const element = cell.querySelector(column.selector);
 
             if (!element) {
-                console.debug(LOG_PREFIX, `[Table] extractCellValue: selector "${column.selector}" not found in cell for column "${column.name}"`);
+                logger.debug(`[Table] extractCellValue: selector "${column.selector}" not found in cell for column "${column.name}"`);
                 return '';
             }
 
@@ -842,7 +842,7 @@
                     value = element.value || element.textContent?.trim() || '';
             }
 
-            console.debug(LOG_PREFIX, `[Table] extractCellValue: column "${column.name}" (${column.type}) = "${value}"`);
+            logger.debug(`[Table] extractCellValue: column "${column.name}" (${column.type}) = "${value}"`);
             return value;
         } catch (e) {
             logger.warn(`[Table] Error extracting cell value for column ${column.name}:`, e);
@@ -2668,7 +2668,7 @@
                     logger.debug(`Using zone checkboxes for item "${step.name}"`);
                     return; // Zone checkboxes succeeded, don't inject traditional checkbox
                 } else {
-                    console.warn(LOG_PREFIX,
+                    logger.warn(
                         `Zone checkboxes failed for item "${step.name}" - falling back to traditional checkbox`
                     );
                     // Fall through to inject traditional checkbox
@@ -2736,14 +2736,14 @@
                 const rect = calculateZoneRect(zoneConfig, index, zoneIndex);
 
                 if (!rect) {
-                    console.warn(LOG_PREFIX,
+                    logger.warn(
                         `Item "${step.name}" zone ${zoneIndex} has show_checkbox:true but zone rect calculation failed`
                     );
                     return;
                 }
 
                 if (rect.width <= 0 || rect.height <= 0) {
-                    console.warn(LOG_PREFIX,
+                    logger.warn(
                         `Item "${step.name}" zone ${zoneIndex} has show_checkbox:true but zone has invalid dimensions`
                     );
                     return;
@@ -3108,7 +3108,7 @@
                 const warningKey = `zone-element-not-found:${itemIndex}:${zoneIndex}:${edgeName}:${edgeConfig.selector}`;
                 if (!loggedWarnings.has(warningKey)) {
                     loggedWarnings.add(warningKey);
-                    console.warn(LOG_PREFIX,
+                    logger.warn(
                         `Item "${checklist[itemIndex].name}" (index ${itemIndex}), zone ${zoneIndex}: ` +
                         `Element not found for ${edgeName} edge (selector: "${edgeConfig.selector}")`
                     );
@@ -3133,7 +3133,7 @@
                     position = rect.right;
                     break;
                 default:
-                    console.warn(LOG_PREFIX,
+                    logger.warn(
                         `Invalid edge type "${edgeConfig.edge}" for ${edgeName} in item ${itemIndex}, zone ${zoneIndex}`
                     );
                     return null;

@@ -27,7 +27,7 @@
 
     const MAX_HISTORY_ITEMS = 10;
     const STORAGE_KEY = 'insurer_history';
-    const LOG_PREFIX = '[InsurerHistory]';
+    const logger = Logger.create('InsurerHistory');
 
     // ============================================================================
     // UTILITY FUNCTIONS
@@ -52,7 +52,7 @@
             const result = await ext.storage.local.get(STORAGE_KEY);
             return result[STORAGE_KEY] || [];
         } catch (e) {
-            console.error(LOG_PREFIX, 'Error reading history:', e);
+            logger.error('Error reading history:', e);
             return [];
         }
     }
@@ -63,9 +63,9 @@
     async function saveHistory(history) {
         try {
             await ext.storage.local.set({ [STORAGE_KEY]: history });
-            console.log(LOG_PREFIX, 'History saved:', history.length, 'items');
+            logger.debug('History saved:', history.length, 'items');
         } catch (e) {
-            console.error(LOG_PREFIX, 'Error saving history:', e);
+            logger.error('Error saving history:', e);
         }
     }
 
@@ -83,7 +83,7 @@
 
             // Preserve status from existing entry if new data doesn't have a valid status
             if (!insurerData.status || insurerData.status === 'Unknown') {
-                console.log(LOG_PREFIX, 'Preserving existing status:', existing.status);
+                logger.debug('Preserving existing status:', existing.status);
                 insurerData.status = existing.status;
             }
 
@@ -91,7 +91,7 @@
             // This prevents wiping out COI data when visiting company details page
             if ((!insurerData.classes || insurerData.classes.length === 0) &&
                 existing.classes && existing.classes.length > 0) {
-                console.log(LOG_PREFIX, 'Preserving existing classes:', existing.classes);
+                logger.debug('Preserving existing classes:', existing.classes);
                 insurerData.classes = existing.classes;
             }
 
@@ -218,7 +218,7 @@
         // Look for class labels in the grid
         const classLabels = document.querySelectorAll('[id*="lblClass"]');
 
-        console.log(LOG_PREFIX, `Found ${classLabels.length} class label elements`);
+        logger.debug(`Found ${classLabels.length} class label elements`);
 
         classLabels.forEach(label => {
             const text = label.textContent.trim();
@@ -227,12 +227,12 @@
                 const description = CLASS_MAP[text] || text;
                 if (!classes.includes(description)) {
                     classes.push(description);
-                    console.log(LOG_PREFIX, `Extracted class: ${text} -> ${description}`);
+                    logger.debug(`Extracted class: ${text} -> ${description}`);
                 }
             }
         });
 
-        console.log(LOG_PREFIX, `Total classes extracted: ${classes.length}`, classes);
+        logger.debug(`Total classes extracted: ${classes.length}`, classes);
         return classes;
     }
 
@@ -257,7 +257,7 @@
      * Detect and extract insurer data from current page
      */
     function detectInsurerData() {
-        console.log(LOG_PREFIX, 'Detecting insurer data...');
+        logger.debug('Detecting insurer data...');
 
         const name = extractInsurerName();
         const naicCode = extractNaicCode();
@@ -266,7 +266,7 @@
         const insurerId = extractInsurerId();
 
         if (!name || !naicCode) {
-            console.log(LOG_PREFIX, 'Could not extract required data (name or NAIC)');
+            logger.debug('Could not extract required data (name or NAIC)');
             return null;
         }
 
@@ -280,7 +280,7 @@
             timestamp: Date.now()
         };
 
-        console.log(LOG_PREFIX, 'Detected insurer:', insurerData);
+        logger.debug('Detected insurer:', insurerData);
         return insurerData;
     }
 
@@ -404,9 +404,9 @@
                 icon.textContent = classesList.classList.contains('expanded') ? '📂' : '📋';
             });
 
-            console.log(LOG_PREFIX, `Added ${insurer.classes.length} classes for ${insurer.name}`);
+            logger.debug(`Added ${insurer.classes.length} classes for ${insurer.name}`);
         } else {
-            console.log(LOG_PREFIX, `No classes data for ${insurer.name}`, insurer.classes);
+            logger.debug(`No classes data for ${insurer.name}`, insurer.classes);
         }
 
         // Click handler - navigate to insurer detail page (only on main area)
@@ -455,7 +455,7 @@
     function initWidget() {
         if (widgetContainer) return; // Already initialized
 
-        console.log(LOG_PREFIX, 'Initializing widget...');
+        logger.debug('Initializing widget...');
 
         widgetContainer = createWidget();
         document.body.appendChild(widgetContainer);
@@ -463,7 +463,7 @@
         // Start minimized
         minimizeWidget();
 
-        console.log(LOG_PREFIX, 'Widget initialized');
+        logger.debug('Widget initialized');
     }
 
     // ============================================================================
@@ -476,11 +476,11 @@
     function init() {
         // Check if we're on an insurer page
         if (!isInsurerPage()) {
-            console.log(LOG_PREFIX, 'Not an insurer page, skipping initialization');
+            logger.debug('Not an insurer page, skipping initialization');
             return;
         }
 
-        console.log(LOG_PREFIX, 'Insurer page detected, initializing...');
+        logger.debug('Insurer page detected, initializing...');
 
         // Wait for page to load
         if (document.readyState === 'loading') {
@@ -496,7 +496,7 @@
             if (insurerData) {
                 // Add to history
                 await addToHistory(insurerData);
-                console.log(LOG_PREFIX, 'Insurer added to history');
+                logger.debug('Insurer added to history');
             }
 
             // Initialize widget UI
@@ -507,7 +507,7 @@
     // Listen for storage changes to update widget across tabs
     ext.storage.onChanged.addListener((changes, namespace) => {
         if (namespace === 'local' && changes[STORAGE_KEY]) {
-            console.log(LOG_PREFIX, 'History updated in another tab, refreshing widget');
+            logger.debug('History updated in another tab, refreshing widget');
             renderList();
         }
     });
@@ -515,5 +515,5 @@
     // Start initialization
     init();
 
-    console.log(LOG_PREFIX, 'Script loaded');
+    logger.debug('Script loaded');
 })();

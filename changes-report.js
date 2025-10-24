@@ -1,7 +1,7 @@
 (function() {
     "use strict";
 
-    const LOG_PREFIX = "[ProcessingChecklist-ChangesReport]";
+    const logger = Logger.create('ChangesReport');
     const ext = (typeof browser !== 'undefined') ? browser : chrome;
 
     // Current filters
@@ -18,7 +18,7 @@
 
     // Initialize on load
     document.addEventListener('DOMContentLoaded', () => {
-        console.log(LOG_PREFIX, "Changes report initialized");
+        logger.debug("Changes report initialized");
         initializeTabs();
         initializeFilters();
         loadUserReport();
@@ -999,5 +999,5 @@
         return div.innerHTML;
     }
 
-    console.log(LOG_PREFIX, "Changes report script loaded");
+    logger.debug("Changes report script loaded");
 })();

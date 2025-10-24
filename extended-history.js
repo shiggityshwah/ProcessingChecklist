@@ -3,7 +3,7 @@
 
     const DEBUG = false;
     function dbg(...args) { if (DEBUG && console && console.debug) console.debug("[ProcessingChecklist-ExtendedHistory]", ...args); }
-    const LOG_PREFIX = "[ProcessingChecklist-ExtendedHistory]";
+    const logger = Logger.create('ExtendedHistory');
 
     const ext = (typeof browser !== 'undefined') ? browser : chrome;
 
@@ -40,7 +40,7 @@
     }
 
     function init() {
-        console.info(LOG_PREFIX, "Extended history page initialized");
+        logger.info("Extended history page initialized");
 
         // Load production rate data
         loadProductionRateData().then(() => {
@@ -356,13 +356,13 @@
         // Remove doc=open flag from URL for main tab
         const cleanUrl = item.url.replace(/[?&]doc=open/gi, '');
 
-        console.log(LOG_PREFIX, "Reopening form - original URL:", item.url);
-        console.log(LOG_PREFIX, "Reopening form - clean URL:", cleanUrl);
-        console.log(LOG_PREFIX, "URLs are different:", item.url !== cleanUrl);
+        logger.debug("Reopening form - original URL:", item.url);
+        logger.debug("Reopening form - clean URL:", cleanUrl);
+        logger.debug("URLs are different:", item.url !== cleanUrl);
 
         // Open the tab without doc=open
         ext.tabs.create({ url: cleanUrl, active: true }, (mainTab) => {
-            console.log(LOG_PREFIX, "Main tab opened with ID:", mainTab.id);
+            logger.debug("Main tab opened with ID:", mainTab.id);
 
             if (isComplete) {
                 // Send message to start review mode after a delay
@@ -376,11 +376,11 @@
 
             // If original URL had doc=open, handle download in background (even in review mode)
             if (item.url !== cleanUrl) {
-                console.log(LOG_PREFIX, "Opening background tab for document download:", item.url);
+                logger.debug("Opening background tab for document download:", item.url);
 
                 // Open background tab with doc=open for download
                 ext.tabs.create({ url: item.url, active: false }, (downloadTab) => {
-                    console.log(LOG_PREFIX, "Background download tab opened with ID:", downloadTab.id);
+                    logger.debug("Background download tab opened with ID:", downloadTab.id);
 
                     let tabClosed = false;
 
@@ -388,17 +388,17 @@
                         if (tabClosed) return;
                         tabClosed = true;
                         ext.tabs.remove(downloadTab.id).then(() => {
-                            console.log(LOG_PREFIX, "Background download tab closed successfully");
+                            logger.debug("Background download tab closed successfully");
                         }).catch((err) => {
-                            console.warn(LOG_PREFIX, "Tab already closed or error:", err);
+                            logger.warn("Tab already closed or error:", err);
                         });
                     };
 
                     // Monitor tab for download completion before closing
                     const downloadListener = (downloadItem) => {
-                        console.log(LOG_PREFIX, "Download detected:", downloadItem.url);
+                        logger.debug("Download detected:", downloadItem.url);
                         if (downloadItem.url === item.url || downloadItem.url.startsWith(item.url.split('?')[0])) {
-                            console.log(LOG_PREFIX, "Download matches form URL, closing tab in 2 seconds");
+                            logger.debug("Download matches form URL, closing tab in 2 seconds");
                             setTimeout(closeTab, 2000);
                             ext.downloads.onCreated.removeListener(downloadListener);
                         }
@@ -408,7 +408,7 @@
 
                     // Fallback: close tab after 10 seconds regardless
                     setTimeout(() => {
-                        console.log(LOG_PREFIX, "Timeout reached, closing background tab");
+                        logger.debug("Timeout reached, closing background tab");
                         closeTab();
                         ext.downloads.onCreated.removeListener(downloadListener);
                     }, 10000);
@@ -744,7 +744,7 @@
             const filtered = history.filter(item => !selectedItems.has(item.urlId));
 
             ext.storage.local.set({ tracking_history: filtered }, () => {
-                console.log(LOG_PREFIX, `Deleted ${selectedItems.size} items`);
+                logger.debug(`Deleted ${selectedItems.size} items`);
                 selectedItems.clear();
                 exitDeleteMode();
                 // Re-render will be triggered by storage listener

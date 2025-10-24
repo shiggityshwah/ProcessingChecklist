@@ -43,7 +43,7 @@
         "*://rapid.slacal.com/*CompanyDetails.aspx*",
         "*://rapid.slacal.com/*AdmittedCompaniesDetails.aspx*"
       ],
-      "js": ["insurer-history.js"],
+      "js": ["logger.js", "insurer-history.js"],
       "css": ["insurer-history.css"],
       "run_at": "document_idle"
     },
@@ -54,7 +54,7 @@
         "*://rapid.slacal.com/policy/transactionSearch*",
         "*://rapid.slacal.com/Policy/TransactionSearch*"
       ],
-      "js": ["policy-search-helper.js"],
+      "js": ["logger.js", "policy-search-helper.js"],
       "run_at": "document_idle"
     }
   ],

@@ -4,7 +4,7 @@
 (function() {
     "use strict";
 
-    const LOG_PREFIX = "[KendoWidgetUtils]";
+    const logger = Logger.create('KendoWidget');
 
     const KendoWidgetUtils = {
         /**
@@ -42,7 +42,7 @@
             // Check data-role attribute as fallback
             const dataRole = $el.attr('data-role');
             if (dataRole) {
-                console.log(LOG_PREFIX, `Found data-role="${dataRole}" on element`, element);
+                logger.debug(`Found data-role="${dataRole}" on element`, element);
                 return dataRole.charAt(0).toUpperCase() + dataRole.slice(1);
             }
 
