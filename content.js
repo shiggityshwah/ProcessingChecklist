@@ -3728,47 +3728,59 @@
             console.log(LOG_PREFIX, "Incomplete insurer details detected - injecting Quick Fill button");
             console.log(LOG_PREFIX, `  SLA: "${slaNumber}", NAIC: "${naicNumber}", Status: "${insurerStatus}", Name: "${insurerName}"`);
 
-            // Find the insurer search container
-            const insurerContainer = document.querySelector('#selectedInsurerContainer');
-            if (!insurerContainer) {
-                console.log(LOG_PREFIX, "Insurer container not found - cannot inject Quick Fill button");
+            // Find the Insurer Name label (in the display row, not the search row)
+            // The label is in the same parent div as #singleSelectedInsurerName
+            const insurerNameColumn = insurerNameSpan?.closest('.col-md-4');
+            if (!insurerNameColumn) {
+                console.log(LOG_PREFIX, "Insurer Name column not found - cannot inject Quick Fill button");
                 return;
             }
 
-            // Find the row with the Insurer Search field
-            const searchRow = insurerContainer.querySelector('.row.row-buffer');
-            if (!searchRow) {
-                console.log(LOG_PREFIX, "Search row not found - cannot inject Quick Fill button");
+            const insurerLabel = insurerNameColumn.querySelector('label');
+            if (!insurerLabel) {
+                console.log(LOG_PREFIX, "Insurer Name label not found - cannot inject Quick Fill button");
                 return;
             }
 
-            // Create a help text and button container
-            const buttonContainer = document.createElement('div');
-            buttonContainer.style.cssText = 'margin-top: 8px; margin-bottom: 8px;';
+            // Extract first two words for tooltip
+            const searchText = insurerName.split(' ').slice(0, 2).join(' ');
 
-            const helpText = document.createElement('div');
-            helpText.style.cssText = 'font-size: 12px; color: #856404; background-color: #fff3cd; border: 1px solid #ffeeba; border-radius: 4px; padding: 8px; margin-bottom: 6px;';
-            helpText.innerHTML = `<strong>⚠️ Incomplete Insurer Details:</strong> SLA Number, NAIC Number, or Status is missing. Click below to auto-fill the Insurer Search with "${insurerName.split(' ').slice(0, 2).join(' ')}"`;
-
+            // Create small arrow button
             const quickFillBtn = document.createElement('button');
             quickFillBtn.type = 'button';
             quickFillBtn.id = 'btnQuickFillInsurer';
-            quickFillBtn.className = 'btn btn-warning btn-sm';
-            quickFillBtn.textContent = '🔍 Quick Fill Insurer Search';
-            quickFillBtn.title = 'Automatically fill the Insurer Search with the first two words of the insurer name';
+            quickFillBtn.style.cssText = `
+                margin-left: 6px;
+                padding: 2px 6px;
+                font-size: 12px;
+                background-color: #f0ad4e;
+                border: 1px solid #eea236;
+                border-radius: 3px;
+                color: white;
+                cursor: pointer;
+                vertical-align: middle;
+                line-height: 1;
+            `;
+            quickFillBtn.innerHTML = '⬆';
+            quickFillBtn.title = `Auto-fill the Insurer Search with "${searchText}"`;
+
+            // Hover effects
+            quickFillBtn.addEventListener('mouseenter', () => {
+                quickFillBtn.style.backgroundColor = '#ec971f';
+            });
+            quickFillBtn.addEventListener('mouseleave', () => {
+                quickFillBtn.style.backgroundColor = '#f0ad4e';
+            });
 
             // Add click handler
             quickFillBtn.addEventListener('click', () => {
                 handleInsurerQuickFill(insurerName);
             });
 
-            buttonContainer.appendChild(helpText);
-            buttonContainer.appendChild(quickFillBtn);
+            // Insert button right after the label text
+            insurerLabel.appendChild(quickFillBtn);
 
-            // Insert after the search row
-            searchRow.insertAdjacentElement('afterend', buttonContainer);
-
-            console.log(LOG_PREFIX, "Quick Fill Insurer button injected");
+            console.log(LOG_PREFIX, "Quick Fill Insurer arrow button injected next to Insurer Name label");
         } else {
             console.log(LOG_PREFIX, "Insurer details are complete or missing name - no Quick Fill button needed");
         }
